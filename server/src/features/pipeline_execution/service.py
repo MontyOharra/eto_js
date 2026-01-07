@@ -2,35 +2,31 @@
 Pipeline Execution Service
 Builds a Dask task graph from compiled steps and executes with auditing.
 
-Executes pipelines as pure data transformation graphs. Output modules collect
-their inputs but do not execute side effects - that responsibility is delegated
-to the OutputExecutionService via the ETO orchestrator.
+Executes pipelines as pure data transformation graphs. Output channels collect
+values from upstream modules. The result contains output_channel_values which
+maps channel types (e.g., "hawb") to their collected values.
 
 Usage:
-    service = PipelineExecutionService(cm, services)
+    service = PipelineExecutionService(cm, access_conn_manager)
     result = service.execute_pipeline(
         steps=compiled_steps,
         entry_values_by_name={"origin": "SFO", "destination": "LAX"},
         pipeline_state=pipeline_state
     )
 
-    # Result contains output_module_id and output_module_inputs
-    # Orchestrator passes these to OutputExecutionService
+    # Result contains output_channel_values: {channel_type: value}
+    # e.g., {"hawb": "ABC123", "pickup_address": "123 Main St"}
 """
 
-from typing import Dict, Any, List, Tuple, Optional
+from typing import Any
 import logging
 from datetime import datetime, date
 from threading import Lock
 from dask.delayed import delayed
 from dask.base import compute
 
-from shared.database import DatabaseConnectionManager
-from shared.database.repositories import (
-    PipelineDefinitionRepository,
-    PipelineDefinitionStepRepository,
-    ModuleRepository,
-)
+from shared.database import DatabaseConnectionManager, AccessConnectionManager
+
 from features.modules.registry import ModuleRegistry
 from shared.types.pipeline_definition import PipelineDefinition
 from shared.types.pipeline_definition_step import PipelineDefinitionStep
@@ -87,7 +83,7 @@ class StepResultCollector:
     """
 
     def __init__(self):
-        self.results: List[PipelineExecutionStepResult] = []
+        self.results: list[PipelineExecutionStepResult] = []
         self.lock = Lock()
 
     def add(self, result: PipelineExecutionStepResult) -> None:
@@ -95,7 +91,7 @@ class StepResultCollector:
         with self.lock:
             self.results.append(result)
 
-    def get_all(self) -> List[PipelineExecutionStepResult]:
+    def get_all(self) -> list[PipelineExecutionStepResult]:
         """Get all collected results, sorted by step_number"""
         with self.lock:
             return sorted(self.results, key=lambda s: s.step_number)
@@ -122,9 +118,9 @@ def _serialize_value(value: Any, type_hint: str) -> Any:
 
 
 def _serialize_io_for_audit(
-    io_dict: Dict[str, Any],
-    pins: List[NodeInstance]
-) -> Dict[str, Dict[str, Any]]:
+    io_dict: dict[str, Any],
+    pins: list[NodeInstance]
+) -> dict[str, dict[str, Any]]:
     """
     Transform {node_id: value} to {node_id: {name, value, type}} for execution visualization.
 
@@ -161,12 +157,12 @@ def _serialize_io_for_audit(
 
 
 def _serialize_inputs_for_audit(
-    io_dict: Dict[str, Any],
-    pins: List[NodeInstance],
-    input_field_mappings: Dict[str, str],
-    all_nodes_metadata: Dict[str, List[NodeInstance]],
-    entry_points_lookup: Dict[str, str]
-) -> Dict[str, Dict[str, Any]]:
+    io_dict: dict[str, Any],
+    pins: list[NodeInstance],
+    input_field_mappings: dict[str, str],
+    all_nodes_metadata: dict[str, list[NodeInstance]],
+    entry_points_lookup: dict[str, str]
+) -> dict[str, dict[str, Any]]:
     """
     Transform inputs to {node_id: {name, value, type}} using UPSTREAM pin names.
 
@@ -249,16 +245,13 @@ class PipelineExecutionService:
     """
 
     connection_manager: DatabaseConnectionManager
-    pipeline_repo: PipelineDefinitionRepository
-    step_repo: PipelineDefinitionStepRepository
-    module_catalog_repo: ModuleRepository
     module_registry: ModuleRegistry
-    services: Optional[Any]
+    services: Any | None
 
     def __init__(
         self,
         connection_manager: DatabaseConnectionManager,
-        services: Optional[Any] = None
+        access_conn_manager: AccessConnectionManager | None = None
     ) -> None:
         """
         Initialize pipeline execution service.
@@ -274,13 +267,8 @@ class PipelineExecutionService:
             raise RuntimeError("Database connection manager is required")
 
         self.connection_manager = connection_manager
-        self.services = services
+        self.access_conn_manager = access_conn_manager
         self.module_registry = ModuleRegistry()
-
-        # Initialize repositories
-        self.pipeline_repo = PipelineDefinitionRepository(connection_manager=connection_manager)
-        self.step_repo = PipelineDefinitionStepRepository(connection_manager=connection_manager)
-        self.module_catalog_repo = ModuleRepository(connection_manager=connection_manager)
 
         logger.info("PipelineExecutionService initialized")
 
@@ -288,8 +276,8 @@ class PipelineExecutionService:
 
     def execute_pipeline(
         self,
-        steps: List[PipelineDefinitionStep],
-        entry_values_by_name: Dict[str, Any],
+        steps: list[PipelineDefinitionStep],
+        entry_values_by_name: dict[str, Any],
         pipeline_state,  # PipelineState from pipelines module
     ) -> PipelineExecutionResult:
         """
@@ -314,10 +302,10 @@ class PipelineExecutionService:
 
         Returns:
             PipelineExecutionResult with:
+            - status: "success", "partial", or "failed"
             - steps: Execution audit trail
-            - output_module_id: Which output module to execute (None if no output module)
-            - output_module_inputs: Input data for output module {name: value}
-            - error: Error message if pipeline failed
+            - output_channel_values: Collected values by channel type {channel_type: value}
+            - error: Error message if pipeline failed (None on success)
 
         Raises:
             ValueError: Missing required entry values
@@ -351,7 +339,7 @@ class PipelineExecutionService:
         collector = StepResultCollector()
 
         # Step 4: Build global node metadata lookup for input name resolution
-        all_nodes_metadata: Dict[str, List[NodeInstance]] = {}
+        all_nodes_metadata: dict[str, list[NodeInstance]] = {}
         for step in steps:
             if step.node_metadata:
                 for key, nodes in step.node_metadata.items():
@@ -360,19 +348,19 @@ class PipelineExecutionService:
                     all_nodes_metadata[key].extend(nodes)
 
         # Step 5: Build entry points lookup {node_id -> name}
-        entry_points_lookup: Dict[str, str] = {
+        entry_points_lookup: dict[str, str] = {
             ep.outputs[0].node_id: ep.name
             for ep in pipeline_state.entry_points
             if ep.outputs
         }
 
         # Step 6: Build Dask graph (all modules in topological order)
-        task_of_step: Dict[str, Any] = {}
-        output_channel_values: Dict[str, Any] = {}  # Collected output channel values
+        task_of_step: dict[str, Any] = {}
+        output_channel_values: dict[str, Any] = {}  # Collected output channel values
 
         for step in steps:
-            # Check if this is an output channel step (module_ref is None)
-            if step.module_ref is None:
+            # Check if this is an output channel step (module_id is None)
+            if step.module_id is None:
                 # Output channel step - create collection task
                 task = self._make_output_channel_collection_task(
                     step, producer_of_pin, output_channel_values
@@ -382,9 +370,7 @@ class PipelineExecutionService:
                 channel_type = step.module_config.get("channel_type", "unknown")
                 logger.debug(f"Created output channel collection task: {step.module_instance_id} (channel_type={channel_type})")
             else:
-                # Regular module step
-                module_id = step.module_ref.split(":")[0] if ":" in step.module_ref else step.module_ref
-
+                # Regular module step - module_id is the DB primary key (int)
                 # Create task for this step
                 task = self._make_step_task(step, producer_of_pin, collector, all_nodes_metadata, entry_points_lookup)
                 task_of_step[step.module_instance_id] = task
@@ -445,55 +431,10 @@ class PipelineExecutionService:
 
     # ==================== Helper Methods ====================
 
-    def _require_pipeline(self, pipeline_definition_id: int) -> PipelineDefinition:
-        """
-        Load pipeline and verify it's compiled.
-
-        Args:
-            pipeline_definition_id: Pipeline definition ID
-
-        Returns:
-            Pipeline definition with full details
-
-        Raises:
-            ValueError: If pipeline not found
-            RuntimeError: If pipeline not compiled
-        """
-        pipeline = self.pipeline_repo.get_by_id(pipeline_definition_id)
-
-        if pipeline is None:
-            raise ValueError(f"Pipeline definition {pipeline_definition_id} not found")
-
-        logger.debug(f"Loaded pipeline {pipeline_definition_id}")
-
-        return pipeline
-
-    def _require_compiled_steps(self, pipeline_definition_id: int) -> List[PipelineDefinitionStep]:
-        """
-        Load compiled steps ordered by step_number.
-
-        Args:
-            pipeline_definition_id: Pipeline definition ID
-
-        Returns:
-            List of steps in execution order
-
-        Raises:
-            ValueError: If no steps found
-        """
-        steps = self.step_repo.get_steps_by_definition_id(pipeline_definition_id)
-
-        if not steps:
-            raise ValueError(f"No compiled steps found for pipeline {pipeline_definition_id}")
-
-        logger.debug(f"Loaded {len(steps)} compiled steps for pipeline {pipeline_definition_id}")
-
-        return steps
-
     def _map_entry_names_to_pin_ids(
         self,
         pipeline: PipelineDefinition
-    ) -> Dict[str, List[str]]:
+    ) -> dict[str, list[str]]:
         """
         Build {entry_name -> [pin_id, ...]} from pipeline_state.entry_points.
 
@@ -510,7 +451,7 @@ class PipelineExecutionService:
     def _map_entry_names_to_pin_ids_from_state(
         self,
         pipeline_state
-    ) -> Dict[str, List[str]]:
+    ) -> dict[str, list[str]]:
         """
         Build {entry_name -> [pin_id, ...]} from pipeline_state.entry_points.
 
@@ -522,7 +463,7 @@ class PipelineExecutionService:
         Returns:
             Mapping of entry point names to pin IDs
         """
-        entry_name_to_ids: Dict[str, List[str]] = {}
+        entry_name_to_ids: dict[str, list[str]] = {}
 
         for entry_point in pipeline_state.entry_points:
             if entry_point.name not in entry_name_to_ids:
@@ -537,9 +478,9 @@ class PipelineExecutionService:
 
     def _seed_entry_values(
         self,
-        entry_values_by_name: Dict[str, Any],
-        entry_name_to_ids: Dict[str, List[str]],
-    ) -> Tuple[Dict[str, Any], List[str], List[str]]:
+        entry_values_by_name: dict[str, Any],
+        entry_name_to_ids: dict[str, list[str]],
+    ) -> tuple[dict[str, Any], list[str], list[str]]:
         """
         Seed producer_of_pin with entry values wrapped in delayed tasks.
 
@@ -563,7 +504,7 @@ class PipelineExecutionService:
             """Tiny wrapper so everything in the graph is delayed"""
             return v
 
-        producer_of_pin: Dict[str, Any] = {}
+        producer_of_pin: dict[str, Any] = {}
         for name, node_ids in entry_name_to_ids.items():
             if name in entry_values_by_name:
                 v = entry_values_by_name[name]
@@ -580,10 +521,10 @@ class PipelineExecutionService:
     def _make_step_task(
         self,
         step: PipelineDefinitionStep,
-        producer_of_pin: Dict[str, Any],
+        producer_of_pin: dict[str, Any],
         collector: StepResultCollector,
-        all_nodes_metadata: Dict[str, List[NodeInstance]],
-        entry_points_lookup: Dict[str, str],
+        all_nodes_metadata: dict[str, list[NodeInstance]],
+        entry_points_lookup: dict[str, str],
     ) -> Any:
         """
         Create delayed task for a module execution.
@@ -601,14 +542,13 @@ class PipelineExecutionService:
         Returns:
             Delayed task that produces {output_pin_id: value}
         """
-        # Resolve handler
-        if step.module_ref is None:
-            raise RuntimeError(f"Step {step.step_number} has no module_ref")
-        module_id = step.module_ref.split(":")[0] if ":" in step.module_ref else step.module_ref
+        # Resolve handler by DB ID (int)
+        if step.module_id is None:
+            raise RuntimeError(f"Step {step.step_number} has no module_id")
 
-        handler = self.module_registry.get(module_id)
+        handler = self.module_registry.get(step.module_id)
         if not handler:
-            raise RuntimeError(f"Module handler not found for {step.module_ref}")
+            raise RuntimeError(f"Module handler not found for module_id={step.module_id}")
 
         ConfigModel = handler.config_class()
         handlerInstance = handler()
@@ -689,7 +629,7 @@ class PipelineExecutionService:
                     inputs=inputs_dict,
                     cfg=config_instance,
                     context=ctx,
-                    services=self.services
+                    access_conn_manager=self.access_conn_manager
                 )
                 error = None
                 logger.debug(f"Executed module {step.module_instance_id}")
@@ -738,7 +678,7 @@ class PipelineExecutionService:
         self,
         step: PipelineDefinitionStep,
         task: Any,
-        producer_of_pin: Dict[str, Any],
+        producer_of_pin: dict[str, Any],
     ) -> None:
         """
         Split module outputs into per-pin delayed futures.
@@ -754,13 +694,13 @@ class PipelineExecutionService:
             task: Delayed task that produces outputs
             producer_of_pin: Map to update with new producers
         """
-        output_pins: List[NodeInstance] = step.node_metadata.get("outputs") or []
+        output_pins: list[NodeInstance] = step.node_metadata.get("outputs") or []
 
         for pin in output_pins:
             node_id = pin.node_id
 
             @delayed(pure=True)  # type: ignore
-            def _select(outputs: Dict[str, Any], key: str):
+            def _select(outputs: dict[str, Any], key: str):
                 """Select a specific output from the module's output dict"""
                 return outputs.get(key)
 
@@ -771,8 +711,8 @@ class PipelineExecutionService:
     def _make_output_channel_collection_task(
         self,
         step: PipelineDefinitionStep,
-        producer_of_pin: Dict[str, Any],
-        output_channel_values: Dict[str, Any],
+        producer_of_pin: dict[str, Any],
+        output_channel_values: dict[str, Any],
     ) -> Any:
         """
         Create a Dask task that collects the input value for an output channel.
@@ -781,7 +721,7 @@ class PipelineExecutionService:
         produce nothing. The collected value is stored in output_channel_values dict.
 
         Args:
-            step: Output channel step (module_ref is None)
+            step: Output channel step (module_id is None)
             producer_of_pin: Map of pin_id -> delayed value
             output_channel_values: Dict to store collected values (mutated by task)
 

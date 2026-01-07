@@ -93,7 +93,7 @@ class DimBuilder(TransformModule):
             )
         )
 
-    def run(self, inputs: Dict[str, Any], cfg: DimBuilderConfig, context: Any, services: Any = None) -> Dict[str, Any]:
+    def run(self, inputs: Dict[str, Any], cfg: DimBuilderConfig, context: Any) -> Dict[str, Any]:
         """
         Execute dim object building
 

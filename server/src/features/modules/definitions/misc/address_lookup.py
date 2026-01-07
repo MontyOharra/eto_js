@@ -9,6 +9,7 @@ from pydantic import BaseModel, Field
 from shared.types import ModuleMeta, IOShape, IOSideShape, NodeGroup, NodeTypeRule
 from features.modules.registry import register
 from features.modules.base import MiscModule
+from shared.database.access_connection import AccessConnectionManager
 
 logger = logging.getLogger(__name__)
 
@@ -151,7 +152,7 @@ class AddressLookup(MiscModule):
 
         return schema
 
-    def run(self, inputs: Dict[str, Any], cfg: AddressLookupConfig, context: Any, services: Any = None) -> Dict[str, Any]:
+    def run(self, inputs: Dict[str, Any], cfg: AddressLookupConfig, context: Any, access_conn_manager: AccessConnectionManager) -> Dict[str, Any]:
         """
         Execute address lookup query.
 
@@ -214,11 +215,11 @@ class AddressLookup(MiscModule):
         params = (company_name, address_line_1, city, state, zip_code)
 
         # Get database connection
-        if not services:
+        if not access_conn_manager:
             raise RuntimeError("Services container not available - cannot access database")
 
         try:
-            db_connection = services.get_connection(cfg.database)
+            db_connection = access_conn_manager.get_connection(cfg.database)
             logger.info(f"[ADDRESS LOOKUP] Retrieved connection for database: {cfg.database}")
         except Exception as e:
             raise RuntimeError(f"Failed to get database connection '{cfg.database}': {e}")

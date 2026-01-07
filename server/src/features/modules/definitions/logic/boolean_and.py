@@ -8,6 +8,7 @@ from pydantic import BaseModel
 from shared.types import ModuleMeta, IOShape, IOSideShape, NodeGroup, NodeTypeRule
 from features.modules.registry import register
 from features.modules.base import LogicModule
+from shared.database.access_connection import AccessConnectionManager
 
 
 class BooleanAndConfig(BaseModel):
@@ -66,7 +67,7 @@ class BooleanAnd(LogicModule):
             )
         )
 
-    def run(self, inputs: Dict[str, Any], cfg: BooleanAndConfig, context: Any, services: Any = None) -> Dict[str, Any]:
+    def run(self, inputs: Dict[str, Any], cfg: BooleanAndConfig, context: Any) -> Dict[str, Any]:
         """
         Execute boolean AND operation
 

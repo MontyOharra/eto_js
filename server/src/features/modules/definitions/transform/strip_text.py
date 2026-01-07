@@ -64,7 +64,7 @@ class StripText(TransformModule):
             )
         )
 
-    def run(self, inputs: Dict[str, Any], cfg: StripTextConfig, context: Any = None, services: Any = None) -> Dict[str, Any]:
+    def run(self, inputs: Dict[str, Any], cfg: StripTextConfig, context: Any = None) -> Dict[str, Any]:
         """
         Strip specific text from the start and/or end of the input string.
 

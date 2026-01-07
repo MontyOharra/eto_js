@@ -3,7 +3,6 @@ Pipeline Validation
 Validates pipeline structure through multiple stages
 """
 import logging
-from typing import Dict, List, Set, Optional
 from collections import Counter
 from pydantic import ValidationError as PydanticValidationError
 from shared.types.pipelines import PipelineState, PipelineIndices, PinInfo, ModuleInstance
@@ -89,7 +88,6 @@ class PipelineValidator:
         Checks:
         - All node IDs are globally unique
         - All pin types are in allowed set
-        - All module refs have format "id:version"
 
         Raises:
             SchemaValidationError: If schema validation fails
@@ -100,9 +98,6 @@ class PipelineValidator:
         # Check 2: Pin types
         self._check_pin_types(pipeline_state)
 
-        # Check 3: Module ref format
-        self._check_module_refs(pipeline_state)
-
     def _check_node_id_uniqueness(self, pipeline_state: PipelineState) -> None:
         """
         Check all node IDs are globally unique across entry points, modules, and output channels.
@@ -112,7 +107,7 @@ class PipelineValidator:
             SchemaValidationError: If duplicate node ID found
         """
         # Collect all node IDs with their sources for error reporting
-        node_ids: List[tuple[str, str]] = []
+        node_ids: list[tuple[str, str]] = []
 
         # Entry points (check output pins)
         for ep in pipeline_state.entry_points:
@@ -184,22 +179,6 @@ class PipelineValidator:
                         }
                     )
 
-    def _check_module_refs(self, pipeline_state: PipelineState) -> None:
-        """
-        Check module_ref format is valid (should contain ':' for "module_id:version").
-        Fails fast on first malformed ref.
-
-        Raises:
-            SchemaValidationError: If malformed module ref found
-        """
-        for module in pipeline_state.modules:
-            if ":" not in module.module_ref:
-                raise SchemaValidationError(
-                    message=f"Module ref '{module.module_ref}' in module '{module.module_instance_id}' is malformed. Expected format: 'module_id:version'",
-                    code="malformed_module_ref",
-                    where={"module_instance_id": module.module_instance_id}
-                )
-
     def _build_indices(self, pipeline_state: PipelineState) -> PipelineIndices:
         """
         Stage 2: Build lookup indices for efficient validation
@@ -212,9 +191,9 @@ class PipelineValidator:
         Returns:
             PipelineIndices with lookup structures
         """
-        pin_by_id: Dict[str, PinInfo] = {}
-        module_by_id: Dict[str, ModuleInstance] = {}
-        input_to_upstream: Dict[str, str] = {}
+        pin_by_id: dict[str, PinInfo] = {}
+        module_by_id: dict[str, ModuleInstance] = {}
+        input_to_upstream: dict[str, str] = {}
 
         # Index entry points (index their output pins)
         for entry in pipeline_state.entry_points:
@@ -279,7 +258,7 @@ class PipelineValidator:
         Stage 3: Validate modules (catalog, groups, type vars, config, output channels)
 
         Checks:
-        - Module exists in catalog
+        - Module exists in catalog (by integer DB ID)
         - Group cardinality constraints (min_count, max_count)
         - Type variable unification (all uses of "T" have same type)
         - Config has required fields
@@ -304,23 +283,19 @@ class PipelineValidator:
             return
 
         for module in pipeline_state.modules:
-            logger.info(f"[VALIDATION DEBUG] Validating module {module.module_instance_id} ({module.module_ref})")
+            logger.info(f"[VALIDATION DEBUG] Validating module {module.module_instance_id} (module_id={module.module_id})")
 
-            # Parse module_ref (format: "module_id:version")
-            module_id, version = self._parse_module_ref(module.module_ref)
-            logger.info(f"[VALIDATION DEBUG] Parsed: module_id={module_id}, version={version}")
-
-            # Lookup module in catalog
-            template = self.module_catalog_repo.get_by_identifier_version(module_id, version)
+            # Lookup module in catalog by integer DB ID
+            template = self.module_catalog_repo.get_by_id(module.module_id)
             logger.info(f"[VALIDATION DEBUG] Template found: {template is not None}")
 
             if not template:
                 raise ModuleValidationError(
-                    message=f"Module '{module_id}:{version}' not found in catalog",
+                    message=f"Module with id={module.module_id} not found in catalog",
                     code="module_not_found",
                     where={
                         "module_instance_id": module.module_instance_id,
-                        "module_ref": module.module_ref,
+                        "module_id": module.module_id,
                     }
                 )
 
@@ -366,20 +341,6 @@ class PipelineValidator:
                     "hawb_options": list(hawb_channels)
                 }
             )
-
-    def _parse_module_ref(self, module_ref: str) -> tuple[str, str]:
-        """
-        Parse module_ref into (module_id, version).
-        Assumes format "module_id:version" (already validated in schema stage).
-
-        Args:
-            module_ref: Module reference string
-
-        Returns:
-            Tuple of (module_id, version)
-        """
-        parts = module_ref.split(":", 1)
-        return parts[0], parts[1]
 
     def _check_group_cardinality(self, module, template) -> None:
         """
@@ -475,7 +436,7 @@ class PipelineValidator:
             ModuleValidationError: If type variable has conflicting types
         """
         io_shape = template.meta.io_shape
-        type_var_bindings: Dict[str, Set[str]] = {}
+        type_var_bindings: dict[str, set[str]] = {}
 
         # Collect type variable bindings from input groups
         for group_idx, group in enumerate(io_shape.inputs.nodes):
@@ -528,13 +489,9 @@ class PipelineValidator:
         logger.info(f"[VALIDATION DEBUG] _check_config called for module {module.module_instance_id}")
         config_schema = template.config_schema
 
-        # Parse module_ref to get module_id
-        module_id, _ = self._parse_module_ref(module.module_ref)
-        logger.info(f"[VALIDATION DEBUG] module_id: {module_id}")
-
-        # Get module handler from registry
-        handler = self.module_registry.get(module_id)
-        logger.info(f"[VALIDATION DEBUG] Handler found in registry: {handler is not None}")
+        # Get module handler from registry by DB ID (int)
+        handler = self.module_registry.get(module.module_id)
+        logger.info(f"[VALIDATION DEBUG] Handler found in registry for module_id={module.module_id}: {handler is not None}")
         logger.info(f"[VALIDATION DEBUG] Registry has {len(self.module_registry.get_all())} modules registered")
         logger.info(f"[VALIDATION DEBUG] Registered module IDs: {list(self.module_registry.get_all().keys())}")
 
@@ -559,7 +516,7 @@ class PipelineValidator:
 
             # Call custom validation if method exists (beyond Pydantic schema validation)
             if hasattr(handler, 'validate_config') and callable(handler.validate_config):
-                logger.info(f"[VALIDATION DEBUG] Calling validate_config for module {module.module_instance_id} ({module_id})")
+                logger.info(f"[VALIDATION DEBUG] Calling validate_config for module {module.module_instance_id} (db_id={module.module_id})")
                 logger.info(f"[VALIDATION DEBUG] Inputs: {[(p.node_id, p.name) for p in module.inputs]}")
                 logger.info(f"[VALIDATION DEBUG] Outputs: {[(p.node_id, p.name) for p in module.outputs]}")
 
@@ -679,7 +636,7 @@ class PipelineValidator:
                 )
 
         # Check for multiple upstreams (count connections to each input)
-        input_connection_counts: Dict[str, int] = {}
+        input_connection_counts: dict[str, int] = {}
         for conn in pipeline_state.connections:
             to_pin = indices.pin_by_id.get(conn.to_node_id)
             if to_pin and to_pin.direction in ("in", "output_channel"):
@@ -772,7 +729,7 @@ class PipelineValidator:
             GraphValidationError: If a cycle is detected
         """
         # Build adjacency list (module -> downstream modules)
-        adjacency: Dict[str, Set[str]] = {
+        adjacency: dict[str, set[str]] = {
             module.module_instance_id: set() for module in pipeline_state.modules
         }
 
@@ -796,9 +753,9 @@ class PipelineValidator:
         # DFS to detect cycles using colors
         # WHITE (0) = unvisited, GRAY (1) = visiting, BLACK (2) = visited
         WHITE, GRAY, BLACK = 0, 1, 2
-        colors: Dict[str, int] = {module_id: WHITE for module_id in adjacency}
+        colors: dict[str, int] = {module_id: WHITE for module_id in adjacency}
 
-        def dfs(node: str, path: List[str]) -> None:
+        def dfs(node: str, path: list[str]) -> None:
             """
             Depth-first search to detect cycles.
 

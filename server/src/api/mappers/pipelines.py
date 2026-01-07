@@ -59,7 +59,7 @@ def convert_module_instance(module: ModuleInstanceDomain) -> ModuleInstance:
     """Convert domain ModuleInstance to API ModuleInstance"""
     return ModuleInstance(
         module_instance_id=module.module_instance_id,
-        module_ref=module.module_ref,
+        module_id=module.module_id,
         config=module.config,
         inputs=[convert_node(node) for node in module.inputs],
         outputs=[convert_node(node) for node in module.outputs]
@@ -176,7 +176,7 @@ def convert_module_instance_to_domain(module: ModuleInstance | dict) -> ModuleIn
     if isinstance(module, dict):
         return ModuleInstanceDomain(
             module_instance_id=module['module_instance_id'],
-            module_ref=module['module_ref'],
+            module_id=module['module_id'],
             config=module['config'],
             inputs=[convert_node_to_domain(node) for node in module.get('inputs', [])],
             outputs=[convert_node_to_domain(node) for node in module.get('outputs', [])]
@@ -184,7 +184,7 @@ def convert_module_instance_to_domain(module: ModuleInstance | dict) -> ModuleIn
 
     return ModuleInstanceDomain(
         module_instance_id=module.module_instance_id,
-        module_ref=module.module_ref,
+        module_id=module.module_id,
         config=module.config,
         inputs=[convert_node_to_domain(node) for node in module.inputs],
         outputs=[convert_node_to_domain(node) for node in module.outputs]

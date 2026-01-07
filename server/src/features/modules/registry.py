@@ -3,6 +3,11 @@ Module Registry System
 
 Handles registration, discovery, and retrieval of module classes.
 Includes the @register decorator for marking module classes.
+
+Architecture:
+- During auto-discovery: Classes are collected in _discovered_classes
+- After DB sync: Registry is built with DB IDs as keys via build_from_db()
+- At runtime: Lookups use integer DB ID via get()
 """
 import importlib
 import logging
@@ -12,7 +17,7 @@ from datetime import datetime
 from typing import Any
 
 from features.modules.base import BaseModule
-from shared.types.modules import ModuleCreate
+from shared.types.modules import Module, ModuleCreate
 
 logger = logging.getLogger(__name__)
 
@@ -138,7 +143,7 @@ class ModuleSecurityValidator:
 # ========== Module Cache ==========
 
 class ModuleCache:
-    """Simple cache for loaded modules."""
+    """Simple cache for dynamically loaded modules (by handler_name)."""
 
     def __init__(self, max_size: int = 50, ttl_seconds: int = 3600):
         self._cache: dict[str, tuple[type[BaseModule], datetime]] = {}
@@ -183,6 +188,11 @@ class ModuleRegistry:
     """
     Singleton registry for transformation pipeline modules.
     Handles registration, discovery, and retrieval of module classes.
+
+    Architecture:
+    - _discovered_classes: Holds module classes found during auto-discovery
+    - _registry: Maps DB ID (int) -> module class, built after DB sync
+    - Lookups at runtime use integer DB IDs via get()
     """
 
     _instance: 'ModuleRegistry | None' = None
@@ -197,60 +207,109 @@ class ModuleRegistry:
     def __init__(self) -> None:
         """Initialize registry (only once)."""
         if not ModuleRegistry._initialized:
-            self._registry: dict[str, type[BaseModule]] = {}
+            # Main registry: DB ID (int) -> class (populated after DB sync)
+            self._registry: dict[int, type[BaseModule]] = {}
+
+            # Temporary holding area during auto-discovery
+            self._discovered_classes: list[type[BaseModule]] = []
+
+            # Cache for dynamically loaded modules
             self._cache = ModuleCache()
+
             ModuleRegistry._initialized = True
             logger.debug("ModuleRegistry initialized (singleton)")
 
     def register(self, module_class: type[BaseModule]) -> type[BaseModule]:
         """
-        Register a module class with the registry.
+        Queue a module class during auto-discovery.
+
+        Classes are held in _discovered_classes until build_from_db() is called
+        after database sync, which populates _registry with DB IDs as keys.
 
         Args:
             module_class: Module class inheriting from BaseModule
 
         Returns:
             The module class (for decorator pattern)
-
-        Raises:
-            ValueError: If module with same ID already registered
         """
-        module_id = module_class.id
-
-        if module_id in self._registry:
-            existing = self._registry[module_id]
-            if existing is not module_class:
+        # Check for duplicates by (identifier, version)
+        key = (module_class.identifier, module_class.version)
+        for existing in self._discovered_classes:
+            existing_key = (existing.identifier, existing.version)
+            if existing_key == key and existing is not module_class:
                 raise ValueError(
-                    f"Module '{module_id}' already registered with different class. "
+                    f"Module '{module_class.identifier}:{module_class.version}' already discovered. "
                     f"Existing: {existing.__module__}.{existing.__name__}, "
                     f"New: {module_class.__module__}.{module_class.__name__}"
                 )
-        else:
-            self._registry[module_id] = module_class
-            logger.debug(f"Registered module: {module_id} ({module_class.__name__})")
+
+        if module_class not in self._discovered_classes:
+            self._discovered_classes.append(module_class)
+            logger.debug(f"Discovered module: {module_class.identifier}:{module_class.version} ({module_class.__name__})")
 
         return module_class
 
-    def get(self, module_id: str) -> type[BaseModule] | None:
+    def build_from_db(self, db_modules: list[Module]) -> None:
         """
-        Get a module class by ID.
+        Build the registry from database records.
+
+        Called after sync_modules() completes. Matches DB records to discovered
+        classes by (identifier, version), then stores by integer DB id.
 
         Args:
-            module_id: Module ID to retrieve
+            db_modules: List of Module domain objects from database
+        """
+        self._registry.clear()
+
+        # Build temporary lookup: (identifier, version) -> class
+        class_lookup: dict[tuple[str, str], type[BaseModule]] = {}
+        for cls in self._discovered_classes:
+            key = (cls.identifier, cls.version)
+            class_lookup[key] = cls
+
+        # Populate registry keyed by DB id
+        for db_module in db_modules:
+            key = (db_module.identifier, db_module.version)
+            module_class = class_lookup.get(key)
+            if module_class:
+                self._registry[db_module.id] = module_class
+            else:
+                logger.warning(
+                    f"DB module {db_module.identifier}:{db_module.version} (id={db_module.id}) "
+                    f"not found in discovered classes"
+                )
+
+        logger.info(f"Registry built: {len(self._registry)} modules indexed by DB ID")
+
+    def get(self, module_id: int) -> type[BaseModule] | None:
+        """
+        Get a module class by database ID.
+
+        Args:
+            module_id: Database primary key (int)
 
         Returns:
             Module class or None if not found
         """
         return self._registry.get(module_id)
 
-    def get_all(self) -> dict[str, type[BaseModule]]:
+    def get_all(self) -> dict[int, type[BaseModule]]:
         """
-        Get all registered modules.
+        Get all registered modules (keyed by DB id).
 
         Returns:
-            Dictionary of module_id -> module_class
+            Dictionary of db_id -> module_class
         """
         return dict(self._registry)
+
+    def get_discovered_classes(self) -> list[type[BaseModule]]:
+        """
+        Get classes found during auto-discovery (for sync).
+
+        Returns:
+            List of module classes discovered during auto-discovery
+        """
+        return list(self._discovered_classes)
 
     def get_by_kind(self, kind: str) -> list[type[BaseModule]]:
         """
@@ -269,14 +328,17 @@ class ModuleRegistry:
         ]
 
     def clear(self) -> None:
-        """Clear all registered modules (useful for testing)."""
+        """Clear all registered modules and discovered classes (useful for testing)."""
         self._registry.clear()
+        self._discovered_classes.clear()
         self._cache.clear()
         logger.debug("Module registry cleared")
 
     def load_module_from_handler(self, handler_name: str) -> type[BaseModule] | None:
         """
         Load a module from handler_name with security validation and caching.
+
+        This is a fallback for dynamically loading modules not in the registry.
 
         Args:
             handler_name: Module handler path (e.g., "module.path:ClassName")
@@ -328,38 +390,13 @@ class ModuleRegistry:
             logger.error(f"Error loading module from {handler_name}: {e}")
             return None
 
-    def resolve_module(
-        self,
-        module_id: str,
-        handler_name: str | None = None
-    ) -> type[BaseModule] | None:
-        """
-        Resolve a module using multiple strategies:
-        1. Check registry (fast)
-        2. Try handler_name if provided (flexible)
-
-        Args:
-            module_id: Module ID
-            handler_name: Optional handler path for dynamic loading
-
-        Returns:
-            Module class or None
-        """
-        # Try registry first
-        module_class = self.get(module_id)
-        if module_class:
-            return module_class
-
-        # Try handler_name if provided
-        if handler_name:
-            return self.load_module_from_handler(handler_name)
-
-        return None
-
     def auto_discover(self, package_paths: list[str]) -> None:
         """
         Auto-discover and import modules from specified packages (recursively).
         This will trigger the @register decorators on module classes.
+
+        Note: After auto-discovery, call build_from_db() with DB records
+        to populate the registry with integer IDs.
 
         Args:
             package_paths: List of package paths to scan for modules
@@ -380,7 +417,7 @@ class ModuleRegistry:
             except Exception as e:
                 logger.error(f"Error discovering modules in {package_path}: {e}")
 
-        logger.info(f"Auto-discovery complete. {len(self._registry)} modules registered.")
+        logger.info(f"Auto-discovery complete. {len(self._discovered_classes)} module classes found.")
 
     def _discover_recursive(self, package: Any, package_path: str) -> None:
         """
@@ -407,7 +444,7 @@ class ModuleRegistry:
                 # Consume any pending registrations from this module
                 count = consume_pending_registrations(self)
                 if count > 0:
-                    logger.debug(f"Registered {count} modules from {full_module_name}")
+                    logger.debug(f"Discovered {count} modules from {full_module_name}")
 
                 # If it's a package, recursively discover it
                 if ispkg:
@@ -418,14 +455,17 @@ class ModuleRegistry:
 
     def to_catalog_entries(self) -> list[ModuleCreate]:
         """
-        Convert all registered modules to ModuleCreate for database sync.
+        Convert discovered module classes to ModuleCreate for database sync.
+
+        Uses _discovered_classes (not _registry) since this is called
+        before build_from_db() populates the registry.
 
         Returns:
             List of ModuleCreate objects ready for repository
         """
         catalog_entries = []
 
-        for module_id, module_class in self._registry.items():
+        for module_class in self._discovered_classes:
             try:
                 # Get module metadata
                 meta = module_class.meta()
@@ -433,8 +473,8 @@ class ModuleRegistry:
 
                 # Build ModuleCreate
                 entry = ModuleCreate(
-                    identifier=module_class.id,
-                    version=getattr(module_class, 'version', '1.0.0'),
+                    identifier=module_class.identifier,
+                    version=module_class.version,
                     name=module_class.title,
                     description=module_class.description,
                     module_kind=module_class.kind,
@@ -447,10 +487,10 @@ class ModuleRegistry:
                 )
 
                 catalog_entries.append(entry)
-                logger.debug(f"Converted module {module_id} to catalog entry")
+                logger.debug(f"Converted module {module_class.identifier}:{module_class.version} to catalog entry")
 
             except Exception as e:
-                logger.error(f"Failed to convert module {module_id} to catalog entry: {e}")
+                logger.error(f"Failed to convert module {module_class.__name__} to catalog entry: {e}")
 
         return catalog_entries
 
@@ -465,4 +505,6 @@ class ModuleRegistry:
             "hit_rate": f"{hit_rate:.1f}%",
             "total_hits": self._cache.hits,
             "total_misses": self._cache.misses,
+            "discovered_classes": len(self._discovered_classes),
+            "registered_by_id": len(self._registry),
         }

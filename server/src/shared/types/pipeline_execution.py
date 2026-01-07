@@ -1,73 +1,23 @@
 """
 Pipeline Execution Types
-Domain types for pipeline execution runs and audit trail
+Domain types for pipeline execution results (in-memory, no persistence)
+
+Note: Actual persistence of execution steps is handled by ETO sub-runs.
+See eto_sub_run_pipeline_execution_steps.py for persisted execution types.
 """
-from dataclasses import dataclass, field
-from datetime import datetime
 from typing import Any
 
+from pydantic import BaseModel, ConfigDict
 
-@dataclass(frozen=True)
-class PipelinExecutionStepIOData:
-    name: str
-    value: str
-    type: str
 
-@dataclass(frozen=True)
-class PipelineExecutionStep:
+class PipelineExecutionStepResult(BaseModel):
     """
-    Complete execution step audit record from database.
+    Result of single module execution.
 
-    Records one module's execution during a pipeline run.
-    Inputs and outputs stored as {node_name: {value, type}} for human readability.
+    Used for in-memory execution results during pipeline runs.
     """
-    id: int
-    run_id: int
-    module_instance_id: str
-    step_number: int
-    inputs: dict[str, PipelinExecutionStepIOData]  # {node_name: {value, type}}
-    outputs: dict[str, PipelinExecutionStepIOData]  # {node_name: {value, type}}
-    error: str | None
-    created_at: datetime
-    updated_at: datetime
+    model_config = ConfigDict(frozen=True)
 
-
-@dataclass(frozen=True)
-class PipelineExecutionStepCreate:
-    """
-    Data needed to create execution step audit record.
-
-    Persisted during module execution to create audit trail.
-    Inputs and outputs use node names (not node IDs) for readability.
-
-    Example:
-        inputs = {
-            "hawb": {"value": "ABC123", "type": "str"},
-            "weight": {"value": 150.5, "type": "float"}
-        }
-        outputs = {
-            "cleaned_hawb": {"value": "abc123", "type": "str"}
-        }
-    """
-    run_id: int
-    module_instance_id: str
-    step_number: int
-    inputs: dict[str, dict[str, Any]] = field(default_factory=dict)
-    outputs: dict[str, dict[str, Any]] = field(default_factory=dict)
-    error: str | None = None
-
-
-# ==================== Simulation Types ====================
-
-
-@dataclass(frozen=True)
-class PipelineExecutionStepResult:
-    """
-    Result of single module execution (simulation mode).
-
-    Similar to PipelineExecutionStep but without DB IDs.
-    Used for in-memory execution results during simulation.
-    """
     module_instance_id: str
     step_number: int
     inputs: dict[str, dict[str, Any]]  # {node_id: {name, value, type}}
@@ -75,21 +25,16 @@ class PipelineExecutionStepResult:
     error: str | None = None
 
 
-@dataclass(frozen=True)
-class PipelineExecutionResult:
+class PipelineExecutionResult(BaseModel):
     """
-    Result of pipeline execution (simulation mode).
+    Result of pipeline execution.
 
-    Contains all execution steps and collected output channel values
-    without any database persistence.
-
-    Used by simulate endpoint to show users what would happen if
-    the pipeline were executed in production.
+    Contains all execution steps and collected output channel values.
+    This is an in-memory result - persistence is handled by ETO sub-runs.
     """
+    model_config = ConfigDict(frozen=True)
+
     status: str
     steps: list[PipelineExecutionStepResult]
-    output_channel_values: dict[str, Any]  # {channel_type: value} e.g., {"hawb": "ABC123", "pickup_address": "123 Main St"}
+    output_channel_values: dict[str, Any]  # {channel_type: value} e.g., {"hawb": "ABC123"}
     error: str | None
-    # Legacy fields for backward compatibility (deprecated)
-    output_module_id: str | None = None
-    output_module_inputs: dict[str, Any] = field(default_factory=dict)

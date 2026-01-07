@@ -63,7 +63,7 @@ class StripCharacters(TransformModule):
             )
         )
 
-    def run(self, inputs: Dict[str, Any], cfg: StripCharactersConfig, context: Any = None, services: Any = None) -> Dict[str, Any]:
+    def run(self, inputs: Dict[str, Any], cfg: StripCharactersConfig, context: Any = None) -> Dict[str, Any]:
         """
         Strip characters from the start and/or end of the input text.
 

@@ -77,6 +77,9 @@ class ModulesService:
         """
         Auto-discover and register all module classes at startup.
         Recursively scans the features/modules/definitions directory.
+
+        Note: After discovery, sync_modules() must be called to populate
+        the registry with DB IDs via build_from_db().
         """
         try:
             logger.info("Auto-discovering modules from features.modules.definitions...")
@@ -84,9 +87,9 @@ class ModulesService:
             # Scan the definitions directory within the modules feature
             self._registry.auto_discover(["features.modules.definitions"])
 
-            # Log how many modules were registered
-            registered_count = len(self._registry.get_all())
-            logger.info(f"Auto-discovery complete: {registered_count} modules registered")
+            # Log how many module classes were discovered
+            discovered_count = len(self._registry.get_discovered_classes())
+            logger.info(f"Auto-discovery complete: {discovered_count} module classes found")
         except Exception as e:
             logger.error(f"Error during module auto-discovery: {e}")
             # Don't fail startup if auto-discovery fails
@@ -200,7 +203,7 @@ class ModulesService:
 
     def execute_module(
         self,
-        identifier: str,
+        module_id: int,
         inputs: dict[str, Any],
         config: dict[str, Any],
         context: Any | None = None
@@ -209,7 +212,7 @@ class ModulesService:
         Execute a module with given inputs and configuration.
 
         Args:
-            identifier: Module identifier to execute
+            module_id: Database ID of the module to execute
             inputs: Input values keyed by node ID
             config: Configuration values
             context: Optional execution context
@@ -222,26 +225,26 @@ class ModulesService:
             ModuleLoadError: If module class cannot be loaded
             ModuleExecutionError: If module execution fails
         """
-        # Step 1: Get module metadata from database
-        module_info = self.get_module(identifier)
+        # Step 1: Verify module exists and is active
+        module_info = self.get_module_by_id(module_id)
         if not module_info:
-            raise ModuleNotFoundError(f"Module {identifier} not found in catalog")
+            raise ModuleNotFoundError(f"Module id={module_id} not found in catalog")
 
         if not module_info.is_active:
-            raise ModuleLoadError(f"Module {identifier} is inactive")
+            raise ModuleLoadError(f"Module id={module_id} ({module_info.identifier}) is inactive")
 
-        # Step 2: Get module class (from cache or dynamic load)
-        module_class = self._get_module_class(module_info)
+        # Step 2: Get module class from registry (by DB ID)
+        module_class = self._get_module_class(module_id)
 
         # Step 3: Execute module
         return self._execute_module_instance(module_class, inputs, config, context)
 
-    def _get_module_class(self, module_info: Module) -> type[BaseModule]:
+    def _get_module_class(self, module_id: int) -> type[BaseModule]:
         """
-        Get module class from registry, loading if needed.
+        Get module class from registry by database ID.
 
         Args:
-            module_info: Module catalog entry
+            module_id: Database primary key (int)
 
         Returns:
             Module class
@@ -249,17 +252,18 @@ class ModulesService:
         Raises:
             ModuleLoadError: If module cannot be loaded
         """
-        # Try registry first (fast path - may be cached)
-        # Registry uses identifier (string), not id (int)
-        module_class = self._registry.get(module_info.identifier)
-
-        if not module_class and module_info.handler_name:
-            # Load dynamically using handler (will be cached)
-            logger.debug(f"Loading module {module_info.identifier} from handler: {module_info.handler_name}")
-            module_class = self._registry.load_module_from_handler(module_info.handler_name)
+        # Registry is keyed by integer DB ID
+        module_class = self._registry.get(module_id)
 
         if not module_class:
-            raise ModuleLoadError(f"Cannot load module class for {module_info.identifier}")
+            # Fallback: try to load from handler via DB lookup
+            module_info = self.module_repository.get_by_id(module_id)
+            if module_info and module_info.handler_name:
+                logger.debug(f"Loading module id={module_id} from handler: {module_info.handler_name}")
+                module_class = self._registry.load_module_from_handler(module_info.handler_name)
+
+        if not module_class:
+            raise ModuleLoadError(f"Cannot load module class for id={module_id}")
 
         return module_class
 
@@ -297,15 +301,15 @@ class ModulesService:
                 context = self._create_default_context(inputs)
 
             # Execute module
-            logger.debug(f"Executing module {module_class.id} with {len(inputs)} inputs")
+            logger.debug(f"Executing module {module_class.identifier} with {len(inputs)} inputs")
             outputs = instance.run(inputs, validated_config.model_dump(), context)
-            logger.debug(f"Module {module_class.id} produced {len(outputs) if outputs else 0} outputs")
+            logger.debug(f"Module {module_class.identifier} produced {len(outputs) if outputs else 0} outputs")
 
             return outputs or {}
 
         except Exception as e:
-            logger.error(f"Module {module_class.id} execution failed: {e}")
-            raise ModuleExecutionError(module_class.id, str(e))
+            logger.error(f"Module {module_class.identifier} execution failed: {e}")
+            raise ModuleExecutionError(module_class.identifier, str(e))
 
     def _create_default_context(self, inputs: dict[str, Any]) -> Any:
         """
@@ -331,19 +335,22 @@ class ModulesService:
         Clears the current registry and re-runs auto-discovery to pick up
         any new modules or versions that were added.
 
+        Note: After re-discovery, sync_modules() should be called to
+        sync to DB and rebuild the registry with DB IDs.
+
         Returns:
-            Number of modules discovered
+            Number of module classes discovered
         """
         logger.info("Re-discovering modules...")
 
-        # Clear existing registry
+        # Clear existing registry and discovered classes
         self._registry.clear()
 
         # Re-run auto-discovery
         self._auto_discover_modules()
 
-        count = len(self._registry.get_all())
-        logger.info(f"Re-discovery complete: {count} modules found")
+        count = len(self._registry.get_discovered_classes())
+        logger.info(f"Re-discovery complete: {count} module classes found")
 
         return count
 
@@ -437,6 +444,11 @@ class ModulesService:
             if removed_count > 0:
                 logger.info(f"Deactivated {removed_count} obsolete modules")
 
+            # Step 5: Build registry from DB (maps DB IDs to module classes)
+            # Re-fetch all active modules to get their DB-assigned IDs
+            all_db_modules = self.module_repository.get_all(only_active=True)
+            self._registry.build_from_db(all_db_modules)
+
             # Build response
             success = failed_count == 0
             message = f"Successfully synced {synced_count} modules"
@@ -478,17 +490,17 @@ class ModulesService:
 
     def get_registry_stats(self) -> dict[str, Any]:
         """
-        Get registry statistics (registered modules, cache stats).
+        Get registry statistics (discovered classes, registered modules, cache stats).
 
         Returns:
             Dictionary with registry statistics
         """
-        registered_modules = self._registry.get_all()
         cache_stats = self._registry.get_cache_stats()
 
         return {
-            "registered_count": len(registered_modules),
-            "registered_modules": list(registered_modules.keys()),
+            "discovered_classes": len(self._registry.get_discovered_classes()),
+            "registered_by_id": len(self._registry.get_all()),
+            "registered_module_ids": list(self._registry.get_all().keys()),
             "cache_stats": cache_stats
         }
 

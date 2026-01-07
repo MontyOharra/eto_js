@@ -67,7 +67,7 @@ class StringConcatenate(TransformModule):
             )
         )
 
-    def run(self, inputs: Dict[str, Any], cfg: StringConcatenateConfig, context: Any, services: Any = None) -> Dict[str, Any]:
+    def run(self, inputs: Dict[str, Any], cfg: StringConcatenateConfig, context: Any) -> Dict[str, Any]:
         """
         Execute string concatenation
 

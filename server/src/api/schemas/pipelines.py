@@ -2,7 +2,7 @@
 Pipelines API Schemas
 Pydantic models for pipeline definition endpoints
 """
-from typing import List, Dict, Any, Optional, Literal, TypeAlias
+from typing import Any, TypeAlias
 from pydantic import BaseModel, Field
 
 # ============================================================================
@@ -22,16 +22,16 @@ class EntryPoint(BaseModel):
     """Entry point for pipeline - structured like a module with outputs"""
     entry_point_id: str  # Format: E01, E02, etc.
     name: str
-    outputs: List[Node] = []  # Array with single output pin containing the type
+    outputs: list[Node] = []  # Array with single output pin containing the type
 
 
 class ModuleInstance(BaseModel):
     """Module instance placed on the canvas"""
     module_instance_id: str
-    module_ref: str  # e.g., "text_cleaner:1.0.0"
-    config: Dict[str, Any]  # Module-specific configuration
-    inputs: List[Node] = []
-    outputs: List[Node] = []
+    module_id: int  # FK to modules table (database primary key)
+    config: dict[str, Any]  # Module-specific configuration
+    inputs: list[Node] = []
+    outputs: list[Node] = []
 
 
 class NodeConnection(BaseModel):
@@ -44,15 +44,15 @@ class OutputChannelInstance(BaseModel):
     """Output channel instance for collecting pipeline outputs"""
     output_channel_instance_id: str  # Format: OC01, OC02, etc.
     channel_type: str                 # e.g., "hawb", "pickup_address"
-    inputs: List[Node] = []
+    inputs: list[Node] = []
 
 
 class PipelineState(BaseModel):
     """Pipeline execution structure"""
-    entry_points: List[EntryPoint] = []
-    modules: List[ModuleInstance] = []
-    connections: List[NodeConnection] = []
-    output_channels: List[OutputChannelInstance] = []
+    entry_points: list[EntryPoint] = []
+    modules: list[ModuleInstance] = []
+    connections: list[NodeConnection] = []
+    output_channels: list[OutputChannelInstance] = []
 
 
 # ============================================================================
@@ -68,7 +68,7 @@ class Position(BaseModel):
 # Flat visual state structure - all node positions in one dictionary
 # Key: node_id (for both modules and entry points)
 # Value: Position {x, y}
-VisualState: TypeAlias = Dict[str, Position]
+VisualState: TypeAlias = dict[str, Position]
 
 
 # ============================================================================
@@ -82,7 +82,7 @@ class PipelineSummary(BaseModel):
 
 class PipelinesListResponse(BaseModel):
     """Response for GET /pipelines"""
-    items: List[PipelineSummary]
+    items: list[PipelineSummary]
     total: int
     limit: int
     offset: int
@@ -118,7 +118,7 @@ class ValidationError(BaseModel):
     """Single validation error"""
     code: str  # Error code (e.g., "type_mismatch", "cycle_detected")
     message: str  # Human-readable error message
-    where: Optional[Dict[str, Any]] = None  # Additional context (connection, module, etc.)
+    where: dict[str, Any] | None = None  # Additional context (connection, module, etc.)
 
 
 class ValidatePipelineRequest(BaseModel):
@@ -129,7 +129,7 @@ class ValidatePipelineRequest(BaseModel):
 class ValidatePipelineResponse(BaseModel):
     """Response for POST /pipelines/validate"""
     valid: bool
-    error: Optional[ValidationError] = None
+    error: ValidationError | None = None
 
 
 # ============================================================================
@@ -138,7 +138,7 @@ class ValidatePipelineResponse(BaseModel):
 
 class ExecutePipelineRequest(BaseModel):
     """Request body for POST /pipelines/{id}/execute"""
-    entry_values: Dict[str, Any] = Field(
+    entry_values: dict[str, Any] = Field(
         ...,
         description="Entry point values keyed by entry point name",
     )
@@ -148,17 +148,17 @@ class ExecutionStepResult(BaseModel):
     """Result of a single module execution"""
     module_instance_id: str
     step_number: int
-    inputs: Dict[str, Dict[str, Any]]  # {pin_name: {value, type}}
-    outputs: Dict[str, Dict[str, Any]]  # {pin_name: {value, type}}
-    error: Optional[str] = None
+    inputs: dict[str, dict[str, Any]]  # {pin_name: {value, type}}
+    outputs: dict[str, dict[str, Any]]  # {pin_name: {value, type}}
+    error: str | None = None
 
 
 class ExecutePipelineResponse(BaseModel):
     """Response for POST /pipelines/{id}/execute"""
     status: str  # "success" | "failed" | "partial"
-    steps: List[ExecutionStepResult]
-    output_channel_values: Dict[str, Any] = Field(
+    steps: list[ExecutionStepResult]
+    output_channel_values: dict[str, Any] = Field(
         default_factory=dict,
         description="Collected output channel values {channel_type: value}"
     )
-    error: Optional[str] = None
+    error: str | None = None

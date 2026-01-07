@@ -47,7 +47,7 @@ class DateBefore(ComparatorModule):
             )
         )
 
-    def run(self, inputs: Dict[str, Any], cfg: DateBeforeConfig, context: Any, services: Any = None) -> Dict[str, Any]:
+    def run(self, inputs: Dict[str, Any], cfg: DateBeforeConfig, context: Any) -> Dict[str, Any]:
         # Extract input
         input_node_id = list(inputs.keys())[0]
         input_date = inputs[input_node_id]
@@ -118,7 +118,7 @@ class DateAfter(ComparatorModule):
             )
         )
 
-    def run(self, inputs: Dict[str, Any], cfg: DateAfterConfig, context: Any, services: Any = None) -> Dict[str, Any]:
+    def run(self, inputs: Dict[str, Any], cfg: DateAfterConfig, context: Any) -> Dict[str, Any]:
         # Extract input
         input_node_id = list(inputs.keys())[0]
         input_date = inputs[input_node_id]
@@ -191,7 +191,7 @@ class DateInRange(ComparatorModule):
             )
         )
 
-    def run(self, inputs: Dict[str, Any], cfg: DateInRangeConfig, context: Any, services: Any = None) -> Dict[str, Any]:
+    def run(self, inputs: Dict[str, Any], cfg: DateInRangeConfig, context: Any) -> Dict[str, Any]:
         # Extract input
         input_node_id = list(inputs.keys())[0]
         input_date = inputs[input_node_id]
@@ -276,7 +276,7 @@ class DateIsToday(ComparatorModule):
             )
         )
 
-    def run(self, inputs: Dict[str, Any], cfg: DateIsTodayConfig, context: Any, services: Any = None) -> Dict[str, Any]:
+    def run(self, inputs: Dict[str, Any], cfg: DateIsTodayConfig, context: Any) -> Dict[str, Any]:
         # Extract input
         input_node_id = list(inputs.keys())[0]
         input_date = inputs[input_node_id]

@@ -76,7 +76,7 @@ class TextSplitter(TransformModule):
             )
         )
 
-    def run(self, inputs: Dict[str, Any], cfg: TextSplitterConfig, context: Any, services: Any = None) -> Dict[str, Any]:
+    def run(self, inputs: Dict[str, Any], cfg: TextSplitterConfig, context: Any) -> Dict[str, Any]:
         """
         Execute text splitting
 

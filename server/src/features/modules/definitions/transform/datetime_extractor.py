@@ -84,7 +84,7 @@ class DateTimeExtractor(TransformModule):
             )
         )
 
-    def run(self, inputs: Dict[str, Any], cfg: DateTimeExtractorConfig, context: Any, services: Any = None) -> Dict[str, Any]:
+    def run(self, inputs: Dict[str, Any], cfg: DateTimeExtractorConfig, context: Any) -> Dict[str, Any]:
         """
         Execute datetime extraction
 

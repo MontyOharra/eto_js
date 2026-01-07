@@ -398,26 +398,6 @@ class PipelineService:
             logger.error(f"Pipeline compilation failed: {e}", exc_info=True)
             raise ServiceError(f"Failed to compile pipeline: {e}") from e
 
-    def get_module_metadata(self, module_ref: str) -> Any:
-        """
-        Fetch module metadata from module catalog.
-
-        TODO: Implement once module catalog exists.
-        This will be used for validation (checking module refs exist)
-        and compilation (getting module_kind).
-
-        Args:
-            module_ref: Module reference (e.g., "text_cleaner:1.0.0")
-
-        Returns:
-            Module metadata (structure TBD)
-
-        Raises:
-            ObjectNotFoundError: If module not found in catalog
-        """
-        logger.warning(f"get_module_metadata called but not implemented: {module_ref}")
-        raise NotImplementedError("Module catalog not yet implemented")
-
     # ==================== Public API Methods ====================
 
     def create_pipeline_definition(
@@ -450,7 +430,7 @@ class PipelineService:
             # DEBUG: Log original pipeline_state before any processing
             logger.debug("[COMPILATION DEBUG] Original pipeline_state modules:")
             for module in create_data.pipeline_state.modules:
-                logger.debug(f"[COMPILATION DEBUG]   Module {module.module_instance_id} ({module.module_ref}):")
+                logger.debug(f"[COMPILATION DEBUG]   Module {module.module_instance_id} ({module.module_id}):")
                 for inp in module.inputs:
                     logger.debug(f"[COMPILATION DEBUG]     Input: node_id={inp.node_id}, name={inp.name}, group_index={inp.group_index}")
 

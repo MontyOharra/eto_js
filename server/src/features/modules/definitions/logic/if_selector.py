@@ -74,7 +74,7 @@ class IfSelector(LogicModule):
             )
         )
 
-    def run(self, inputs: Dict[str, Any], cfg: IfSelectorConfig, context: Any, services: Any = None) -> Dict[str, Any]:
+    def run(self, inputs: Dict[str, Any], cfg: IfSelectorConfig, context: Any) -> Dict[str, Any]:
         """
         Execute if selector operation
 

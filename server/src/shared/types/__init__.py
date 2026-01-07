@@ -64,11 +64,8 @@ from shared.types.modules import (
     ModuleUpdate
 )
 
-# Pipeline execution types
+# Pipeline execution types (in-memory results, no persistence)
 from shared.types.pipeline_execution import (
-    PipelineExecutionStep,
-    PipelineExecutionStepCreate,
-    # Simulation types
     PipelineExecutionStepResult,
     PipelineExecutionResult,
 )
@@ -148,10 +145,7 @@ __all__ = [
     "Module",
     "ModuleCreate",
     "ModuleUpdate",
-    # Pipeline execution
-    "PipelineExecutionStep",
-    "PipelineExecutionStepCreate",
-    # Simulation
+    # Pipeline execution (in-memory results)
     "PipelineExecutionStepResult",
     "PipelineExecutionResult",
     # Pending orders

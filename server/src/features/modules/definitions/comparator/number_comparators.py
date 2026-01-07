@@ -47,7 +47,7 @@ class NumberEquals(ComparatorModule):
             )
         )
 
-    def run(self, inputs: Dict[str, Any], cfg: NumberEqualsConfig, context: Any = None, services: Any = None) -> Dict[str, Any]:
+    def run(self, inputs: Dict[str, Any], cfg: NumberEqualsConfig, context: Any = None) -> Dict[str, Any]:
         # Extract input
         input_node_id = list(inputs.keys())[0]
         value = inputs[input_node_id]
@@ -105,7 +105,7 @@ class NumberGreaterThan(ComparatorModule):
             )
         )
 
-    def run(self, inputs: Dict[str, Any], cfg: NumberGreaterThanConfig, context: Any = None, services: Any = None) -> Dict[str, Any]:
+    def run(self, inputs: Dict[str, Any], cfg: NumberGreaterThanConfig, context: Any = None) -> Dict[str, Any]:
         import math
 
         # Get the single input value (there should be exactly one)
@@ -193,7 +193,7 @@ class NumberLessThan(ComparatorModule):
             )
         )
 
-    def run(self, inputs: Dict[str, Any], cfg: NumberLessThanConfig, context: Any = None, services: Any = None) -> Dict[str, Any]:
+    def run(self, inputs: Dict[str, Any], cfg: NumberLessThanConfig, context: Any = None) -> Dict[str, Any]:
         import math
 
         # Extract input

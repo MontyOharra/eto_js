@@ -66,7 +66,7 @@ class BasicTextCleaner(TransformModule):
             )
         )
 
-    def run(self, inputs: Dict[str, Any], cfg: TextCleanerConfig, context: Any = None, services: Any = None) -> Dict[str, Any]:
+    def run(self, inputs: Dict[str, Any], cfg: TextCleanerConfig, context: Any = None) -> Dict[str, Any]:
         """
         Execute text cleaning on the input
 

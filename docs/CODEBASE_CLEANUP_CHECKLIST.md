@@ -25,13 +25,10 @@ Track file-by-file cleanup progress for the server codebase.
 
 ### api/
 
-- [ ] `api/__init__.py`
+- [x] `api/__init__.py`
 
 #### api/mappers/
-- [x] ~~`api/mappers/email_accounts.py`~~ (deleted - unnecessary)
-- [x] ~~`api/mappers/email_ingestion_configs.py`~~ (deleted - unnecessary)
 - [ ] `api/mappers/eto_runs.py`
-- [x] ~~`api/mappers/modules.py`~~ (deleted - unnecessary)
 - [ ] `api/mappers/order_management.py`
 - [x] `api/mappers/pdf_files.py`
 - [ ] `api/mappers/pdf_templates.py`
@@ -69,14 +66,14 @@ Track file-by-file cleanup progress for the server codebase.
 
 ### features/
 
-- [ ] `features/__init__.py`
+- [x] `features/__init__.py`
 
 #### features/auth/
-- [ ] `features/auth/__init__.py`
+- [x] `features/auth/__init__.py`
 - [x] `features/auth/service.py`
 
 #### features/email/
-- [ ] `features/email/__init__.py`
+- [x] `features/email/__init__.py`
 - [x] `features/email/service.py`
 - [x] `features/email/poller.py`
 - [x] `features/email/processing.py`
@@ -163,7 +160,7 @@ Track file-by-file cleanup progress for the server codebase.
 - [ ] `features/output_processing/service.py`
 
 #### features/pdf_files/
-- [ ] `features/pdf_files/__init__.py`
+- [x] `features/pdf_files/__init__.py`
 - [x] `features/pdf_files/service.py`
 
 ##### features/pdf_files/utils/
@@ -175,17 +172,17 @@ Track file-by-file cleanup progress for the server codebase.
 - [ ] `features/pdf_templates/service.py`
 
 #### features/pipeline_execution/
-- [ ] `features/pipeline_execution/__init__.py`
-- [ ] `features/pipeline_execution/service.py`
+- [x] `features/pipeline_execution/__init__.py`
+- [x] `features/pipeline_execution/service.py`
 
 #### features/pipelines/
-- [ ] `features/pipelines/__init__.py`
-- [ ] `features/pipelines/service.py`
+- [x] `features/pipelines/__init__.py`
+- [x] `features/pipelines/service.py`
 
 ##### features/pipelines/utils/
-- [ ] `features/pipelines/utils/__init__.py`
-- [ ] `features/pipelines/utils/compilation.py`
-- [ ] `features/pipelines/utils/validation.py`
+- [x] `features/pipelines/utils/__init__.py`
+- [x] `features/pipelines/utils/compilation.py`
+- [x] `features/pipelines/utils/validation.py`
 
 ---
 
@@ -203,7 +200,6 @@ Track file-by-file cleanup progress for the server codebase.
 - [ ] `shared/database/__init__.py`
 - [x] `shared/database/connection.py`
 - [x] `shared/database/access_connection.py` (consolidated - includes AccessConnection and AccessConnectionManager)
-- [x] ~~`shared/database/access_database_manager.py`~~ (deleted - consolidated into access_connection.py)
 - [ ] `shared/database/models.py`
 - [ ] `shared/database/unit_of_work.py`
 - [x] `shared/database/views.py`
@@ -229,8 +225,8 @@ Track file-by-file cleanup progress for the server codebase.
 - [ ] `shared/database/repositories/pending_order_history.py`
 - [ ] `shared/database/repositories/pending_update.py`
 - [ ] `shared/database/repositories/pending_update_history.py`
-- [ ] `shared/database/repositories/pipeline_definition.py`
-- [ ] `shared/database/repositories/pipeline_definition_step.py`
+- [x] `shared/database/repositories/pipeline_definition.py`
+- [x] `shared/database/repositories/pipeline_definition_step.py`
 - [ ] `shared/database/repositories/system_settings.py`
 - [ ] `shared/database/repositories/unified_actions.py`
 
@@ -268,10 +264,10 @@ Track file-by-file cleanup progress for the server codebase.
 - [x] `shared/types/pdf_files.py`
 - [ ] `shared/types/pdf_templates.py`
 - [ ] `shared/types/pending_orders.py`
-- [ ] `shared/types/pipeline_definition.py`
-- [ ] `shared/types/pipeline_definition_step.py`
-- [ ] `shared/types/pipeline_execution.py`
-- [ ] `shared/types/pipelines.py`
+- [x] `shared/types/pipeline_definition.py`
+- [x] `shared/types/pipeline_definition_step.py`
+- [x] `shared/types/pipeline_execution.py`
+- [x] `shared/types/pipelines.py`
 
 #### shared/utils/
 - [x] `shared/utils/__init__.py`

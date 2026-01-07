@@ -10,6 +10,7 @@ from typing import Any
 from pydantic import BaseModel
 
 from shared.types.modules import ModuleMeta, ModuleKind
+from shared.database.access_connection import AccessConnectionManager
 
 
 class BaseModule(ABC):
@@ -110,7 +111,7 @@ class BaseModule(ABC):
         inputs: dict[str, Any],
         cfg: Any,
         context: Any | None,
-        services: Any | None = None
+        access_conn_manager: AccessConnectionManager | None = None
     ) -> dict[str, Any]:
         """
         Execute the module logic.

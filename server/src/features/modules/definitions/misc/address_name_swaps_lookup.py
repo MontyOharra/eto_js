@@ -9,6 +9,7 @@ from pydantic import BaseModel, Field
 from shared.types import ModuleMeta, IOShape, IOSideShape, NodeGroup, NodeTypeRule
 from features.modules.registry import register
 from features.modules.base import MiscModule
+from shared.database.access_connection import AccessConnectionManager
 
 logger = logging.getLogger(__name__)
 
@@ -80,7 +81,7 @@ class AddressNameSwapsLookup(MiscModule):
             )
         )
 
-    def run(self, inputs: Dict[str, Any], cfg: AddressNameSwapsLookupConfig, context: Any, services: Any = None) -> Dict[str, Any]:
+    def run(self, inputs: Dict[str, Any], cfg: AddressNameSwapsLookupConfig, context: Any, access_conn_manager: AccessConnectionManager) -> Dict[str, Any]:
         """
         Execute address lookup using Address Name Swaps table, then fetch address details.
 
@@ -94,8 +95,8 @@ class AddressNameSwapsLookup(MiscModule):
             Dictionary with location_name, address_string, and address_found outputs
         """
         # Validate services
-        if services is None:
-            raise ValueError("AccessConnectionManager services required for address_lookup")
+        if access_conn_manager is None:
+            raise ValueError("AccessConnectionManager required for address_lookup")
 
         # Get input
         input_node_id = list(inputs.keys())[0]
@@ -115,7 +116,7 @@ class AddressNameSwapsLookup(MiscModule):
 
         # Get connection to HTC350D_Database (Address Name Swaps table)
         try:
-            connection_350d = services.get_connection("htc_350d")
+            connection_350d = access_conn_manager.get_connection("htc_350d")
         except Exception as e:
             logger.error(f"Failed to get database connection 'htc_350d': {e}")
             raise ValueError(
@@ -156,7 +157,7 @@ class AddressNameSwapsLookup(MiscModule):
 
         # Step 2: Get connection to HTC300 database (Addresses table)
         try:
-            connection_300 = services.get_connection("htc_300")
+            connection_300 = access_conn_manager.get_connection("htc_300")
         except Exception as e:
             logger.error(f"Failed to get database connection 'htc_300': {e}")
             raise ValueError(
