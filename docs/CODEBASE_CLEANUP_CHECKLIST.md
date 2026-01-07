@@ -45,7 +45,7 @@ Track file-by-file cleanup progress for the server codebase.
 - [ ] `api/routers/order_management.py`
 - [x] `api/routers/pdf_files.py`
 - [ ] `api/routers/pdf_templates.py`
-- [ ] `api/routers/pipelines.py`
+- [x] `api/routers/pipelines.py`
 - [ ] `api/routers/system_settings.py`
 
 #### api/schemas/
@@ -59,7 +59,7 @@ Track file-by-file cleanup progress for the server codebase.
 - [ ] `api/schemas/order_management.py`
 - [x] `api/schemas/pdf_files.py`
 - [ ] `api/schemas/pdf_templates.py`
-- [ ] `api/schemas/pipelines.py`
+- [x] `api/schemas/pipelines.py`
 - [ ] `api/schemas/system_settings.py`
 
 ---

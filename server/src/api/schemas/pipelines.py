@@ -1,113 +1,59 @@
 """
 Pipelines API Schemas
-Pydantic models for pipeline definition endpoints
+
+Pydantic models for pipeline API requests and responses.
+Reuses domain types from shared/types where possible.
 """
-from typing import Any, TypeAlias
+from typing import Any
+
 from pydantic import BaseModel, Field
 
-# ============================================================================
-# Pipeline State Types (logical structure)
-# ============================================================================
-
-class Node(BaseModel):
-    """Node (pin) in a module instance"""
-    node_id: str
-    type: str  # "str", "int", "float", "bool", "datetime", etc.
-    name: str
-    position_index: int
-    group_index: int
-
-
-class EntryPoint(BaseModel):
-    """Entry point for pipeline - structured like a module with outputs"""
-    entry_point_id: str  # Format: E01, E02, etc.
-    name: str
-    outputs: list[Node] = []  # Array with single output pin containing the type
-
-
-class ModuleInstance(BaseModel):
-    """Module instance placed on the canvas"""
-    module_instance_id: str
-    module_id: int  # FK to modules table (database primary key)
-    config: dict[str, Any]  # Module-specific configuration
-    inputs: list[Node] = []
-    outputs: list[Node] = []
-
-
-class NodeConnection(BaseModel):
-    """Connection between two nodes"""
-    from_node_id: str
-    to_node_id: str
-
-
-class OutputChannelInstance(BaseModel):
-    """Output channel instance for collecting pipeline outputs"""
-    output_channel_instance_id: str  # Format: OC01, OC02, etc.
-    channel_type: str                 # e.g., "hawb", "pickup_address"
-    inputs: list[Node] = []
-
-
-class PipelineState(BaseModel):
-    """Pipeline execution structure"""
-    entry_points: list[EntryPoint] = []
-    modules: list[ModuleInstance] = []
-    connections: list[NodeConnection] = []
-    output_channels: list[OutputChannelInstance] = []
+from shared.types.pipelines import (
+    PipelineState,
+    VisualState,
+)
+from shared.types.pipeline_definition import (
+    PipelineDefinition,
+    PipelineDefinitionSummary,
+    PipelineDefinitionCreate,
+)
+from shared.types.pipeline_execution import (
+    PipelineExecutionStepResult,
+    PipelineExecutionResult,
+)
 
 
 # ============================================================================
-# Visual State Types (UI layout)
+# List Response
 # ============================================================================
 
-class Position(BaseModel):
-    """2D position for visual layout"""
-    x: float
-    y: float
-
-
-# Flat visual state structure - all node positions in one dictionary
-# Key: node_id (for both modules and entry points)
-# Value: Position {x, y}
-VisualState: TypeAlias = dict[str, Position]
-
-
-# ============================================================================
-# Pipeline Definition Types
-# ============================================================================
-
-class PipelineSummary(BaseModel):
-    """Lightweight pipeline summary for list views (GET /pipelines)"""
-    id: int
-
-
-class PipelinesListResponse(BaseModel):
+class PipelineListResponse(BaseModel):
     """Response for GET /pipelines"""
-    items: list[PipelineSummary]
+    items: list[PipelineDefinitionSummary]
     total: int
     limit: int
     offset: int
 
 
-class PipelineDetail(BaseModel):
-    """Full pipeline definition details (GET /pipelines/{id})"""
-    id: int
-    pipeline_state: PipelineState
-    visual_state: VisualState
-
-
 # ============================================================================
-# Create/Update Requests
+# Create/Update
 # ============================================================================
 
-class CreatePipelineRequest(BaseModel):
-    """Request body for POST /pipelines"""
-    pipeline_state: PipelineState
-    visual_state: VisualState
+# Reuse domain type for create request
+CreatePipelineRequest = PipelineDefinitionCreate
 
 
 class CreatePipelineResponse(BaseModel):
     """Response for POST /pipelines"""
-    id: int  # Created pipeline ID
+    id: int
+
+
+# ============================================================================
+# Detail Response
+# ============================================================================
+
+# Reuse domain type directly for detail response
+PipelineDetailResponse = PipelineDefinition
 
 
 # ============================================================================
@@ -118,7 +64,7 @@ class ValidationError(BaseModel):
     """Single validation error"""
     code: str  # Error code (e.g., "type_mismatch", "cycle_detected")
     message: str  # Human-readable error message
-    where: dict[str, Any] | None = None  # Additional context (connection, module, etc.)
+    where: dict[str, Any] | None = None  # Additional context
 
 
 class ValidatePipelineRequest(BaseModel):
@@ -144,19 +90,14 @@ class ExecutePipelineRequest(BaseModel):
     )
 
 
-class ExecutionStepResult(BaseModel):
-    """Result of a single module execution"""
-    module_instance_id: str
-    step_number: int
-    inputs: dict[str, dict[str, Any]]  # {pin_name: {value, type}}
-    outputs: dict[str, dict[str, Any]]  # {pin_name: {value, type}}
-    error: str | None = None
+# Reuse domain type for execution step result
+ExecutionStepResultResponse = PipelineExecutionStepResult
 
 
 class ExecutePipelineResponse(BaseModel):
     """Response for POST /pipelines/{id}/execute"""
     status: str  # "success" | "failed" | "partial"
-    steps: list[ExecutionStepResult]
+    steps: list[PipelineExecutionStepResult]
     output_channel_values: dict[str, Any] = Field(
         default_factory=dict,
         description="Collected output channel values {channel_type: value}"

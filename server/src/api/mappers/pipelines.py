@@ -1,24 +1,15 @@
 """
 Pipeline API Mappers
-Convert between domain types and API schemas
+
+Utility functions for converting dict data to domain types.
+Used by pdf_templates service for dict-to-Pydantic conversion.
+
+NOTE: Most pipeline API endpoints no longer need these mappers since
+the schemas now directly use shared types. These remain for legacy
+dict-handling in pdf_templates.
 """
 from shared.types.pipelines import (
-    NodeInstance as NodeInstanceDomain,
-    EntryPoint as EntryPointDomain,
-    ModuleInstance as ModuleInstanceDomain,
-    NodeConnection as NodeConnectionDomain,
-    OutputChannelInstance as OutputChannelInstanceDomain,
-    PipelineState as PipelineStateDomain,
-    VisualState as VisualStateDomain,
-    Position as PositionDomain,
-)
-from shared.types.pipeline_definition import (
-    PipelineDefinition,
-    PipelineDefinitionSummary,
-    PipelineDefinitionCreate,
-)
-from api.schemas.pipelines import (
-    Node,
+    NodeInstance,
     EntryPoint,
     ModuleInstance,
     NodeConnection,
@@ -26,295 +17,40 @@ from api.schemas.pipelines import (
     PipelineState,
     VisualState,
     Position,
-    PipelineSummary,
-    PipelineDetail,
-    CreatePipelineRequest,
-    PipelinesListResponse,
 )
 
 
-# ========== Domain → API (Response) Conversions ==========
-
-def convert_node(node: NodeInstanceDomain) -> Node:
-    """Convert domain NodeInstance to API Node"""
-    return Node(
-        node_id=node.node_id,
-        type=node.type,
-        name=node.name,
-        position_index=node.position_index,
-        group_index=node.group_index
-    )
-
-
-def convert_entry_point(entry_point: EntryPointDomain) -> EntryPoint:
-    """Convert domain EntryPoint to API EntryPoint"""
-    return EntryPoint(
-        entry_point_id=entry_point.entry_point_id,
-        name=entry_point.name,
-        outputs=[convert_node(node) for node in entry_point.outputs]
-    )
-
-
-def convert_module_instance(module: ModuleInstanceDomain) -> ModuleInstance:
-    """Convert domain ModuleInstance to API ModuleInstance"""
-    return ModuleInstance(
-        module_instance_id=module.module_instance_id,
-        module_id=module.module_id,
-        config=module.config,
-        inputs=[convert_node(node) for node in module.inputs],
-        outputs=[convert_node(node) for node in module.outputs]
-    )
-
-
-def convert_connection(connection: NodeConnectionDomain) -> NodeConnection:
-    """Convert domain NodeConnection to API NodeConnection"""
-    return NodeConnection(
-        from_node_id=connection.from_node_id,
-        to_node_id=connection.to_node_id
-    )
-
-
-def convert_output_channel_instance(oc: OutputChannelInstanceDomain) -> OutputChannelInstance:
-    """Convert domain OutputChannelInstance to API OutputChannelInstance"""
-    return OutputChannelInstance(
-        output_channel_instance_id=oc.output_channel_instance_id,
-        channel_type=oc.channel_type,
-        inputs=[convert_node(node) for node in oc.inputs]
-    )
-
-
-def convert_pipeline_state(pipeline_state: PipelineStateDomain) -> PipelineState:
-    """Convert domain PipelineState to API PipelineState"""
-    return PipelineState(
-        entry_points=[convert_entry_point(ep) for ep in pipeline_state.entry_points],
-        modules=[convert_module_instance(mod) for mod in pipeline_state.modules],
-        connections=[convert_connection(conn) for conn in pipeline_state.connections],
-        output_channels=[convert_output_channel_instance(oc) for oc in pipeline_state.output_channels]
-    )
-
-
-def convert_visual_state(visual_state: VisualStateDomain) -> VisualState:
-    """Convert domain VisualState to API VisualState (flat structure)"""
-    # visual_state is already a dict at domain level
-    return {
-        key: Position(x=pos.x, y=pos.y)
-        for key, pos in visual_state.items()
-    }
-
-
-def convert_pipeline_summary(summary: PipelineDefinitionSummary) -> PipelineSummary:
-    """Convert domain PipelineDefinitionSummary to API PipelineSummary"""
-    return PipelineSummary(
-        id=summary.id
-    )
-
-
-def convert_pipeline_summary_list(summaries: list[PipelineDefinitionSummary]) -> list[PipelineSummary]:
-    """Convert list of domain summaries to API schemas"""
-    return [convert_pipeline_summary(summary) for summary in summaries]
-
-
-def convert_pipeline_detail(pipeline: PipelineDefinition) -> PipelineDetail:
-    """Convert domain PipelineDefinition to API PipelineDetail"""
-    return PipelineDetail(
-        id=pipeline.id,
-        pipeline_state=convert_pipeline_state(pipeline.pipeline_state),
-        visual_state=convert_visual_state(pipeline.visual_state)
-    )
-
-
-# ========== API (Request) → Domain Conversions ==========
-
-def convert_node_to_domain(node: Node | dict) -> NodeInstanceDomain:
+def convert_pipeline_state_to_domain(pipeline_state: PipelineState | dict) -> PipelineState:
     """
-    Convert API Node to domain NodeInstance.
-    Handles both Pydantic models and dictionaries.
+    Convert dict or PipelineState to domain PipelineState.
+
+    If already a PipelineState, returns as-is.
+    If a dict, validates and converts to PipelineState.
     """
-    if isinstance(node, dict):
-        return NodeInstanceDomain(
-            node_id=node['node_id'],
-            type=node['type'],
-            name=node['name'],
-            position_index=node['position_index'],
-            group_index=node['group_index']
-        )
+    if isinstance(pipeline_state, PipelineState):
+        return pipeline_state
 
-    return NodeInstanceDomain(
-        node_id=node.node_id,
-        type=node.type,
-        name=node.name,
-        position_index=node.position_index,
-        group_index=node.group_index
-    )
+    # Use Pydantic's model_validate for dict conversion
+    return PipelineState.model_validate(pipeline_state)
 
 
-def convert_entry_point_to_domain(entry_point: EntryPoint | dict) -> EntryPointDomain:
+def convert_visual_state_to_domain(visual_state: VisualState | dict) -> VisualState:
     """
-    Convert API EntryPoint to domain EntryPoint.
-    Handles both Pydantic models and dictionaries.
+    Convert dict to VisualState (dict[str, Position]).
+
+    Handles both raw dicts with {x, y} values and Position objects.
     """
-    if isinstance(entry_point, dict):
-        return EntryPointDomain(
-            entry_point_id=entry_point['entry_point_id'],
-            name=entry_point['name'],
-            outputs=[convert_node_to_domain(node) for node in entry_point.get('outputs', [])]
-        )
+    if not isinstance(visual_state, dict):
+        return visual_state
 
-    return EntryPointDomain(
-        entry_point_id=entry_point.entry_point_id,
-        name=entry_point.name,
-        outputs=[convert_node_to_domain(node) for node in entry_point.outputs]
-    )
+    result: VisualState = {}
+    for key, pos in visual_state.items():
+        if isinstance(pos, Position):
+            result[key] = pos
+        elif isinstance(pos, dict):
+            result[key] = Position(x=pos['x'], y=pos['y'])
+        else:
+            # Already a Position-like object with x, y attributes
+            result[key] = Position(x=pos.x, y=pos.y)
 
-
-def convert_module_instance_to_domain(module: ModuleInstance | dict) -> ModuleInstanceDomain:
-    """
-    Convert API ModuleInstance to domain ModuleInstance.
-    Recursively converts nested inputs/outputs.
-    Handles both Pydantic models and dictionaries.
-    """
-    if isinstance(module, dict):
-        return ModuleInstanceDomain(
-            module_instance_id=module['module_instance_id'],
-            module_id=module['module_id'],
-            config=module['config'],
-            inputs=[convert_node_to_domain(node) for node in module.get('inputs', [])],
-            outputs=[convert_node_to_domain(node) for node in module.get('outputs', [])]
-        )
-
-    return ModuleInstanceDomain(
-        module_instance_id=module.module_instance_id,
-        module_id=module.module_id,
-        config=module.config,
-        inputs=[convert_node_to_domain(node) for node in module.inputs],
-        outputs=[convert_node_to_domain(node) for node in module.outputs]
-    )
-
-
-def convert_connection_to_domain(connection: NodeConnection | dict) -> NodeConnectionDomain:
-    """
-    Convert API NodeConnection to domain NodeConnection.
-    Handles both Pydantic models and dictionaries.
-    """
-    if isinstance(connection, dict):
-        return NodeConnectionDomain(
-            from_node_id=connection['from_node_id'],
-            to_node_id=connection['to_node_id']
-        )
-
-    return NodeConnectionDomain(
-        from_node_id=connection.from_node_id,
-        to_node_id=connection.to_node_id
-    )
-
-
-def convert_output_channel_instance_to_domain(oc: OutputChannelInstance | dict) -> OutputChannelInstanceDomain:
-    """
-    Convert API OutputChannelInstance to domain OutputChannelInstance.
-    Handles both Pydantic models and dictionaries.
-    """
-    if isinstance(oc, dict):
-        return OutputChannelInstanceDomain(
-            output_channel_instance_id=oc['output_channel_instance_id'],
-            channel_type=oc['channel_type'],
-            inputs=[convert_node_to_domain(node) for node in oc.get('inputs', [])]
-        )
-
-    return OutputChannelInstanceDomain(
-        output_channel_instance_id=oc.output_channel_instance_id,
-        channel_type=oc.channel_type,
-        inputs=[convert_node_to_domain(node) for node in oc.inputs]
-    )
-
-
-def convert_pipeline_state_to_domain(pipeline_state: PipelineState | dict) -> PipelineStateDomain:
-    """
-    Convert API PipelineState to domain PipelineState.
-    Recursively converts all nested structures.
-    Handles both Pydantic models and dictionaries.
-    """
-    if isinstance(pipeline_state, dict):
-        return PipelineStateDomain(
-            entry_points=[
-                convert_entry_point_to_domain(ep)
-                for ep in pipeline_state.get('entry_points', [])
-            ],
-            modules=[
-                convert_module_instance_to_domain(mod)
-                for mod in pipeline_state.get('modules', [])
-            ],
-            connections=[
-                convert_connection_to_domain(conn)
-                for conn in pipeline_state.get('connections', [])
-            ],
-            output_channels=[
-                convert_output_channel_instance_to_domain(oc)
-                for oc in pipeline_state.get('output_channels', [])
-            ]
-        )
-
-    return PipelineStateDomain(
-        entry_points=[convert_entry_point_to_domain(ep) for ep in pipeline_state.entry_points],
-        modules=[convert_module_instance_to_domain(mod) for mod in pipeline_state.modules],
-        connections=[convert_connection_to_domain(conn) for conn in pipeline_state.connections],
-        output_channels=[convert_output_channel_instance_to_domain(oc) for oc in pipeline_state.output_channels]
-    )
-
-
-def convert_visual_state_to_domain(visual_state: VisualState | dict) -> VisualStateDomain:
-    """
-    Convert API VisualState to domain VisualState (flat structure).
-    Handles both dictionaries with Position objects and plain dicts.
-    """
-    positions_dict = {}
-
-    # Handle flat dict structure
-    if isinstance(visual_state, dict):
-        for key, pos in visual_state.items():
-            if isinstance(pos, dict):
-                # Plain dict with x, y keys
-                positions_dict[key] = PositionDomain(x=pos['x'], y=pos['y'])
-            else:
-                # Position object
-                positions_dict[key] = PositionDomain(x=pos.x, y=pos.y)
-
-    return positions_dict
-
-
-def convert_create_request(request: CreatePipelineRequest) -> PipelineDefinitionCreate:
-    """Convert API CreatePipelineRequest to domain PipelineDefinitionCreate"""
-    return PipelineDefinitionCreate(
-        pipeline_state=convert_pipeline_state_to_domain(request.pipeline_state),
-        visual_state=convert_visual_state_to_domain(request.visual_state)
-    )
-
-
-def convert_execution_result(result):
-    """
-    Convert domain execution result to API ExecutePipelineResponse.
-
-    Args:
-        result: Domain execution result object
-
-    Returns:
-        ExecutePipelineResponse for API
-    """
-    from api.schemas.pipelines import ExecutePipelineResponse, ExecutionStepResult
-
-    steps = [
-        ExecutionStepResult(
-            module_instance_id=step.module_instance_id,
-            step_number=step.step_number,
-            inputs=step.inputs,
-            outputs=step.outputs,
-            error=step.error
-        )
-        for step in result.steps
-    ]
-
-    return ExecutePipelineResponse(
-        status=result.status,
-        steps=steps,
-        output_channel_values=result.output_channel_values,
-        error=result.error
-    )
+    return result

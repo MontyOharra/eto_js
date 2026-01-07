@@ -1,36 +1,34 @@
 """
 PDF Template Types
-Dataclasses for template management, versioning, and wizard data
+Domain types for template management, versioning, and wizard data
 """
-from dataclasses import dataclass
 from datetime import datetime
-from typing import Literal, Any
+from typing import Any
 
-# Import PDF object types - signature objects are just a subset of extracted objects
+from pydantic import BaseModel, ConfigDict, Field
+
 from .pdf_files import PdfObjects
 from .pipelines import PipelineState
 from .pipeline_execution import PipelineExecutionResult
 
-@dataclass(frozen=True)
-class ExtractionField:
+
+class ExtractionField(BaseModel):
     """
     Field definition for data extraction from PDF.
 
-    Domain model for extraction fields - simple structure for storage.
-    API layer has matching ExtractionField Pydantic model with same structure.
-
     Note: page is 1-indexed (page 1 = first page)
     """
+    model_config = ConfigDict(frozen=True)
+
     name: str
-    description: str | None
+    description: str | None = None
     bbox: tuple[float, float, float, float]  # [x0, y0, x1, y1]
     page: int  # 1-indexed
 
 
-# ========== Template Version Dataclasses ==========
+# ========== Template Version Types ==========
 
-@dataclass(frozen=True)
-class PdfTemplateVersion:
+class PdfTemplateVersion(BaseModel):
     """
     Immutable version snapshot of template wizard data.
 
@@ -43,6 +41,8 @@ class PdfTemplateVersion:
 
     pipeline_definition_id is nullable for autoskip templates (no pipeline needed).
     """
+    model_config = ConfigDict(frozen=True)
+
     id: int
     template_id: int
     version_number: int
@@ -53,8 +53,7 @@ class PdfTemplateVersion:
     created_at: datetime
 
 
-@dataclass(frozen=True)
-class PdfVersionCreate:
+class PdfTemplateVersionCreate(BaseModel):
     """
     Data needed to create new template version.
     Used by create_template and update_template service methods.
@@ -64,6 +63,8 @@ class PdfVersionCreate:
 
     pipeline_definition_id is nullable for autoskip templates (no pipeline needed).
     """
+    model_config = ConfigDict(frozen=True)
+
     template_id: int
     version_number: int
     source_pdf_id: int
@@ -72,22 +73,22 @@ class PdfVersionCreate:
     pipeline_definition_id: int | None  # Nullable for autoskip templates
 
 
-@dataclass(frozen=True)
-class PdfVersionSummary:
+class PdfTemplateVersionSummary(BaseModel):
     """
     Lightweight version info for history/list views.
     Used by list_versions service method.
     """
+    model_config = ConfigDict(frozen=True)
+
     id: int
     version_number: int
     created_at: datetime
     is_current: bool
 
 
-# ========== Template Metadata Dataclasses ==========
+# ========== Template Metadata Types ==========
 
-@dataclass(frozen=True)
-class PdfTemplate:
+class PdfTemplate(BaseModel):
     """
     Complete template metadata (database record).
 
@@ -97,38 +98,43 @@ class PdfTemplate:
     is_autoskip: If True, pages matching this template are automatically
     skipped during ETO processing (useful for cover pages, safety forms, etc.)
     """
+    model_config = ConfigDict(frozen=True)
+
     id: int
     name: str
-    description: str | None
-    customer_id: int | None  # References external Access DB
+    description: str | None = None
+    customer_id: int | None = None  # References external Access DB
     status: str
     is_autoskip: bool
     source_pdf_id: int
-    current_version_id: int | None
+    current_version_id: int | None = None
     created_at: datetime
     updated_at: datetime
-    
-    
-@dataclass(frozen=True)
-class PdfTemplateListView:
+
+
+class PdfTemplateListView(BaseModel):
+    """
+    Template list view with version info for list endpoints.
+    """
+    model_config = ConfigDict(frozen=True)
+
     id: int
     name: str
-    description: str | None
-    customer_id: int | None  # References external Access DB
+    description: str | None = None
+    customer_id: int | None = None  # References external Access DB
     status: str
     is_autoskip: bool
     source_pdf_id: int
-    current_version_id: int | None
-    current_version_number: int | None
-    version_usage_count: int | None
-    version_count: int | None
+    current_version_id: int | None = None
+    current_version_number: int | None = None
+    version_usage_count: int | None = None
+    version_count: int | None = None
     updated_at: datetime
-        
-        
-# ========== Template CRUD Dataclasses ==========
 
-@dataclass(frozen=True)
-class PdfTemplateCreate:
+
+# ========== Template CRUD Types ==========
+
+class PdfTemplateCreate(BaseModel):
     """
     Data needed to create new template + initial version.
 
@@ -144,19 +150,20 @@ class PdfTemplateCreate:
     is_autoskip: If True, pages matching this template are automatically
     skipped during ETO processing (useful for cover pages, safety forms, etc.)
     """
+    model_config = ConfigDict(frozen=True)
+
     name: str
-    description: str | None
-    customer_id: int | None  # References external Access DB
+    description: str | None = None
+    customer_id: int | None = None  # References external Access DB
     signature_objects: PdfObjects  # Subset of extracted PDF objects
     extraction_fields: list[ExtractionField]
-    pipeline_state: dict[str, Any]  # Pipeline graph structure from wizard
+    pipeline_state: PipelineState  # Pipeline graph structure from wizard
     visual_state: dict[str, Any]  # Node positions from wizard
     source_pdf_id: int
     is_autoskip: bool = False  # Default to normal processing
 
 
-@dataclass(frozen=True)
-class PdfTemplateUpdate:
+class PdfTemplateUpdate(BaseModel):
     """
     Unified update data for templates - all possible fields in one place.
 
@@ -168,6 +175,8 @@ class PdfTemplateUpdate:
     All wizard data fields (signature_objects, extraction_fields, pipeline_state, visual_state)
     trigger version creation when provided.
     """
+    model_config = ConfigDict(frozen=True)
+
     # Template metadata fields (can update without version)
     name: str | None = None
     description: str | None = None
@@ -177,54 +186,56 @@ class PdfTemplateUpdate:
     # Wizard data fields (trigger version creation)
     signature_objects: PdfObjects | None = None
     extraction_fields: list[ExtractionField] | None = None
-    pipeline_state: dict[str, Any] | None = None  # Pipeline graph structure
+    pipeline_state: PipelineState | None = None  # Pipeline graph structure
     visual_state: dict[str, Any] | None = None  # Node positions
 
 
-# ========== Template Simulation Dataclasses ==========
+# ========== Template Simulation Types ==========
 
-@dataclass(frozen=True)
-class TemplateSimulateData:
+class TemplateSimulateData(BaseModel):
     """
     Data for template simulation (testing/preview).
 
     Used by simulate endpoint to test extraction and pipeline execution
     without persistence.
     """
+    model_config = ConfigDict(frozen=True)
+
     pdf_objects: PdfObjects
     extraction_fields: list[ExtractionField]
     pipeline_state: PipelineState
 
 
-@dataclass(frozen=True)
-class TemplateSimulateResult:
+class TemplateSimulateResult(BaseModel):
     """
     Result of template simulation.
 
     Contains extraction results, extracted data, and pipeline execution result.
     """
+    model_config = ConfigDict(frozen=True)
+
     extraction_fields: list[ExtractionField]
     extracted_data: dict[str, str]
     execution_result: PipelineExecutionResult
 
 
-# ========== Multi-Template Matching Dataclasses ==========
+# ========== Multi-Template Matching Types ==========
 
-@dataclass(frozen=True)
-class TemplateMatch:
+class TemplateMatch(BaseModel):
     """
     Single template match for a consecutive page range.
 
     Represents pages that matched a specific template version.
     matched_pages is always consecutive (e.g., [1, 2, 3] or [5, 6]).
     """
+    model_config = ConfigDict(frozen=True)
+
     template_id: int
     version_id: int
     matched_pages: list[int]  # Consecutive pages, 1-indexed
 
 
-@dataclass(frozen=True)
-class TemplateMatchingResult:
+class TemplateMatchingResult(BaseModel):
     """
     Complete multi-template matching result for entire PDF.
 
@@ -234,5 +245,7 @@ class TemplateMatchingResult:
     matches: Ordered by page appearance (first match has lowest page numbers)
     unmatched_pages: All pages that didn't match any template (can be non-consecutive)
     """
+    model_config = ConfigDict(frozen=True)
+
     matches: list[TemplateMatch]
     unmatched_pages: list[int]  # Can be non-consecutive, 1-indexed
