@@ -3,7 +3,7 @@ PDF Template Service
 Outward-facing service for managing PDF template CRUD and lifecycle
 """
 import logging
-from typing import Literal, Any, Optional
+from typing import Literal, Any
 
 from shared.database import DatabaseConnectionManager
 from shared.database.repositories import (
@@ -17,25 +17,18 @@ from shared.types.pdf_templates import (
     PdfTemplateCreate,
     PdfTemplateUpdate,
     PdfTemplateVersion,
-    PdfVersionSummary,
-    ExtractionField as ExtractionFieldDomain,
+    PdfTemplateVersionCreate,
+    ExtractionField,
     TemplateSimulateData,
     TemplateSimulateResult,
     TemplateMatch,
     TemplateMatchingResult,
 )
 from shared.types.pdf_files import PdfObjects, PdfFile
-from shared.types.pipelines import PipelineState as PipelineStateDomain
-from shared.types.pipeline_definition_step import PipelineDefinitionStepCreate
 from shared.exceptions.service import ObjectNotFoundError, ConflictError, ServiceError
 from features.pipelines.service import PipelineService
 from features.pipeline_execution.service import PipelineExecutionService
 from features.pdf_files.service import PdfFilesService
-from shared.types.pipeline_execution import PipelineExecutionResult
-from api.mappers.pipelines import (
-    convert_pipeline_state_to_domain,
-    convert_visual_state_to_domain,
-)
 
 logger = logging.getLogger(__name__)
 
@@ -215,7 +208,6 @@ class PdfTemplateService:
             ObjectNotFoundError: Template not found
             ValidationError: Pipeline validation fails
         """
-        from shared.types.pdf_templates import PdfVersionCreate
         from shared.types.pipeline_definition import PipelineDefinitionCreate
 
         # Get current template
@@ -273,14 +265,10 @@ class PdfTemplateService:
                         "Both pipeline_state and visual_state must be provided when updating pipeline"
                     )
 
-                # Convert API types to domain types (handles both Pydantic models and dicts)
-                pipeline_state_obj = convert_pipeline_state_to_domain(update_data.pipeline_state)
-                visual_state_obj = convert_visual_state_to_domain(update_data.visual_state)
-
                 # Create pipeline definition (validation, compilation, creation all handled)
                 pipeline_create_data = PipelineDefinitionCreate(
-                    pipeline_state=pipeline_state_obj,
-                    visual_state=visual_state_obj
+                    pipeline_state=update_data.pipeline_state,
+                    visual_state=update_data.visual_state
                 )
 
                 pipeline_definition = self.pipeline_service.create_pipeline_definition(pipeline_create_data)
@@ -301,7 +289,7 @@ class PdfTemplateService:
             next_version_num = (current_version.version_number + 1) if current_version else 1
 
             # Create new version
-            version_data = PdfVersionCreate(
+            version_data = PdfTemplateVersionCreate(
                 template_id=template_id,
                 version_number=next_version_num,
                 source_pdf_id=template.source_pdf_id,
@@ -360,7 +348,6 @@ class PdfTemplateService:
         Raises:
             ServiceError: If creation fails at any step
         """
-        from shared.types.pdf_templates import PdfVersionCreate
         from shared.types.pipeline_definition import PipelineDefinitionCreate
 
         try:
@@ -375,14 +362,10 @@ class PdfTemplateService:
                     # Normal templates need pipeline definition
                     logger.info("Creating pipeline definition for template")
 
-                    # Convert API types to domain types (handles both Pydantic models and dicts)
-                    pipeline_state_obj = convert_pipeline_state_to_domain(template_data.pipeline_state)
-                    visual_state_obj = convert_visual_state_to_domain(template_data.visual_state)
-
                     # Create pipeline definition (handles validation, compilation, and creation)
                     pipeline_create_data = PipelineDefinitionCreate(
-                        pipeline_state=pipeline_state_obj,
-                        visual_state=visual_state_obj
+                        pipeline_state=template_data.pipeline_state,
+                        visual_state=template_data.visual_state
                     )
 
                     pipeline_definition = self.pipeline_service.create_pipeline_definition(pipeline_create_data)
@@ -400,7 +383,7 @@ class PdfTemplateService:
                 )
 
                 # Step 3: Create version 1 with signature objects, extraction fields, and pipeline ID
-                version_data = PdfVersionCreate(
+                version_data = PdfTemplateVersionCreate(
                     template_id=template.id,
                     version_number=1,
                     source_pdf_id=template_data.source_pdf_id,
@@ -489,7 +472,7 @@ class PdfTemplateService:
 
     # ==================== Template Matching ====================
 
-    def match_template(self, pdf_objects: PdfObjects, pdf_page_count: int) -> Optional[tuple[int, int]]:
+    def match_template(self, pdf_objects: PdfObjects, pdf_page_count: int) -> tuple[int, int] | None:
         """
         Find the best matching template for a PDF document.
 
@@ -600,7 +583,7 @@ class PdfTemplateService:
     def match_templates_multi_page(
         self,
         pdf_file: PdfFile,
-        page_numbers: Optional[list[int]] = None
+        page_numbers: list[int] | None = None
     ) -> TemplateMatchingResult:
         """
         Match templates page-by-page with multi-template support.
@@ -866,31 +849,29 @@ class PdfTemplateService:
         Returns:
             New PdfObjects with remapped page numbers
         """
-        from dataclasses import replace
-
-        # Remap each object type
+        # Remap each object type using Pydantic's model_copy
         remapped_text_words = [
-            replace(obj, page=to_page) if obj.page == from_page else obj
+            obj.model_copy(update={"page": to_page}) if obj.page == from_page else obj
             for obj in pdf_objects.text_words
         ]
         remapped_graphic_rects = [
-            replace(obj, page=to_page) if obj.page == from_page else obj
+            obj.model_copy(update={"page": to_page}) if obj.page == from_page else obj
             for obj in pdf_objects.graphic_rects
         ]
         remapped_graphic_lines = [
-            replace(obj, page=to_page) if obj.page == from_page else obj
+            obj.model_copy(update={"page": to_page}) if obj.page == from_page else obj
             for obj in pdf_objects.graphic_lines
         ]
         remapped_graphic_curves = [
-            replace(obj, page=to_page) if obj.page == from_page else obj
+            obj.model_copy(update={"page": to_page}) if obj.page == from_page else obj
             for obj in pdf_objects.graphic_curves
         ]
         remapped_images = [
-            replace(obj, page=to_page) if obj.page == from_page else obj
+            obj.model_copy(update={"page": to_page}) if obj.page == from_page else obj
             for obj in pdf_objects.images
         ]
         remapped_tables = [
-            replace(obj, page=to_page) if obj.page == from_page else obj
+            obj.model_copy(update={"page": to_page}) if obj.page == from_page else obj
             for obj in pdf_objects.tables
         ]
 
@@ -1057,7 +1038,7 @@ class PdfTemplateService:
         # Break ties using weighted ranking
         logger.debug(f"Breaking tie between {len(tied_templates)} templates with {max_count} objects each")
 
-        best_match: Optional[tuple[PdfTemplateListView, PdfTemplateVersion, int]] = None
+        best_match: tuple[PdfTemplateListView, PdfTemplateVersion, int] | None = None
         best_weighted_score = -1.0
 
         for template, version, total_count in tied_templates:
@@ -1335,7 +1316,7 @@ class PdfTemplateService:
     def _extract_text_from_objects(
         self,
         pdf_objects: PdfObjects,
-        extraction_fields: list[ExtractionFieldDomain]
+        extraction_fields: list[ExtractionField]
     ) -> dict[str, str]:
         """
         Extract text from PDF objects based on extraction fields.
