@@ -1,54 +1,55 @@
 """
 ETO Sub-Run Pipeline Execution Step Domain Types
-Dataclasses representing eto_sub_run_pipeline_execution_steps table and related operations
+Pydantic models representing eto_sub_run_pipeline_execution_steps table and related operations
 """
-from dataclasses import dataclass
 from datetime import datetime
-from typing import Optional
+
+from pydantic import BaseModel, ConfigDict
 
 
-# =========================
-# Pipeline Execution Step Types
-# =========================
-
-@dataclass
-class EtoSubRunPipelineExecutionStepCreate:
+class EtoSubRunPipelineExecutionStepCreate(BaseModel):
     """
     Data required to create a new pipeline execution step record.
     Used to create audit records for each step in the pipeline.
     """
+    model_config = ConfigDict(frozen=True)
+
     pipeline_execution_id: int  # FK to eto_sub_run_pipeline_executions.id
     module_instance_id: str
     step_number: int
-    inputs: Optional[str] = None  # JSON string
-    outputs: Optional[str] = None  # JSON string
-    error: Optional[str] = None  # JSON string
+    inputs: str | None = None  # JSON string
+    outputs: str | None = None  # JSON string
+    error: str | None = None  # JSON string
 
 
-@dataclass
-class EtoSubRunPipelineExecutionStepUpdate:
+class EtoSubRunPipelineExecutionStepUpdate(BaseModel):
     """
     Data for updating a pipeline execution step record.
-    All fields are optional - only provided fields will be updated.
     Typically used to set outputs after step execution, or error on failure.
+
+    Uses Pydantic's model_fields_set to distinguish between:
+    - Field not provided: not in model_fields_set (don't update)
+    - Field set to None: in model_fields_set with None value (set NULL)
+    - Field set to value: in model_fields_set with value (update)
     """
-    inputs: Optional[str] = None  # JSON string
-    outputs: Optional[str] = None  # JSON string
-    error: Optional[str] = None  # JSON string
+    inputs: str | None = None  # JSON string
+    outputs: str | None = None  # JSON string
+    error: str | None = None  # JSON string
 
 
-@dataclass
-class EtoSubRunPipelineExecutionStep:
+class EtoSubRunPipelineExecutionStep(BaseModel):
     """
     Complete pipeline execution step record as stored in the database.
     Represents the eto_sub_run_pipeline_execution_steps table exactly.
     """
+    model_config = ConfigDict(frozen=True)
+
     id: int
     pipeline_execution_id: int  # FK to eto_sub_run_pipeline_executions.id
     module_instance_id: str
     step_number: int
-    inputs: Optional[str]  # JSON string
-    outputs: Optional[str]  # JSON string
-    error: Optional[str]  # JSON string
+    inputs: str | None  # JSON string
+    outputs: str | None  # JSON string
+    error: str | None  # JSON string
     created_at: datetime
     updated_at: datetime

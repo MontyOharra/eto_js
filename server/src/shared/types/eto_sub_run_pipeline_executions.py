@@ -1,54 +1,56 @@
 """
 ETO Sub-Run Pipeline Execution Domain Types
-Dataclasses representing eto_sub_run_pipeline_executions table and related operations
+Pydantic models representing eto_sub_run_pipeline_executions table and related operations
 """
-from dataclasses import dataclass
 from datetime import datetime
-from typing import Literal, Optional, TypedDict
+
+from pydantic import BaseModel, ConfigDict
+
 
 # =========================
 # ETO Sub-Run Pipeline Execution Types
 # =========================
 
-@dataclass
-class EtoSubRunPipelineExecutionCreate:
+class EtoSubRunPipelineExecutionCreate(BaseModel):
     """
     Data required to create a new pipeline execution record for a sub-run.
     Status defaults to "processing" in the database.
     """
+    model_config = ConfigDict(frozen=True)
+
     sub_run_id: int
-    started_at: Optional[datetime] = None
+    started_at: datetime | None = None
 
 
-class EtoSubRunPipelineExecutionUpdate(TypedDict, total=False):
+class EtoSubRunPipelineExecutionUpdate(BaseModel):
     """
-    Dict for updating a pipeline execution record.
-    All fields are optional - only provided fields will be updated.
+    Data for updating a pipeline execution record.
 
-    Uses dict keys to distinguish between:
-    - Field not provided (key absent) - field will not be updated
-    - Field set to None (key present, value None) - field will be cleared/nulled in database
-    - Field set to value (key present, value set) - field will be updated to that value
+    Uses Pydantic's model_fields_set to distinguish between:
+    - Field not provided: not in model_fields_set (don't update)
+    - Field set to None: in model_fields_set with None value (set NULL)
+    - Field set to value: in model_fields_set with value (update)
     """
+    status: str | None = None
+    error_message: str | None = None
+    transformed_data: str | None = None  # JSON string of output channel values
+    started_at: datetime | None = None
+    completed_at: datetime | None = None
+
+
+class EtoSubRunPipelineExecution(BaseModel):
+    """
+    Complete pipeline execution record as stored in the database.
+    Represents the eto_sub_run_pipeline_executions table exactly.
+    """
+    model_config = ConfigDict(frozen=True)
+
+    id: int
+    sub_run_id: int
     status: str
     error_message: str | None
     transformed_data: str | None  # JSON string of output channel values
     started_at: datetime | None
     completed_at: datetime | None
-
-
-@dataclass
-class EtoSubRunPipelineExecution:
-    """
-    Complete pipeline execution record as stored in the database.
-    Represents the eto_sub_run_pipeline_executions table exactly.
-    """
-    id: int
-    sub_run_id: int
-    status: str
-    error_message: Optional[str]
-    transformed_data: Optional[str]  # JSON string of output channel values
-    started_at: Optional[datetime]
-    completed_at: Optional[datetime]
     created_at: datetime
     updated_at: datetime

@@ -1,13 +1,14 @@
 """
 ETO Sub-Run Domain Types
-Dataclasses representing eto_sub_runs table and related operations
+Pydantic models representing eto_sub_runs table and related operations
 
 Sub-runs represent page-set business logic units within a parent ETO run.
 Each sub-run handles a specific set of pages that matched a template (or no template).
 """
-from dataclasses import dataclass
 from datetime import datetime
-from typing import Literal, Optional, Dict, Any, TypedDict
+from typing import Any
+
+from pydantic import BaseModel, ConfigDict
 
 # Import stage detail view types from eto_runs for reuse
 from shared.types.eto_runs import (
@@ -15,48 +16,43 @@ from shared.types.eto_runs import (
     EtoRunPipelineExecutionDetailView,
 )
 
+
 # =========================
 # ETO Sub-Run Types
 # =========================
 
-@dataclass
-class EtoSubRunCreate:
+class EtoSubRunCreate(BaseModel):
     """
     Data required to create a new ETO sub-run.
 
     Sub-runs are created during template matching stage when pages are
     matched to templates (or grouped as unmatched).
     """
+    model_config = ConfigDict(frozen=True)
+
     eto_run_id: int
     matched_pages: str  # JSON string like "[1,2,3]"
-    template_version_id: Optional[int] = None  # NULL for unmatched pages
+    template_version_id: int | None = None  # NULL for unmatched pages
 
 
-class EtoSubRunUpdate(TypedDict, total=False):
+class EtoSubRunUpdate(BaseModel):
     """
-    Dict for updating an ETO sub-run.
-    All fields are optional - only provided fields will be updated.
+    Data for updating an ETO sub-run.
 
-    Uses dict keys to distinguish between:
-    - Field not provided (key absent) - field will not be updated
-    - Field set to None (key present, value None) - field will be cleared/nulled in database
-    - Field set to value (key present, value set) - field will be updated to that value
-
-    Example:
-        {"status": "success"}  # Only update status
-        {"error_type": None}  # Clear error_type
-        {"status": "failure", "error_message": "Extraction failed"}  # Update multiple
+    Uses Pydantic's model_fields_set to distinguish between:
+    - Field not provided: not in model_fields_set (don't update)
+    - Field set to None: in model_fields_set with None value (set NULL)
+    - Field set to value: in model_fields_set with value (update)
     """
-    status: str
-    error_type: str | None
-    error_message: str | None
-    error_details: str | None
-    started_at: datetime | None
-    completed_at: datetime | None
+    status: str | None = None
+    error_type: str | None = None
+    error_message: str | None = None
+    error_details: str | None = None
+    started_at: datetime | None = None
+    completed_at: datetime | None = None
 
 
-@dataclass
-class EtoSubRun:
+class EtoSubRun(BaseModel):
     """
     Complete ETO sub-run record as stored in the database.
     Represents the eto_sub_runs table exactly.
@@ -64,16 +60,18 @@ class EtoSubRun:
     Each sub-run represents a contiguous set of pages that matched a specific
     template (or no template for unmatched groups).
     """
+    model_config = ConfigDict(frozen=True)
+
     id: int
     eto_run_id: int
     matched_pages: str  # JSON string like "[1,2,3]"
-    template_version_id: Optional[int]
+    template_version_id: int | None
     status: str
-    error_type: Optional[str]
-    error_message: Optional[str]
-    error_details: Optional[str]
-    started_at: Optional[datetime]
-    completed_at: Optional[datetime]
+    error_type: str | None
+    error_message: str | None
+    error_details: str | None
+    started_at: datetime | None
+    completed_at: datetime | None
     created_at: datetime
     updated_at: datetime
 
@@ -82,8 +80,7 @@ class EtoSubRun:
 # Detail View Types
 # =========================
 
-@dataclass
-class EtoSubRunDetailView:
+class EtoSubRunDetailView(BaseModel):
     """
     Complete detailed view for a single sub-run with all stage data.
 
@@ -93,6 +90,8 @@ class EtoSubRunDetailView:
     This is the new equivalent of the old single-run detailed view,
     but scoped to a specific page set.
     """
+    model_config = ConfigDict(frozen=True)
+
     # Core sub-run data
     id: int
     eto_run_id: int
@@ -100,36 +99,36 @@ class EtoSubRunDetailView:
     status: str
 
     # Template info (None for unmatched groups)
-    template_id: Optional[int]
-    template_name: Optional[str]
-    template_version_id: Optional[int]
-    template_version_num: Optional[int]
+    template_id: int | None
+    template_name: str | None
+    template_version_id: int | None
+    template_version_num: int | None
 
     # PDF info (for the viewer - inherited from parent run)
     pdf_file_id: int
     pdf_original_filename: str
-    pdf_file_size: Optional[int]
-    pdf_page_count: Optional[int]
+    pdf_file_size: int | None
+    pdf_page_count: int | None
 
     # Optional fields with defaults (must come after required fields)
-    template_customer_id: Optional[int] = None  # Customer ID from pdf_templates (for Access DB lookup)
+    template_customer_id: int | None = None  # Customer ID from pdf_templates (for Access DB lookup)
 
     # Stage data (optional - depends on sub-run progress)
     # Reuses existing stage detail view types from eto_runs
-    extraction: Optional[EtoRunExtractionDetailView] = None
-    pipeline_execution: Optional[EtoRunPipelineExecutionDetailView] = None
+    extraction: EtoRunExtractionDetailView | None = None
+    pipeline_execution: EtoRunPipelineExecutionDetailView | None = None
 
     # Output channel data from pipeline execution (for successful sub-runs)
     # Dict of channel_name -> value, e.g., {"hawb": "12345", "pickup_address": "123 Main St"}
-    output_channel_data: Optional[Dict[str, Any]] = None
+    output_channel_data: dict[str, Any] | None = None
 
     # Error tracking (business-level failures)
-    error_type: Optional[str] = None
-    error_message: Optional[str] = None
-    error_details: Optional[str] = None
+    error_type: str | None = None
+    error_message: str | None = None
+    error_details: str | None = None
 
     # Timestamps
-    started_at: Optional[datetime] = None
-    completed_at: Optional[datetime] = None
-    created_at: Optional[datetime] = None
-    updated_at: Optional[datetime] = None
+    started_at: datetime | None = None
+    completed_at: datetime | None = None
+    created_at: datetime | None = None
+    updated_at: datetime | None = None

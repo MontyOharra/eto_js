@@ -1,10 +1,12 @@
 """
 ETO Sub-Run Output Execution Domain Types
-Dataclasses representing eto_sub_run_output_executions table and related operations
+Pydantic models representing eto_sub_run_output_executions table and related operations
 """
-from dataclasses import dataclass
 from datetime import datetime
-from typing import Any, Dict, Literal, Optional, TypedDict
+from typing import Any, Literal
+
+from pydantic import BaseModel, ConfigDict
+
 
 # =========================
 # Status Literal
@@ -30,25 +32,53 @@ ActionTaken = Literal[
 # ETO Sub-Run Output Execution Types
 # =========================
 
-@dataclass
-class EtoSubRunOutputExecutionCreate:
+class EtoSubRunOutputExecutionCreate(BaseModel):
     """
     Data required to create a new output execution record.
 
     One record is created per HAWB (if pipeline returns multiple HAWBs,
     multiple records are created with the same output_channel_data).
     """
+    model_config = ConfigDict(frozen=True)
+
     sub_run_id: int
     customer_id: int
     hawb: str
-    output_channel_data: Dict[str, Any]  # Stored as JSON in DB
+    output_channel_data: dict[str, Any]  # Stored as JSON in DB
 
 
-class EtoSubRunOutputExecutionUpdate(TypedDict, total=False):
+class EtoSubRunOutputExecutionUpdate(BaseModel):
     """
-    Dict for updating an output execution record.
-    All fields are optional - only provided fields will be updated.
+    Data for updating an output execution record.
+
+    Uses Pydantic's model_fields_set to distinguish between:
+    - Field not provided: not in model_fields_set (don't update)
+    - Field set to None: in model_fields_set with None value (set NULL)
+    - Field set to value: in model_fields_set with value (update)
     """
+    status: OutputExecutionStatus | None = None
+    action_taken: str | None = None
+    htc_order_number: float | None = None
+    error_message: str | None = None
+    error_type: str | None = None
+    started_at: datetime | None = None
+    completed_at: datetime | None = None
+
+
+class EtoSubRunOutputExecution(BaseModel):
+    """
+    Complete output execution record as stored in the database.
+
+    Represents the eto_sub_run_output_executions table.
+    The unique order identifier is (customer_id, hawb).
+    """
+    model_config = ConfigDict(frozen=True)
+
+    id: int
+    sub_run_id: int
+    customer_id: int
+    hawb: str
+    output_channel_data: dict[str, Any]
     status: OutputExecutionStatus
     action_taken: str | None
     htc_order_number: float | None
@@ -56,27 +86,5 @@ class EtoSubRunOutputExecutionUpdate(TypedDict, total=False):
     error_type: str | None
     started_at: datetime | None
     completed_at: datetime | None
-
-
-@dataclass
-class EtoSubRunOutputExecution:
-    """
-    Complete output execution record as stored in the database.
-
-    Represents the eto_sub_run_output_executions table.
-    The unique order identifier is (customer_id, hawb).
-    """
-    id: int
-    sub_run_id: int
-    customer_id: int
-    hawb: str
-    output_channel_data: Dict[str, Any]
-    status: OutputExecutionStatus
-    action_taken: Optional[str]
-    htc_order_number: Optional[float]
-    error_message: Optional[str]
-    error_type: Optional[str]
-    started_at: Optional[datetime]
-    completed_at: Optional[datetime]
     created_at: datetime
     updated_at: datetime

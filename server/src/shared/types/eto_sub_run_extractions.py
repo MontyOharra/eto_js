@@ -1,52 +1,53 @@
 """
 ETO Sub-Run Extraction Domain Types
-Dataclasses representing eto_sub_run_extractions table and related operations
+Pydantic models representing eto_sub_run_extractions table and related operations
 """
-from dataclasses import dataclass
 from datetime import datetime
-from typing import Any, Dict, List, Literal, Optional, TypedDict
+from typing import Any
+
+from pydantic import BaseModel, ConfigDict
+
 
 # =========================
 # ETO Sub-Run Extraction Types
 # =========================
 
-@dataclass
-class EtoSubRunExtractionCreate:
+class EtoSubRunExtractionCreate(BaseModel):
     """
     Data required to create a new extraction for a sub-run.
     Status defaults to "processing" in the database.
     Timing and data fields are set during processing.
     """
+    model_config = ConfigDict(frozen=True)
+
     sub_run_id: int
 
 
-class EtoSubRunExtractionUpdate(TypedDict, total=False):
+class EtoSubRunExtractionUpdate(BaseModel):
     """
-    Dict for updating a sub-run extraction.
-    All fields are optional - only provided fields will be updated.
+    Data for updating a sub-run extraction.
 
-    Uses dict keys to distinguish between:
-    - Field not provided (key absent) - field will not be updated
-    - Field set to None (key present, value None) - field will be cleared/nulled in database
-    - Field set to value (key present, value set) - field will be updated to that value
+    Uses Pydantic's model_fields_set to distinguish between:
+    - Field not provided: not in model_fields_set (don't update)
+    - Field set to None: in model_fields_set with None value (set NULL)
+    - Field set to value: in model_fields_set with value (update)
 
-    Note: extracted_data is List[Dict] in domain but stored as JSON string in DB.
+    Note: extracted_data is list[dict] in domain but stored as JSON string in DB.
     Repository handles serialization.
     """
-    status: str
-    extracted_data: List[Dict[str, Any]] | None
-    error_message: str | None
-    started_at: datetime | None
-    completed_at: datetime | None
+    status: str | None = None
+    extracted_data: list[dict[str, Any]] | None = None
+    error_message: str | None = None
+    started_at: datetime | None = None
+    completed_at: datetime | None = None
 
 
-@dataclass
-class EtoSubRunExtraction:
+class EtoSubRunExtraction(BaseModel):
     """
     Complete extraction record for a sub-run.
 
     Note: extracted_data is stored as JSON string in database but represented
-    as List[Dict] in domain. Repository handles serialization/deserialization.
+    as list[dict] in domain. Repository handles serialization/deserialization.
 
     extracted_data format:
     [
@@ -60,12 +61,14 @@ class EtoSubRunExtraction:
         ...
     ]
     """
+    model_config = ConfigDict(frozen=True)
+
     id: int
     sub_run_id: int
     status: str
-    extracted_data: Optional[List[Dict[str, Any]]]
-    error_message: Optional[str]
-    started_at: Optional[datetime]
-    completed_at: Optional[datetime]
+    extracted_data: list[dict[str, Any]] | None
+    error_message: str | None
+    started_at: datetime | None
+    completed_at: datetime | None
     created_at: datetime
     updated_at: datetime
