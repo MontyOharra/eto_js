@@ -10,6 +10,7 @@ from typing import Optional, Literal, Any
 from fastapi import APIRouter, Query, status, Depends, File, UploadFile, Request
 from fastapi.responses import StreamingResponse
 
+
 from api.schemas.eto_runs import (
     GetEtoRunsResponse,
     BulkRunIdsRequest,
@@ -30,6 +31,7 @@ from api.mappers.eto_runs import (
 
 from shared.services.service_container import ServiceContainer
 from shared.exceptions.service import ValidationError
+from shared.exceptions.service import ObjectNotFoundError
 from shared.events.eto_events import eto_event_manager
 from features.eto_runs.service import EtoRunsService
 
@@ -495,7 +497,6 @@ async def reprocess_sub_run(
     # Get parent run ID before reprocessing (sub-run will be deleted)
     sub_run = service.sub_run_repo.get_by_id(sub_run_id)
     if not sub_run:
-        from shared.exceptions.service import ObjectNotFoundError
         raise ObjectNotFoundError(f"Sub-run {sub_run_id} not found")
 
     eto_run_id = sub_run.eto_run_id
@@ -540,7 +541,6 @@ async def skip_sub_run(
     # Get parent run ID before skipping (sub-run will be deleted)
     sub_run = service.sub_run_repo.get_by_id(sub_run_id)
     if not sub_run:
-        from shared.exceptions.service import ObjectNotFoundError
         raise ObjectNotFoundError(f"Sub-run {sub_run_id} not found")
 
     eto_run_id = sub_run.eto_run_id

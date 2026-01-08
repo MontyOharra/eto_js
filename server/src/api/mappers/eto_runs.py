@@ -30,6 +30,7 @@ from api.schemas.eto_runs import (
     TransformResult,
 )
 
+from features.modules.output_channel_definitions import get_channel_by_name
 
 def eto_run_list_view_to_api(run: EtoRunListView) -> EtoRunListItem:
     """
@@ -151,7 +152,6 @@ def eto_sub_run_detail_to_api(
     Returns:
         EtoSubRunDetail Pydantic model for API response
     """
-    from features.modules.output_channel_definitions import get_channel_by_name
 
     # Build template info (None for needs_template sub-runs)
     template: Optional[EtoSubRunTemplate] = None

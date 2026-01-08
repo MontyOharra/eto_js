@@ -17,6 +17,7 @@ Architecture:
 """
 
 from typing import Any
+import json
 
 from shared.logging import get_logger
 from shared.exceptions import OutputExecutionError
@@ -310,7 +311,6 @@ class HtcIntegrationService:
         Raises:
             OutputExecutionError: If update fails
         """
-        import json
 
         # Uppercase all string fields for HTC database
         string_fields = [
@@ -675,7 +675,6 @@ class HtcIntegrationService:
             OutputExecutionError: If order creation fails
             ValueError: If required data is missing
         """
-        import json
 
         logger.info(f"Creating HTC order from pending order {pending_order.id}")
 

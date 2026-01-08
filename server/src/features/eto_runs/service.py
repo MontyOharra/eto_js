@@ -10,6 +10,8 @@ from datetime import datetime, timezone
 
 from shared.logging import get_logger
 
+from features.eto_runs.utils.extraction import extract_data_from_pdf_pages
+        
 from shared.database import DatabaseConnectionManager
 from shared.database.repositories.eto_run import EtoRunRepository
 from shared.database.repositories.eto_sub_run import EtoSubRunRepository
@@ -1118,7 +1120,6 @@ class EtoRunsService:
         Returns:
             List of extracted data records for specified pages only
         """
-        from features.eto_runs.utils.extraction import extract_data_from_pdf_pages
 
         return extract_data_from_pdf_pages(
             pdf_file_service=self.pdf_files_service,

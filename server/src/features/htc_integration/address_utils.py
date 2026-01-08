@@ -8,6 +8,7 @@ Provides address-related operations for the HTC database:
 """
 
 import re
+import usaddress
 from datetime import datetime
 from typing import Any, Callable
 
@@ -282,12 +283,6 @@ class HtcAddressUtils:
             - zip_code: ZIP code (without +4)
             Returns None if parsing fails or essential components missing.
         """
-        try:
-            import usaddress
-            from usaddress import RepeatedLabelError #type: ignore
-        except ImportError:
-            logger.error("usaddress library not installed. Run: pip install usaddress")
-            raise ImportError("usaddress library required for address parsing")
 
         if not address_string or not address_string.strip():
             logger.debug("Empty address string provided")
