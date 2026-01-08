@@ -90,13 +90,12 @@ Track file-by-file cleanup progress for the server codebase.
 - [x] `features/email/utils/filter_rules.py`
 
 #### features/eto_runs/
-- [ ] `features/eto_runs/__init__.py`
+- [x] `features/eto_runs/__init__.py`
 - [ ] `features/eto_runs/service.py`
 
 ##### features/eto_runs/utils/
-- [ ] `features/eto_runs/utils/__init__.py`
-- [ ] `features/eto_runs/utils/eto_worker.py`
-- [ ] `features/eto_runs/utils/extraction.py`
+- [x] `features/eto_runs/utils/__init__.py`
+- [x] `features/eto_runs/utils/eto_worker.py`
 
 #### features/htc_integration/
 - [ ] `features/htc_integration/__init__.py`
@@ -210,12 +209,12 @@ Track file-by-file cleanup progress for the server codebase.
 - [x] `shared/database/repositories/email.py`
 - [x] `shared/database/repositories/email_account.py`
 - [x] `shared/database/repositories/email_ingestion_config.py`
-- [ ] `shared/database/repositories/eto_run.py`
-- [ ] `shared/database/repositories/eto_sub_run.py`
-- [ ] `shared/database/repositories/eto_sub_run_extraction.py`
-- [ ] `shared/database/repositories/eto_sub_run_output_execution.py`
-- [ ] `shared/database/repositories/eto_sub_run_pipeline_execution.py`
-- [ ] `shared/database/repositories/eto_sub_run_pipeline_execution_step.py`
+- [x] `shared/database/repositories/eto_run.py`
+- [x] `shared/database/repositories/eto_sub_run.py`
+- [x] `shared/database/repositories/eto_sub_run_extraction.py`
+- [x] `shared/database/repositories/eto_sub_run_output_execution.py`
+- [x] `shared/database/repositories/eto_sub_run_pipeline_execution.py`
+- [x] `shared/database/repositories/eto_sub_run_pipeline_execution_step.py`
 - [x] `shared/database/repositories/module.py`
 - [x] `shared/database/repositories/output_channel_type.py`
 - [x] `shared/database/repositories/pdf_file.py`
@@ -253,12 +252,12 @@ Track file-by-file cleanup progress for the server codebase.
 - [x] `shared/types/email_accounts.py`
 - [x] `shared/types/email_ingestion_configs.py`
 - [x] `shared/types/email_integrations.py`
-- [ ] `shared/types/eto_runs.py`
-- [ ] `shared/types/eto_sub_runs.py`
-- [ ] `shared/types/eto_sub_run_extractions.py`
-- [ ] `shared/types/eto_sub_run_output_executions.py`
-- [ ] `shared/types/eto_sub_run_pipeline_execution_steps.py`
-- [ ] `shared/types/eto_sub_run_pipeline_executions.py`
+- [x] `shared/types/eto_runs.py`
+- [x] `shared/types/eto_sub_runs.py`
+- [x] `shared/types/eto_sub_run_extractions.py`
+- [x] `shared/types/eto_sub_run_output_executions.py`
+- [x] `shared/types/eto_sub_run_pipeline_execution_steps.py`
+- [x] `shared/types/eto_sub_run_pipeline_executions.py`
 - [x] `shared/types/modules.py`
 - [x] `shared/types/output_channels.py`
 - [x] `shared/types/pdf_files.py`

@@ -80,6 +80,25 @@ class PdfObjects(BaseModel):
     tables: list[Table]
 
 
+# ========== Extraction Result Types ==========
+
+class ExtractedFieldData(BaseModel):
+    """
+    Single extraction field result with bbox for visual display.
+
+    Used by extraction utilities to return rich results that include
+    both the extracted value and the field metadata (bbox, page) for
+    UI visualization of extraction regions.
+    """
+    model_config = ConfigDict(frozen=True)
+
+    name: str
+    description: str | None
+    bbox: tuple[float, float, float, float]
+    page: int
+    extracted_value: str
+
+
 # ========== PDF File Types ==========
 
 class PdfFile(BaseModel):

@@ -5,13 +5,13 @@ Business logic for ETO run lifecycle and orchestration
 import asyncio
 import json
 import os
-from typing import Optional, List, Dict, Any, Set, Literal
+from typing import Any, Literal
 from datetime import datetime, timezone
 
 from shared.logging import get_logger
 
-from features.eto_runs.utils.extraction import extract_data_from_pdf_pages
-        
+from features.pdf_files.utils import extract_data_from_pdf_pages
+
 from shared.database import DatabaseConnectionManager
 from shared.database.repositories.eto_run import EtoRunRepository
 from shared.database.repositories.eto_sub_run import EtoSubRunRepository
@@ -189,7 +189,7 @@ class EtoRunsService:
         self,
         pdf_file_id: int,
         source_type: Literal['email', 'manual'] = 'manual',
-        source_email_id: Optional[int] = None
+        source_email_id: int | None = None
     ) -> EtoRun:
         """
         Create ETO run with a single initial sub-run containing all pages.
@@ -227,10 +227,12 @@ class EtoRunsService:
                 source_type=source_type,
                 source_email_id=source_email_id
             ))
-            self.eto_run_repo.update(run.id, {
-                "status": "processing",
-                "started_at": datetime.now(timezone.utc)
-            })
+            self.eto_run_repo.update(run.id,                     
+                EtoRunUpdate(
+                    status='processing',
+                    started_at=datetime.now(timezone.utc)
+                )
+            )
 
             # Broadcast creation event
             eto_event_manager.broadcast_sync(
@@ -270,23 +272,25 @@ class EtoRunsService:
             logger.error(f"Critical error creating run for PDF {pdf_file_id}: {e}", exc_info=True)
 
             if 'run' in locals():
-                self.eto_run_repo.update(run.id, {
-                    "status": "failure",
-                    "completed_at": datetime.now(timezone.utc),
-                    "error_type": "RunCreationError",
-                    "error_message": str(e)
-                })
-
+                self.eto_run_repo.update(run.id, 
+                    EtoRunUpdate(
+                        status="failure",
+                        completed_at=datetime.now(timezone.utc),
+                        error_type="RunCreationError",
+                        error_message=str(e)
+                    )
+                )
+            
             raise ServiceError(f"Failed to create ETO run: {str(e)}") from e
 
     def list_runs(
         self,
-        status: Optional[str] = None,
-        limit: Optional[int] = None,
-        offset: Optional[int] = None,
+        status: str | None = None,
+        limit: int | None = None,
+        offset: int | None = None,
         order_by: str = "created_at",
         desc: bool = True
-    ) -> List[EtoRun]:
+    ) -> list[EtoRun]:
         """
         List ETO runs with optional filtering, pagination, and sorting.
 
@@ -320,16 +324,16 @@ class EtoRunsService:
 
     def list_runs_with_relations(
         self,
-        is_read: Optional[bool] = None,
-        has_sub_run_status: Optional[str] = None,
-        search_query: Optional[str] = None,
-        date_from: Optional[datetime] = None,
-        date_to: Optional[datetime] = None,
-        limit: Optional[int] = None,
-        offset: Optional[int] = None,
+        is_read: bool | None = None,
+        has_sub_run_status: str | None = None,
+        search_query: str | None = None,
+        date_from: datetime | None = None,
+        date_to: datetime | None = None,
+        limit: int | None = None,
+        offset: int | None = None,
         order_by: str = "last_processed_at",
         desc: bool = True
-    ) -> List[EtoRunListView]:
+    ) -> list[EtoRunListView]:
         """
         List ETO runs with all related data for API list view.
 
@@ -509,7 +513,7 @@ class EtoRunsService:
             logger.warning(f"Failed to parse matched_pages for sub-run {sub_run_id}: {e}")
 
         # Get extraction stage data (if exists)
-        extraction_detail: Optional[EtoRunExtractionDetailView] = None
+        extraction_detail: EtoRunExtractionDetailView | None = None
         extraction = self.sub_run_extraction_repo.get_by_sub_run_id(sub_run_id)
         if extraction:
             extraction_detail = EtoRunExtractionDetailView(
@@ -520,7 +524,7 @@ class EtoRunsService:
             )
 
         # Get pipeline execution stage data (if exists)
-        pipeline_detail: Optional[EtoRunPipelineExecutionDetailView] = None
+        pipeline_detail: EtoRunPipelineExecutionDetailView | None = None
         pipeline_exec = self.sub_run_pipeline_execution_repo.get_by_sub_run_id(sub_run_id)
         if pipeline_exec:
             # Get pipeline definition ID from template version (already fetched above)
@@ -629,7 +633,7 @@ class EtoRunsService:
             raise ObjectNotFoundError(f"Sub-run {sub_run_id} not found")
 
         # Get customer_id from template (via template_version)
-        customer_id: Optional[int] = None
+        customer_id: int | None = None
         if sub_run.template_version_id:
             template_version = self.pdf_template_service.get_version_by_id(sub_run.template_version_id)
             template = self.pdf_template_service.get_template(template_version.template_id)
@@ -639,10 +643,10 @@ class EtoRunsService:
         try:
             # Update to processing status
             started_at = datetime.now(timezone.utc)
-            self.sub_run_repo.update(sub_run_id, {
-                "status": "processing",
-                "started_at": started_at
-            })
+            self.sub_run_repo.update(sub_run_id, EtoSubRunUpdate(
+                status="processing",
+                started_at=started_at
+            ))
 
             # Broadcast status change
             eto_event_manager.broadcast_sync("sub_run_updated", {
@@ -737,10 +741,10 @@ class EtoRunsService:
         try:
             # Update to processing status
             started_at = datetime.now(timezone.utc)
-            self.sub_run_repo.update(sub_run_id, {
-                "status": "processing",
-                "started_at": started_at
-            })
+            self.sub_run_repo.update(sub_run_id, EtoSubRunUpdate(
+                status="processing",
+                started_at=started_at
+            ))
 
             # Broadcast status change
             eto_event_manager.broadcast_sync("sub_run_updated", {
@@ -786,14 +790,14 @@ class EtoRunsService:
                 template = self.pdf_template_service.get_template(match.template_id)
                 if template.is_autoskip:
                     # Autoskip template - mark as skipped, no further processing needed
-                    self.sub_run_repo.update(new_sub_run.id, {"status": "skipped"})
+                    self.sub_run_repo.update(new_sub_run.id, EtoSubRunUpdate(status="skipped"))
                     logger.info(
                         f"Sub-run {sub_run_id}: Created skipped sub-run {new_sub_run.id} "
                         f"for pages {match.matched_pages} (autoskip template '{template.name}')"
                     )
                 else:
                     # Normal template - mark as matched, ready for extraction + pipeline
-                    self.sub_run_repo.update(new_sub_run.id, {"status": "matched"})
+                    self.sub_run_repo.update(new_sub_run.id, EtoSubRunUpdate(status="matched"))
                     logger.debug(
                         f"Sub-run {sub_run_id}: Created matched sub-run {new_sub_run.id} "
                         f"for pages {match.matched_pages} with template version {match.version_id}"
@@ -806,7 +810,7 @@ class EtoRunsService:
                     matched_pages=json.dumps(match_result.unmatched_pages),
                     template_version_id=None,
                 ))
-                self.sub_run_repo.update(unmatched_sub_run.id, {"status": "needs_template"})
+                self.sub_run_repo.update(unmatched_sub_run.id, EtoSubRunUpdate(status="needs_template"))
                 logger.debug(
                     f"Sub-run {sub_run_id}: Created needs_template sub-run {unmatched_sub_run.id} "
                     f"for pages {match_result.unmatched_pages}"
@@ -900,12 +904,12 @@ class EtoRunsService:
         )
 
         # Update with results (repository handles JSON serialization)
-        self.sub_run_extraction_repo.update(extraction.id, {
-            "status": "success",
-            "extracted_data": extracted_data,
-            "started_at": datetime.now(timezone.utc),
-            "completed_at": datetime.now(timezone.utc)
-        })
+        self.sub_run_extraction_repo.update(extraction.id, EtoSubRunExtractionUpdate(
+            status="success",
+            extracted_data=extracted_data,
+            started_at=datetime.now(timezone.utc),
+            completed_at=datetime.now(timezone.utc)
+        ))
 
         logger.info(f"Sub-run {sub_run_id}: Extraction completed - {len(extracted_data)} pages extracted")
 
@@ -1078,11 +1082,11 @@ class EtoRunsService:
 
         self.sub_run_pipeline_execution_repo.update(
             pipeline_execution.id,
-            {
-                "status": final_status,
-                "completed_at": completed_at,
-                "transformed_data": transformed_data_json
-            }
+            EtoSubRunPipelineExecutionUpdate(
+                status=final_status,
+                completed_at=completed_at,
+                transformed_data=transformed_data_json
+            )
         )
         logger.debug(
             f"Sub-run {sub_run_id}: Updated pipeline_execution record to status={final_status}, "
@@ -1131,7 +1135,7 @@ class EtoRunsService:
     def _process_sub_run_output_execution(
         self,
         sub_run_id: int,
-        output_channel_values: Dict[str, Any],
+        output_channel_values: dict[str, Any],
         customer_id: int,
     ) -> None:
         """
@@ -1176,7 +1180,7 @@ class EtoRunsService:
 
         logger.monitor(f"Sub-run {sub_run_id}: Output execution completed for {len(hawbs)} HAWB(s)")
 
-    def _extract_hawbs(self, output_channel_values: Dict[str, Any]) -> List[str]:
+    def _extract_hawbs(self, output_channel_values: dict[str, Any]) -> list[str]:
         """
         Extract HAWB value(s) from output channel values.
 
@@ -1189,7 +1193,7 @@ class EtoRunsService:
         Returns:
             List of HAWB strings (may be empty if no HAWB found)
         """
-        hawbs: List[str] = []
+        hawbs: list[str] = []
 
         # Check hawb_list channel (list[str])
         hawb_list_value = output_channel_values.get("hawb_list")
@@ -1209,7 +1213,7 @@ class EtoRunsService:
 
         # Deduplicate while preserving order
         seen: set[str] = set()
-        unique_hawbs: List[str] = []
+        unique_hawbs: list[str] = []
         for h in hawbs:
             if h not in seen:
                 seen.add(h)
@@ -1231,10 +1235,10 @@ class EtoRunsService:
         logger.info(f"Sub-run {sub_run_id}: Marking as success")
 
         completed_at = datetime.now(timezone.utc)
-        self.sub_run_repo.update(sub_run_id, {
-            "status": "success",
-            "completed_at": completed_at
-        })
+        self.sub_run_repo.update(sub_run_id, EtoSubRunUpdate(
+            status="success",
+            completed_at=completed_at
+        ))
 
         # Get parent run ID for broadcast
         sub_run = self.sub_run_repo.get_by_id(sub_run_id)
@@ -1250,7 +1254,7 @@ class EtoRunsService:
         self,
         sub_run_id: int,
         error: Exception,
-        error_type: Optional[str] = None
+        error_type: str | None = None
     ) -> None:
         """
         Mark sub-run as failed and record error details.
@@ -1271,13 +1275,13 @@ class EtoRunsService:
 
         logger.error(f"Sub-run {sub_run_id}: Marking as failure - {error_type}: {error}")
 
-        self.sub_run_repo.update(sub_run_id, {
-            "status": "failure",
-            "error_type": error_type,
-            "error_message": error_message,
-            "error_details": None,  # TODO: Add stack trace or additional context if needed
-            "completed_at": completed_at
-        })
+        self.sub_run_repo.update(sub_run_id, EtoSubRunUpdate(
+            status="failure",
+            error_type=error_type,
+            error_message=error_message,
+            error_details=None,  # TODO: Add stack trace or additional context if needed
+            completed_at=completed_at
+        ))
 
         # Get parent run ID for broadcast
         sub_run = self.sub_run_repo.get_by_id(sub_run_id)
@@ -1352,20 +1356,21 @@ class EtoRunsService:
 
         # Only update and broadcast if status changed
         if new_status != old_status:
-            update_data: EtoRunUpdate = {"status": new_status}
+            # Build update with conditional fields
+            update_kwargs: dict[str, Any] = {"status": new_status}
             if completed_at:
-                update_data["completed_at"] = completed_at
+                update_kwargs["completed_at"] = completed_at
                 # Set last_processed_at for stable list sorting (Item #5)
                 # Only updated when run reaches terminal state, not during processing
-                update_data["last_processed_at"] = completed_at
+                update_kwargs["last_processed_at"] = completed_at
 
             # Reset is_read to False when status changes (Item #4)
             # This ensures users are notified of changes to runs they've reviewed
             if current_run.is_read:
-                update_data["is_read"] = False
+                update_kwargs["is_read"] = False
                 logger.debug(f"Run {run_id}: Resetting is_read to False due to status change")
 
-            self.eto_run_repo.update(run_id, update_data)
+            self.eto_run_repo.update(run_id, EtoRunUpdate(**update_kwargs))
 
             # Broadcast run status change
             event_data = {
@@ -1396,14 +1401,14 @@ class EtoRunsService:
         """
         logger.info(f"Sub-run {sub_run_id}: Resetting to not_started")
 
-        self.sub_run_repo.update(sub_run_id, {
-            "status": "not_started",
-            "started_at": None,
-            "completed_at": None,
-            "error_type": None,
-            "error_message": None,
-            "error_details": None
-        })
+        self.sub_run_repo.update(sub_run_id, EtoSubRunUpdate(
+            status="not_started",
+            started_at=None,
+            completed_at=None,
+            error_type=None,
+            error_message=None,
+            error_details=None
+        ))
 
     # ==================== Bulk Operation Methods ====================
 
@@ -1615,7 +1620,7 @@ class EtoRunsService:
 
     # ==================== Run-Level Aggregated Operations ====================
 
-    def reprocess_run(self, run_id: int) -> Optional[int]:
+    def reprocess_run(self, run_id: int) -> int | None:
         """
         Reprocess all failed/needs_template sub-runs for a run by aggregating them into one new sub-run.
 
@@ -1659,7 +1664,7 @@ class EtoRunsService:
             return None
 
         # Collect all pages from eligible sub-runs
-        all_pages: List[int] = []
+        all_pages: list[int] = []
         for sub_run in eligible_sub_runs:
             pages = json.loads(sub_run.matched_pages)
             all_pages.extend(pages)
@@ -1717,7 +1722,7 @@ class EtoRunsService:
         )
         return new_sub_run.id
 
-    def skip_run(self, run_id: int) -> Optional[int]:
+    def skip_run(self, run_id: int) -> int | None:
         """
         Skip all failed/needs_template sub-runs for a run by aggregating them into one skipped sub-run.
 
@@ -1759,7 +1764,7 @@ class EtoRunsService:
             return None
 
         # Collect all pages from eligible sub-runs
-        all_pages: List[int] = []
+        all_pages: list[int] = []
         for sub_run in eligible_sub_runs:
             pages = json.loads(sub_run.matched_pages)
             all_pages.extend(pages)
@@ -1799,7 +1804,7 @@ class EtoRunsService:
                 template_version_id=None,
             ))
             # Update status to skipped
-            uow.eto_sub_runs.update(new_sub_run.id, {"status": "skipped"})
+            uow.eto_sub_runs.update(new_sub_run.id, EtoSubRunUpdate(status="skipped"))
             logger.debug(f"Created new skipped sub-run {new_sub_run.id} with {len(all_pages)} pages")
 
         # Update parent run status
@@ -1968,7 +1973,7 @@ class EtoRunsService:
                 template_version_id=None,
             ))
             # Update status to skipped
-            uow.eto_sub_runs.update(new_sub_run.id, {"status": "skipped"})
+            uow.eto_sub_runs.update(new_sub_run.id, EtoSubRunUpdate(status="skipped"))
             logger.debug(f"Created new skipped sub-run {new_sub_run.id} with pages {matched_pages}")
 
         # Update parent run status (outside UoW - uses separate transaction)
@@ -2028,7 +2033,7 @@ class EtoRunsService:
         """
         return self.worker.resume()
 
-    def get_worker_status(self) -> Dict[str, Any]:
+    def get_worker_status(self) -> dict[str, Any]:
         """
         Get current worker status and metrics.
 

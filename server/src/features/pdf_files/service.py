@@ -13,7 +13,7 @@ from typing import Any
 
 import pdfplumber
 
-from features.pdf_files.utils import extract_data_from_pdf_objects
+from features.pdf_files.utils import extract_fields_from_raw_objects
 from shared.config import StorageConfig
 from shared.database import DatabaseConnectionManager
 from shared.database.repositories import PdfFileRepository
@@ -300,7 +300,7 @@ class PdfFilesService:
                             })
 
                 # Use extraction utility to extract data from text words
-                extracted_data = extract_data_from_pdf_objects(
+                extracted_data = extract_fields_from_raw_objects(
                     pdf_objects=text_words,
                     extraction_fields=extraction_fields
                 )

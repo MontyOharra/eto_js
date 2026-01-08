@@ -319,18 +319,18 @@ class EtoWorker:
 
     def _log_batch_results(
         self,
-        results: list[bool | Exception],
+        results: list[bool | BaseException],
         runs: list[EtoSubRun],
         phase_name: str
     ) -> None:
         """Log batch processing results."""
-        successful = sum(1 for r in results if not isinstance(r, Exception) and r is True)
+        successful = sum(1 for r in results if not isinstance(r, BaseException) and r is True)
         failed = len(results) - successful
 
         if failed > 0:
             logger.warning(f"{phase_name} batch completed: {successful} successful, {failed} failed")
             for i, result in enumerate(results):
-                if isinstance(result, Exception):
+                if isinstance(result, BaseException):
                     logger.error(f"{phase_name} sub-run {runs[i].id} failed: {result}")
         else:
             logger.debug(f"{phase_name} batch completed successfully: {successful} sub-runs processed")
