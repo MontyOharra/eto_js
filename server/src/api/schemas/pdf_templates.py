@@ -1,148 +1,156 @@
 """
 PDF Templates API Schemas
-Pydantic models for PDF template endpoints
+
+Pydantic models for PDF template endpoints.
+Reuses domain types from shared/types where possible.
 """
-from typing import Optional, List, Dict, Any, Literal, Tuple, Union
+from typing import Any
+
 from pydantic import BaseModel, Field, model_validator
 
-# Import canonical pipeline types (single source of truth)
-from api.schemas.pipelines import PipelineState, VisualState, ExecutionStepResult
-from api.schemas.pdf_files import PdfObjects
+# Import domain types
+from shared.types.pipelines import PipelineState, VisualState
+from shared.types.pdf_files import PdfObjects
+from shared.types.pdf_templates import (
+    ExtractionField,
+    PdfTemplateVersionSummary,
+)
+from shared.types.pipeline_execution import PipelineExecutionStepResult
 
 
-# Extraction Fields (used across multiple endpoints)
-class ExtractionField(BaseModel):
-    name: str
-    description: Optional[str] = None
-    bbox: Tuple[float, float, float, float]  # [x0, y0, x1, y1]
-    page: int
+# ========== List Response ==========
 
-
-# GET /pdf-templates - List Response
 class TemplateVersionSummary(BaseModel):
+    """Version summary for list items"""
     version_id: int
     version_num: int
     usage_count: int
 
 
 class TemplateListItem(BaseModel):
+    """Template list item with version info"""
     id: int
     name: str
-    description: Optional[str] = None
-    customer_id: Optional[int] = None  # References external Access DB
-    customer_name: Optional[str] = None  # Customer name from Access DB (if available)
+    description: str | None = None
+    customer_id: int | None = None
+    customer_name: str | None = None  # Enriched from Access DB
     status: str
-    is_autoskip: bool = False  # If True, pages matching this template are automatically skipped
+    is_autoskip: bool = False
     source_pdf_id: int
     current_version: TemplateVersionSummary
     total_versions: int
 
 
 class PaginatedTemplateListResponse(BaseModel):
-    """Paginated response for template list with infinite scroll support"""
-    items: List[TemplateListItem]
-    total: int  # Total count matching filters (for knowing when to stop infinite scroll)
-    limit: int  # Page size used
-    offset: int  # Current offset
+    """Paginated response for template list"""
+    items: list[TemplateListItem]
+    total: int
+    limit: int
+    offset: int
 
 
-# Version list item (used in template responses)
+# ========== Version Navigation ==========
+
 class VersionListItem(BaseModel):
     """Lightweight version identifier for navigation"""
     version_id: int
     version_number: int
 
 
-# PdfTemplate - Main template object (API version without audit timestamps)
-class PdfTemplate(BaseModel):
-    """Template metadata for API responses with version navigation (excludes audit timestamps)"""
+# ========== Template Detail ==========
+
+class PdfTemplateResponse(BaseModel):
+    """Template metadata for API responses (excludes audit timestamps)"""
     id: int
     name: str
-    description: Optional[str] = None
-    customer_id: Optional[int] = None  # References external Access DB
-    customer_name: Optional[str] = None  # Customer name from Access DB (if available)
+    description: str | None = None
+    customer_id: int | None = None
+    customer_name: str | None = None  # Enriched from Access DB
     status: str
-    is_autoskip: bool = False  # If True, pages matching this template are automatically skipped
+    is_autoskip: bool = False
     source_pdf_id: int
-    current_version_id: Optional[int] = None
-    versions: List[VersionListItem]  # All versions for navigation
+    current_version_id: int | None = None
+    versions: list[VersionListItem]
 
 
-# POST /pdf-templates - Create Request
+# ========== Create Request ==========
+
 class CreatePdfTemplateRequest(BaseModel):
+    """Request for POST /pdf-templates"""
     name: str = Field(..., min_length=1, max_length=255)
-    description: Optional[str] = Field(None, max_length=1000)
-    customer_id: Optional[int] = None  # References external Access DB
-    is_autoskip: bool = False  # If True, pages matching this template are automatically skipped
-    source_pdf_id: int  # Required - PDF must be uploaded first via POST /pdf-files
+    description: str | None = Field(None, max_length=1000)
+    customer_id: int | None = None
+    is_autoskip: bool = False
+    source_pdf_id: int
     signature_objects: PdfObjects
-    extraction_fields: List[ExtractionField] = Field(default_factory=list)  # Can be empty for autoskip templates
+    extraction_fields: list[ExtractionField] = Field(default_factory=list)
     pipeline_state: PipelineState
     visual_state: VisualState
 
     @model_validator(mode='after')
     def validate_extraction_fields(self):
-        """Autoskip templates can have empty extraction fields, normal templates require at least one"""
+        """Autoskip templates can have empty extraction fields"""
         if not self.is_autoskip and len(self.extraction_fields) == 0:
             raise ValueError('extraction_fields must have at least 1 item for non-autoskip templates')
         return self
 
 
-# PUT /pdf-templates/{id} - Update Request
+# ========== Update Request ==========
+
 class UpdatePdfTemplateRequest(BaseModel):
-    name: Optional[str] = Field(None, min_length=1, max_length=255)
-    description: Optional[str] = Field(None, max_length=1000)
-    customer_id: Optional[int] = None  # References external Access DB
-    is_autoskip: Optional[bool] = None  # If True, pages matching this template are automatically skipped
-    signature_objects: Optional[PdfObjects] = None
-    extraction_fields: Optional[List[ExtractionField]] = None
-    pipeline_state: Optional[PipelineState] = None
-    visual_state: Optional[VisualState] = None
+    """Request for PUT /pdf-templates/{id}"""
+    name: str | None = Field(None, min_length=1, max_length=255)
+    description: str | None = Field(None, max_length=1000)
+    customer_id: int | None = None
+    is_autoskip: bool | None = None
+    signature_objects: PdfObjects | None = None
+    extraction_fields: list[ExtractionField] | None = None
+    pipeline_state: PipelineState | None = None
+    visual_state: VisualState | None = None
 
 
-# GET /pdf-templates/versions/{version_id} - Version Detail Response
+# ========== Version Detail ==========
+
 class GetTemplateVersionResponse(BaseModel):
+    """Response for GET /pdf-templates/versions/{version_id}"""
     version_id: int
     template_id: int
     version_num: int
     source_pdf_id: int
     is_current: bool
     signature_objects: PdfObjects
-    extraction_fields: List[ExtractionField]
-    pipeline_definition_id: Optional[int] = None  # Nullable for autoskip templates
+    extraction_fields: list[ExtractionField]
+    pipeline_definition_id: int | None = None
 
 
-# POST /pdf-templates/simulate - Simulate Request
+# ========== Simulation ==========
+
 class SimulateTemplateRequest(BaseModel):
-    """Request for template simulation (testing/preview only)"""
+    """Request for POST /pdf-templates/simulate"""
     pdf_objects: PdfObjects
-    extraction_fields: List[ExtractionField] = Field(..., min_length=1)
+    extraction_fields: list[ExtractionField] = Field(..., min_length=1)
     pipeline_state: PipelineState
 
 
-# POST /pdf-templates/simulate - Simulate Response
 class ExtractedFieldResult(BaseModel):
     """Single extraction field result with bbox for visual display"""
     name: str
-    description: Optional[str] = None
-    bbox: Tuple[float, float, float, float]  # [x0, y0, x1, y1]
+    description: str | None = None
+    bbox: tuple[float, float, float, float]
     page: int
-    extracted_value: str  # The actual extracted text
+    extracted_value: str
 
 
 class SimulateTemplateResponse(BaseModel):
-    """
-    Response for POST /pdf-templates/simulate
-    Matches the format from POST /pipelines/{id}/execute for consistency
-    """
-    extraction_results: List[ExtractedFieldResult]  # Fields with extracted values and bbox info
+    """Response for POST /pdf-templates/simulate"""
+    extraction_results: list[ExtractedFieldResult]
     pipeline_status: str  # "success" | "failed"
-    pipeline_steps: List[ExecutionStepResult]  # Reuse from pipelines
-    output_channel_values: Dict[str, Any] = {}  # {channel_type: value} collected from output channels
-    pipeline_error: Optional[str] = None
+    pipeline_steps: list[PipelineExecutionStepResult]
+    output_channel_values: dict[str, Any] = Field(default_factory=dict)
+    pipeline_error: str | None = None
 
 
-# ========== Test Multi-Template Matching Schemas ==========
+# ========== Multi-Template Matching ==========
 
 class TemplateMatchResult(BaseModel):
     """Single template match for a consecutive page range"""
@@ -150,29 +158,26 @@ class TemplateMatchResult(BaseModel):
     template_name: str
     version_id: int
     version_number: int
-    matched_pages: List[int]  # Consecutive pages, 1-indexed
+    matched_pages: list[int]
 
 
 class TestMultiTemplateMatchingResponse(BaseModel):
-    """
-    Response for POST /pdf-templates/test-multi-match
-    Temporary endpoint for e2e testing multi-template matching
-    """
+    """Response for POST /pdf-templates/test-multi-match"""
     pdf_id: int
     pdf_filename: str
     total_pages: int
-    matches: List[TemplateMatchResult]
-    unmatched_pages: List[int]  # Can be non-consecutive, 1-indexed
+    matches: list[TemplateMatchResult]
+    unmatched_pages: list[int]
 
 
-# ========== Customer Schemas ==========
+# ========== Customers ==========
 
 class Customer(BaseModel):
-    """Single customer entry for dropdown lists"""
+    """Customer entry for dropdown lists"""
     id: int
     name: str
 
 
 class GetCustomersResponse(BaseModel):
     """Response for GET /pdf-templates/customers"""
-    customers: List[Customer]
+    customers: list[Customer]

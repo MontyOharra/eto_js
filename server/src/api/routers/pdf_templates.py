@@ -2,42 +2,34 @@
 PDF Templates FastAPI Router
 REST endpoints for PDF template creation, management, and versioning
 """
-import json
 import logging
-from typing import Optional, Literal
-from fastapi import APIRouter, Query, status, Depends, File, UploadFile, Form
+from typing import Literal
+
+from fastapi import APIRouter, Query, status, Depends
 
 from api.schemas.pdf_templates import (
-    PdfTemplate,
-    TemplateListItem,
+    PdfTemplateResponse,
     PaginatedTemplateListResponse,
-    VersionListItem,
     CreatePdfTemplateRequest,
     UpdatePdfTemplateRequest,
     GetTemplateVersionResponse,
     SimulateTemplateRequest,
     SimulateTemplateResponse,
-    ExtractedFieldResult,
-    TestMultiTemplateMatchingResponse,
-    TemplateMatchResult,
     GetCustomersResponse,
     Customer,
 )
 from api.mappers.pdf_templates import (
-    convert_template_summary_list,
-    convert_pdf_template,
-    convert_version_list,
-    convert_create_template_request,
-    convert_update_template_request,
-    convert_template_version,
-    convert_simulate_request,
-    convert_simulate_result_to_api,
+    build_template_list,
+    build_template_response,
+    to_template_create,
+    to_template_update,
+    build_version_response,
+    to_simulate_data,
+    build_simulate_response,
 )
 
 from shared.services.service_container import ServiceContainer
-from shared.exceptions.service import ValidationError
 from features.pdf_templates import PdfTemplateService
-from features.pdf_files.service import PdfFilesService
 
 logger = logging.getLogger(__name__)
 
@@ -49,9 +41,9 @@ router = APIRouter(
 
 @router.get("", response_model=PaginatedTemplateListResponse)
 async def list_pdf_templates(
-    status_filter: Optional[Literal["active", "inactive"]] = Query(None, description="Filter by status"),
-    customer_id: Optional[int] = Query(None, description="Filter by customer ID"),
-    autoskip_filter: Optional[Literal["all", "processable", "skip"]] = Query(None, description="Filter by autoskip: 'all' (default), 'processable' (is_autoskip=False), 'skip' (is_autoskip=True)"),
+    status_filter: Literal["active", "inactive"] | None = Query(None, description="Filter by status"),
+    customer_id: int | None = Query(None, description="Filter by customer ID"),
+    autoskip_filter: Literal["all", "processable", "skip"] | None = Query(None, description="Filter by autoskip"),
     sort_by: Literal["name", "status", "usage_count"] = Query("name", description="Field to sort by"),
     sort_order: Literal["asc", "desc"] = Query("asc", description="Sort order"),
     limit: int = Query(20, ge=1, le=100, description="Number of items per page"),
@@ -73,7 +65,7 @@ async def list_pdf_templates(
     customer_ids = [s.customer_id for s in summaries if s.customer_id is not None]
     customer_names = service._get_customer_names(customer_ids) if customer_ids else {}
 
-    items = convert_template_summary_list(summaries, customer_names)
+    items = build_template_list(summaries, customer_names)
     return PaginatedTemplateListResponse(
         items=items,
         total=total,
@@ -89,7 +81,7 @@ async def get_customers(
     """
     Get list of customers for template dropdown.
 
-    Fetches active customers from the Access database (HTC300_G030_T010 Customers table).
+    Fetches active customers from the Access database.
     Returns customers sorted by name.
     """
     customers_data = service.list_customers()
@@ -102,11 +94,11 @@ async def get_customers(
     return GetCustomersResponse(customers=customers)
 
 
-@router.get("/{id}", response_model=PdfTemplate)
+@router.get("/{id}", response_model=PdfTemplateResponse)
 async def get_pdf_template(
     id: int,
     service: PdfTemplateService = Depends(lambda: ServiceContainer.get_pdf_template_service())
-) -> PdfTemplate:
+) -> PdfTemplateResponse:
     """
     Get template metadata with version navigation.
 
@@ -116,14 +108,14 @@ async def get_pdf_template(
     template = service.get_template(id)
     version_list = service.get_version_list(id)
     customer_name = service._get_customer_name(template.customer_id)
-    return convert_pdf_template(template, version_list, customer_name)
+    return build_template_response(template, version_list, customer_name)
 
 
-@router.post("", response_model=PdfTemplate, status_code=status.HTTP_201_CREATED)
+@router.post("", response_model=PdfTemplateResponse, status_code=status.HTTP_201_CREATED)
 async def create_pdf_template(
     request: CreatePdfTemplateRequest,
     template_service: PdfTemplateService = Depends(lambda: ServiceContainer.get_pdf_template_service())
-) -> PdfTemplate:
+) -> PdfTemplateResponse:
     """
     Create new PDF template with wizard data (template + version 1 atomically).
 
@@ -139,78 +131,68 @@ async def create_pdf_template(
 
     Returns created template with status="inactive"
     """
-    # Convert API request to domain type (mapper handles all nested conversions)
-    template_create_data = convert_create_template_request(request)
+    template_create_data = to_template_create(request)
 
-    # Create template (service orchestrates all database operations)
     template, version_num, pipeline_id = template_service.create_template(template_create_data)
 
     logger.info(
         f"Created template {template.id} (version {version_num}, pipeline {pipeline_id})"
     )
 
-    # Fetch version list and convert to API response
     version_list = template_service.get_version_list(template.id)
     customer_name = template_service._get_customer_name(template.customer_id)
-    return convert_pdf_template(template, version_list, customer_name)
+    return build_template_response(template, version_list, customer_name)
 
 
-@router.put("/{id}", response_model=PdfTemplate, status_code=status.HTTP_200_OK)
+@router.put("/{id}", response_model=PdfTemplateResponse, status_code=status.HTTP_200_OK)
 async def update_pdf_template(
     id: int,
     request: UpdatePdfTemplateRequest,
     service: PdfTemplateService = Depends(lambda: ServiceContainer.get_pdf_template_service())
-) -> PdfTemplate:
+) -> PdfTemplateResponse:
     """
     Update template with smart versioning logic.
 
     Flow:
-    1. Simple Case: Only name/description → Update metadata only (no new version)
-    2. Version Case: signature_objects or extraction_fields → Create new version
-    3. Complex Case: Pipeline fields → Validate/compile/create pipeline → Create new version
+    1. Simple Case: Only name/description -> Update metadata only (no new version)
+    2. Version Case: signature_objects or extraction_fields -> Create new version
+    3. Complex Case: Pipeline fields -> Validate/compile/create pipeline -> Create new version
 
     All updates are atomic using unit-of-work pattern.
     Templates can be updated even when active (new version created automatically).
-
-    Errors:
-    - 404: Template not found
-    - 400: Pipeline validation fails
     """
-    update_data = convert_update_template_request(request)
+    update_data = to_template_update(request)
     template, version_num, pipeline_id = service.update_template(id, update_data)
 
-    # Fetch version list for response
     version_list = service.get_version_list(id)
     customer_name = service._get_customer_name(template.customer_id)
-    return convert_pdf_template(template, version_list, customer_name)
+    return build_template_response(template, version_list, customer_name)
 
 
-@router.post("/{id}/activate", response_model=PdfTemplate)
+@router.post("/{id}/activate", response_model=PdfTemplateResponse)
 async def activate_pdf_template(
     id: int,
     service: PdfTemplateService = Depends(lambda: ServiceContainer.get_pdf_template_service())
-) -> PdfTemplate:
+) -> PdfTemplateResponse:
     """Activate template for ETO matching"""
     template = service.activate_template(id)
 
-    # Fetch version list for response
     version_list = service.get_version_list(id)
     customer_name = service._get_customer_name(template.customer_id)
-    return convert_pdf_template(template, version_list, customer_name)
+    return build_template_response(template, version_list, customer_name)
 
 
-@router.post("/{id}/deactivate", response_model=PdfTemplate)
+@router.post("/{id}/deactivate", response_model=PdfTemplateResponse)
 async def deactivate_pdf_template(
     id: int,
     service: PdfTemplateService = Depends(lambda: ServiceContainer.get_pdf_template_service())
-) -> PdfTemplate:
+) -> PdfTemplateResponse:
     """Deactivate template (stop using for ETO matching)"""
     template = service.deactivate_template(id)
 
-    # Fetch version list for response
     version_list = service.get_version_list(id)
     customer_name = service._get_customer_name(template.customer_id)
-    return convert_pdf_template(template, version_list, customer_name)
+    return build_template_response(template, version_list, customer_name)
 
 
 @router.get("/versions/{version_id}", response_model=GetTemplateVersionResponse)
@@ -230,7 +212,7 @@ async def get_template_version(
     version = service.get_version_by_id(version_id)
     template = service.get_template(version.template_id)
     is_current = template.current_version_id == version.id
-    return convert_template_version(version, is_current)
+    return build_version_response(version, is_current)
 
 
 @router.post("/simulate", response_model=SimulateTemplateResponse)
@@ -246,24 +228,12 @@ async def simulate_template(
     Used during template creation/editing to test extraction and transformation.
     Client must provide PDF objects (from /pdf-files/process-objects or stored PDF).
 
-    Returns:
-    - Simulation results with:
-      - Data extraction results with bbox info
-      - Pipeline execution results (status, steps, actions)
+    Returns simulation results with extraction and pipeline execution details.
     """
-    # Convert to domain
-    simulate_data = convert_simulate_request(request)
-
-    # Run simulation
+    simulate_data = to_simulate_data(request)
     result = template_service.simulate(simulate_data)
+    api_response = build_simulate_response(result)
 
-    # Convert to API response
-    api_response = convert_simulate_result_to_api(result)
-
-    # Debug: Log what we're sending to frontend
-    logger.info(f"API Response: status={api_response.pipeline_status}, error={api_response.pipeline_error}")
-    logger.info(f"API Response steps: {len(api_response.pipeline_steps)} steps")
-    for step in api_response.pipeline_steps:
-        logger.info(f"  API Step {step.step_number} ({step.module_instance_id}): error={step.error}")
+    logger.debug(f"Simulation: status={api_response.pipeline_status}, steps={len(api_response.pipeline_steps)}")
 
     return api_response
