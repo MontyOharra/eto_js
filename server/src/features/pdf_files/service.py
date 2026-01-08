@@ -5,26 +5,30 @@ Manages PDF file storage, object extraction, and retrieval
 import hashlib
 import logging
 import tempfile
+from collections import defaultdict
 from datetime import datetime, timezone
+from io import BytesIO
 from pathlib import Path
 from typing import Any
+
 import pdfplumber
 
+from features.pdf_files.utils import extract_data_from_pdf_objects
+from shared.config import StorageConfig
 from shared.database import DatabaseConnectionManager
 from shared.database.repositories import PdfFileRepository
+from shared.exceptions.service import ObjectNotFoundError, ServiceError, ValidationError
 from shared.types.pdf_files import (
+    GraphicCurve,
+    GraphicLine,
+    GraphicRect,
+    Image,
     PdfFile,
     PdfFileCreate,
     PdfObjects,
+    Table,
     TextWord,
-    GraphicRect,
-    GraphicLine,
-    GraphicCurve,
-    Image,
-    Table
 )
-from shared.config import StorageConfig
-from shared.exceptions.service import ObjectNotFoundError, ServiceError, ValidationError
 
 logger = logging.getLogger(__name__)
 
@@ -264,8 +268,6 @@ class PdfFilesService:
             ValidationError: If PDF is invalid
             ServiceError: If extraction fails
         """
-        from features.pdf_files.utils import extract_data_from_pdf_objects
-
         try:
             # Validate PDF first
             is_valid, error_msg = self._validate_pdf(pdf_bytes)
@@ -688,9 +690,6 @@ class PdfFilesService:
 
         # Try to open with pdfplumber
         try:
-            import pdfplumber
-            from io import BytesIO
-
             with pdfplumber.open(BytesIO(file_bytes)) as pdf:
                 # Check if we can access pages
                 if len(pdf.pages) == 0:
@@ -723,8 +722,6 @@ class PdfFilesService:
         Returns:
             List of merged GraphicLine objects
         """
-        from collections import defaultdict
-
         if not lines:
             return []
 
@@ -796,8 +793,6 @@ class PdfFilesService:
         Returns:
             List of merged lines
         """
-        from collections import defaultdict
-
         if not lines:
             return []
 
@@ -954,8 +949,6 @@ class PdfFilesService:
         Returns:
             List of merged diagonal lines
         """
-        from collections import defaultdict
-
         if not lines:
             return []
 
