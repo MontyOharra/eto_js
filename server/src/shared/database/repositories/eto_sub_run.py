@@ -4,9 +4,8 @@ Repository for eto_sub_runs table with CRUD operations
 
 Sub-runs represent page-set business logic units within a parent ETO run.
 """
-import logging
 import json
-from typing import Type, Optional, List
+import logging
 from datetime import datetime
 
 from shared.database.repositories.base import BaseRepository
@@ -41,7 +40,7 @@ class EtoSubRunRepository(BaseRepository[EtoSubRunModel]):
     """
 
     @property
-    def model_class(self) -> Type[EtoSubRunModel]:
+    def model_class(self) -> type[EtoSubRunModel]:
         """Return the SQLAlchemy model class this repository manages"""
         return EtoSubRunModel
 
@@ -96,7 +95,7 @@ class EtoSubRunRepository(BaseRepository[EtoSubRunModel]):
 
             return self._model_to_domain(model)
 
-    def get_by_id(self, sub_run_id: int) -> Optional[EtoSubRun]:
+    def get_by_id(self, sub_run_id: int) -> EtoSubRun | None:
         """
         Get ETO sub-run by ID.
 
@@ -118,21 +117,20 @@ class EtoSubRunRepository(BaseRepository[EtoSubRunModel]):
         """
         Update ETO sub-run. Only updates provided fields.
 
-        Uses dict keys to distinguish between:
-        - Field not provided (key absent) - field will not be updated
-        - Field explicitly set to None (key present, value None) - field will be cleared in database
-        - Field set to value (key present) - field will be updated to that value
+        Uses Pydantic's model_fields_set to distinguish between:
+        - Field not provided: not in model_fields_set (don't update)
+        - Field set to None: in model_fields_set with None value (set NULL)
+        - Field set to value: in model_fields_set with value (update)
 
         Args:
             sub_run_id: Sub-run ID
-            updates: Dict of fields to update (TypedDict with all fields optional)
+            updates: EtoSubRunUpdate with fields to update
 
         Returns:
             Updated EtoSubRun dataclass
 
         Raises:
             ObjectNotFoundError: If sub-run not found
-            ValueError: If invalid field name provided
         """
         with self._get_session() as session:
             model = session.get(self.model_class, sub_run_id)
@@ -140,11 +138,10 @@ class EtoSubRunRepository(BaseRepository[EtoSubRunModel]):
             if model is None:
                 raise ObjectNotFoundError(f"ETO sub-run {sub_run_id} not found")
 
-            # Update only provided fields (iterate over dict keys)
-            for field, value in updates.items():
-                if not hasattr(model, field):
-                    raise ValueError(f"Invalid field for sub-run update: {field}")
-                setattr(model, field, value)
+            # Update only fields that were explicitly set
+            for field_name in updates.model_fields_set:
+                value = getattr(updates, field_name)
+                setattr(model, field_name, value)
 
             session.flush()  # Persist changes
 
@@ -174,7 +171,7 @@ class EtoSubRunRepository(BaseRepository[EtoSubRunModel]):
 
     # ========== Query Operations ==========
 
-    def get_by_eto_run_id(self, eto_run_id: int) -> List[EtoSubRun]:
+    def get_by_eto_run_id(self, eto_run_id: int) -> list[EtoSubRun]:
         """
         Get all sub-runs for a parent ETO run, ordered by first page number.
 
@@ -205,7 +202,7 @@ class EtoSubRunRepository(BaseRepository[EtoSubRunModel]):
 
             return [self._model_to_domain(model) for model in models]
 
-    def get_by_status(self, status: str, limit: Optional[int] = None) -> List[EtoSubRun]:
+    def get_by_status(self, status: str, limit: int | None = None) -> list[EtoSubRun]:
         """
         Get sub-runs by status.
         Used by worker to find sub-runs that need processing.
@@ -227,7 +224,7 @@ class EtoSubRunRepository(BaseRepository[EtoSubRunModel]):
 
             return [self._model_to_domain(model) for model in models]
 
-    def get_by_status_no_template(self, status: str, limit: Optional[int] = None) -> List[EtoSubRun]:
+    def get_by_status_no_template(self, status: str, limit: int | None = None) -> list[EtoSubRun]:
         """
         Get sub-runs by status that have no template assigned.
         Used by worker Phase 1 to find sub-runs needing template matching.
@@ -255,7 +252,7 @@ class EtoSubRunRepository(BaseRepository[EtoSubRunModel]):
 
             return [self._model_to_domain(model) for model in models]
 
-    def get_by_status_with_template(self, status: str, limit: Optional[int] = None) -> List[EtoSubRun]:
+    def get_by_status_with_template(self, status: str, limit: int | None = None) -> list[EtoSubRun]:
         """
         Get sub-runs by status that have a template assigned.
         Used by worker Phase 2 to find sub-runs ready for extraction + pipeline.
@@ -283,7 +280,7 @@ class EtoSubRunRepository(BaseRepository[EtoSubRunModel]):
 
             return [self._model_to_domain(model) for model in models]
 
-    def get_needs_template_for_run(self, eto_run_id: int) -> List[EtoSubRun]:
+    def get_needs_template_for_run(self, eto_run_id: int) -> list[EtoSubRun]:
         """
         Get sub-runs that need templates for a parent ETO run.
 
@@ -302,7 +299,7 @@ class EtoSubRunRepository(BaseRepository[EtoSubRunModel]):
 
             return [self._model_to_domain(model) for model in models]
 
-    def get_detail_view(self, sub_run_id: int) -> Optional[EtoSubRunDetailView]:
+    def get_detail_view(self, sub_run_id: int) -> EtoSubRunDetailView | None:
         """
         Get complete sub-run detail with all stage data using SQLAlchemy joins.
 

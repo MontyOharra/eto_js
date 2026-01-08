@@ -4,7 +4,7 @@ Repository for eto_sub_run_extractions table with CRUD operations
 """
 import json
 import logging
-from typing import Any, Dict, List, Type, Optional
+from typing import Any
 
 from shared.database.repositories.base import BaseRepository
 from shared.database.models import EtoSubRunExtractionModel
@@ -31,19 +31,19 @@ class EtoSubRunExtractionRepository(BaseRepository[EtoSubRunExtractionModel]):
     """
 
     @property
-    def model_class(self) -> Type[EtoSubRunExtractionModel]:
+    def model_class(self) -> type[EtoSubRunExtractionModel]:
         """Return the SQLAlchemy model class this repository manages"""
         return EtoSubRunExtractionModel
 
     # ========== Serialization Methods ==========
 
-    def _deserialize_extracted_data(self, json_str: Optional[str]) -> Optional[List[Dict[str, Any]]]:
+    def _deserialize_extracted_data(self, json_str: str | None) -> list[dict[str, Any]] | None:
         """Convert JSON string to list of extracted field dicts"""
         if json_str is None:
             return None
         return json.loads(json_str)
 
-    def _serialize_extracted_data(self, data: Optional[List[Dict[str, Any]]]) -> Optional[str]:
+    def _serialize_extracted_data(self, data: list[dict[str, Any]] | None) -> str | None:
         """Convert list of extracted field dicts to JSON string"""
         if data is None:
             return None
@@ -95,7 +95,7 @@ class EtoSubRunExtractionRepository(BaseRepository[EtoSubRunExtractionModel]):
 
             return self._model_to_domain(model)
 
-    def get_by_id(self, extraction_id: int) -> Optional[EtoSubRunExtraction]:
+    def get_by_id(self, extraction_id: int) -> EtoSubRunExtraction | None:
         """
         Get extraction by ID.
 
@@ -113,26 +113,23 @@ class EtoSubRunExtractionRepository(BaseRepository[EtoSubRunExtractionModel]):
 
             return self._model_to_domain(model)
 
-    def update(self, extraction_id: int, updates: EtoSubRunExtractionUpdate) -> Optional[EtoSubRunExtraction]:
+    def update(self, extraction_id: int, updates: EtoSubRunExtractionUpdate) -> EtoSubRunExtraction | None:
         """
         Update extraction. Only updates provided fields.
 
-        Uses dict keys to distinguish between:
-        - Field not provided (key absent) - field will not be updated
-        - Field explicitly set to None (key present, value None) - field will be cleared in database
-        - Field set to value (key present) - field will be updated to that value
+        Uses Pydantic's model_fields_set to distinguish between:
+        - Field not provided: not in model_fields_set (don't update)
+        - Field set to None: in model_fields_set with None value (set NULL)
+        - Field set to value: in model_fields_set with value (update)
 
         Note: extracted_data is serialized to JSON before storage.
 
         Args:
             extraction_id: Extraction ID
-            updates: Dict of fields to update (TypedDict with all fields optional)
+            updates: EtoSubRunExtractionUpdate with fields to update
 
         Returns:
             Updated EtoSubRunExtraction dataclass or None if not found
-
-        Raises:
-            ValueError: If invalid field name provided
         """
         with self._get_session() as session:
             model = session.get(self.model_class, extraction_id)
@@ -140,16 +137,15 @@ class EtoSubRunExtractionRepository(BaseRepository[EtoSubRunExtractionModel]):
             if model is None:
                 return None
 
-            # Update only provided fields (iterate over dict keys)
-            for field, value in updates.items():
-                if not hasattr(model, field):
-                    raise ValueError(f"Invalid field for extraction update: {field}")
+            # Update only fields that were explicitly set
+            for field_name in updates.model_fields_set:
+                value = getattr(updates, field_name)
 
                 # Serialize extracted_data to JSON
-                if field == "extracted_data":
-                    value = self._serialize_extracted_data(value)  # type: ignore[arg-type]
+                if field_name == "extracted_data":
+                    value = self._serialize_extracted_data(value)
 
-                setattr(model, field, value)
+                setattr(model, field_name, value)
 
             session.flush()  # Persist changes
 
@@ -157,7 +153,7 @@ class EtoSubRunExtractionRepository(BaseRepository[EtoSubRunExtractionModel]):
 
     # ========== Query Operations ==========
 
-    def get_by_sub_run_id(self, sub_run_id: int) -> Optional[EtoSubRunExtraction]:
+    def get_by_sub_run_id(self, sub_run_id: int) -> EtoSubRunExtraction | None:
         """
         Get extraction by sub-run ID.
         Each sub-run should have at most one extraction record.
@@ -176,7 +172,7 @@ class EtoSubRunExtractionRepository(BaseRepository[EtoSubRunExtractionModel]):
 
             return self._model_to_domain(model)
 
-    def get_by_status(self, status: str, limit: Optional[int] = None) -> List[EtoSubRunExtraction]:
+    def get_by_status(self, status: str, limit: int | None = None) -> list[EtoSubRunExtraction]:
         """
         Get extractions by status.
         Useful for monitoring/debugging extraction processing.

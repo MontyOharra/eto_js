@@ -3,7 +3,6 @@ ETO Sub-Run Pipeline Execution Step Repository
 Repository for eto_sub_run_pipeline_execution_steps table with CRUD operations
 """
 import logging
-from typing import Type, Optional, List
 
 from shared.database.repositories.base import BaseRepository
 from shared.database.models import EtoSubRunPipelineExecutionStepModel
@@ -27,7 +26,7 @@ class EtoSubRunPipelineExecutionStepRepository(BaseRepository[EtoSubRunPipelineE
     """
 
     @property
-    def model_class(self) -> Type[EtoSubRunPipelineExecutionStepModel]:
+    def model_class(self) -> type[EtoSubRunPipelineExecutionStepModel]:
         """Return the SQLAlchemy model class this repository manages"""
         return EtoSubRunPipelineExecutionStepModel
 
@@ -79,7 +78,7 @@ class EtoSubRunPipelineExecutionStepRepository(BaseRepository[EtoSubRunPipelineE
 
             return self._model_to_domain(model)
 
-    def get_by_id(self, record_id: int) -> Optional[EtoSubRunPipelineExecutionStep]:
+    def get_by_id(self, record_id: int) -> EtoSubRunPipelineExecutionStep | None:
         """
         Get pipeline execution step record by ID.
 
@@ -97,13 +96,18 @@ class EtoSubRunPipelineExecutionStepRepository(BaseRepository[EtoSubRunPipelineE
 
             return self._model_to_domain(model)
 
-    def update(self, record_id: int, data: EtoSubRunPipelineExecutionStepUpdate) -> Optional[EtoSubRunPipelineExecutionStep]:
+    def update(self, record_id: int, updates: EtoSubRunPipelineExecutionStepUpdate) -> EtoSubRunPipelineExecutionStep | None:
         """
         Update pipeline execution step record. Only updates provided fields.
 
+        Uses Pydantic's model_fields_set to distinguish between:
+        - Field not provided: not in model_fields_set (don't update)
+        - Field set to None: in model_fields_set with None value (set NULL)
+        - Field set to value: in model_fields_set with value (update)
+
         Args:
             record_id: Step record ID
-            data: EtoSubRunPipelineExecutionStepUpdate with fields to update (all optional)
+            updates: EtoSubRunPipelineExecutionStepUpdate with fields to update
 
         Returns:
             Updated EtoSubRunPipelineExecutionStep dataclass or None if not found
@@ -114,13 +118,10 @@ class EtoSubRunPipelineExecutionStepRepository(BaseRepository[EtoSubRunPipelineE
             if model is None:
                 return None
 
-            # Update only provided fields
-            if data.inputs is not None:
-                model.inputs = data.inputs
-            if data.outputs is not None:
-                model.outputs = data.outputs
-            if data.error is not None:
-                model.error = data.error
+            # Update only fields that were explicitly set
+            for field_name in updates.model_fields_set:
+                value = getattr(updates, field_name)
+                setattr(model, field_name, value)
 
             session.flush()  # Persist changes
 
@@ -128,7 +129,7 @@ class EtoSubRunPipelineExecutionStepRepository(BaseRepository[EtoSubRunPipelineE
 
     # ========== Query Operations ==========
 
-    def get_by_pipeline_execution_id(self, pipeline_execution_id: int, ordered: bool = True) -> List[EtoSubRunPipelineExecutionStep]:
+    def get_by_pipeline_execution_id(self, pipeline_execution_id: int, ordered: bool = True) -> list[EtoSubRunPipelineExecutionStep]:
         """
         Get all pipeline execution steps for a specific pipeline execution.
 
@@ -149,7 +150,7 @@ class EtoSubRunPipelineExecutionStepRepository(BaseRepository[EtoSubRunPipelineE
 
             return [self._model_to_domain(model) for model in models]
 
-    def get_by_module_instance_id(self, module_instance_id: str) -> List[EtoSubRunPipelineExecutionStep]:
+    def get_by_module_instance_id(self, module_instance_id: str) -> list[EtoSubRunPipelineExecutionStep]:
         """
         Get all steps for a specific module instance.
         Useful for debugging specific module executions across runs.

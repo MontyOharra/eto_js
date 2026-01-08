@@ -4,8 +4,8 @@ Repository for eto_runs table with CRUD operations
 """
 import logging
 import json
-from typing import Type, Optional, List, Tuple
 from datetime import datetime
+
 from sqlalchemy.orm import joinedload, selectinload
 
 from shared.database.repositories.base import BaseRepository
@@ -47,7 +47,7 @@ class EtoRunRepository(BaseRepository[EtoRunModel]):
     """
 
     @property
-    def model_class(self) -> Type[EtoRunModel]:
+    def model_class(self) -> type[EtoRunModel]:
         """Return the SQLAlchemy model class this repository manages"""
         return EtoRunModel
 
@@ -105,7 +105,7 @@ class EtoRunRepository(BaseRepository[EtoRunModel]):
 
             return self._model_to_domain(model)
 
-    def get_by_id(self, run_id: int) -> Optional[EtoRun]:
+    def get_by_id(self, run_id: int) -> EtoRun | None:
         """
         Get ETO run by ID.
 
@@ -127,25 +127,20 @@ class EtoRunRepository(BaseRepository[EtoRunModel]):
         """
         Update ETO run. Only updates provided fields.
 
-        Uses dict keys to distinguish between:
-        - Field not provided (key absent) - field will not be updated
-        - Field explicitly set to None (key present, value None) - field will be cleared in database
-        - Field set to value (key present) - field will be updated to that value
+        Uses Pydantic's model_fields_set to distinguish between:
+        - Field not provided: not in model_fields_set (don't update)
+        - Field set to None: in model_fields_set with None value (set NULL)
+        - Field set to value: in model_fields_set with value (update)
 
         Args:
             run_id: ETO run ID
-            updates: Dict of fields to update (TypedDict with all fields optional)
+            updates: EtoRunUpdate with fields to update
 
         Returns:
             Updated EtoRun dataclass
 
         Raises:
             ObjectNotFoundError: If run with given ID does not exist
-            ValueError: If invalid field name provided
-
-        Example:
-            update(1, {"status": "success"})
-            update(1, {"processing_step": None, "error_type": None})
         """
         with self._get_session() as session:
             model = session.get(self.model_class, run_id)
@@ -153,11 +148,10 @@ class EtoRunRepository(BaseRepository[EtoRunModel]):
             if model is None:
                 raise ObjectNotFoundError(f"ETO run {run_id} not found")
 
-            # Update only provided fields (iterate over dict keys)
-            for field, value in updates.items():
-                if not hasattr(model, field):
-                    raise ValueError(f"Invalid field for ETO run update: {field}")
-                setattr(model, field, value)
+            # Update only fields that were explicitly set
+            for field_name in updates.model_fields_set:
+                value = getattr(updates, field_name)
+                setattr(model, field_name, value)
 
             session.flush()  # Persist changes
 
@@ -167,12 +161,12 @@ class EtoRunRepository(BaseRepository[EtoRunModel]):
 
     def get_all(
         self,
-        status: Optional[str] = None,
-        limit: Optional[int] = None,
-        offset: Optional[int] = None,
+        status: str | None = None,
+        limit: int | None = None,
+        offset: int | None = None,
         order_by: str = "created_at",
         desc: bool = True
-    ) -> List[EtoRun]:
+    ) -> list[EtoRun]:
         """
         Get all ETO runs with optional filtering, pagination, and sorting.
 
@@ -215,7 +209,7 @@ class EtoRunRepository(BaseRepository[EtoRunModel]):
             models = query.all()
             return [self._model_to_domain(model) for model in models]
 
-    def get_by_status(self, status: str, limit: Optional[int] = None) -> List[EtoRun]:
+    def get_by_status(self, status: str, limit: int | None = None) -> list[EtoRun]:
         """
         Get ETO runs by status.
         Used by worker to find runs that need processing.
@@ -260,16 +254,16 @@ class EtoRunRepository(BaseRepository[EtoRunModel]):
 
     def get_all_with_relations(
         self,
-        is_read: Optional[bool] = None,
-        has_sub_run_status: Optional[str] = None,
-        search_query: Optional[str] = None,
-        date_from: Optional[datetime] = None,
-        date_to: Optional[datetime] = None,
-        limit: Optional[int] = None,
-        offset: Optional[int] = None,
+        is_read: bool | None = None,
+        has_sub_run_status: str | None = None,
+        search_query: str | None = None,
+        date_from: datetime | None = None,
+        date_to: datetime | None = None,
+        limit: int | None = None,
+        offset: int | None = None,
         order_by: str = "last_processed_at",
         desc: bool = True
-    ) -> List[EtoRunListView]:
+    ) -> list[EtoRunListView]:
         """
         Get all ETO runs with aggregated sub-run data.
 
@@ -461,7 +455,7 @@ class EtoRunRepository(BaseRepository[EtoRunModel]):
 
             return result
 
-    def get_detail_with_stages(self, run_id: int) -> Optional[EtoRunDetailView]:
+    def get_detail_with_stages(self, run_id: int) -> EtoRunDetailView | None:
         """
         Get complete ETO run detail with all sub-runs.
 
@@ -577,30 +571,3 @@ class EtoRunRepository(BaseRepository[EtoRunModel]):
                 created_at=row.created_at,
                 updated_at=row.updated_at,
             )
-            
-            
-    def mark_as_read(self, run_id: int) -> None:
-        """
-        Mark an ETO run as read.
-
-        Args:
-            run_id: ETO run ID
-
-        Raises:
-            ObjectNotFoundError: If run not found
-        """
-        self.update(run_id, {"is_read": True})
-        logger.debug(f"Marked ETO run {run_id} as read")
-
-    def mark_as_unread(self, run_id: int) -> None:
-        """
-        Mark an ETO run as unread.
-
-        Args:
-            run_id: ETO run ID
-
-        Raises:
-            ObjectNotFoundError: If run not found
-        """
-        self.update(run_id, {"is_read": False})
-        logger.debug(f"Marked ETO run {run_id} as unread")

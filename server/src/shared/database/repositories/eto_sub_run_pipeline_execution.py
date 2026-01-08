@@ -3,7 +3,6 @@ ETO Sub-Run Pipeline Execution Repository
 Repository for eto_sub_run_pipeline_executions table with CRUD operations
 """
 import logging
-from typing import Type, Optional, List
 
 from shared.database.repositories.base import BaseRepository
 from shared.database.models import EtoSubRunPipelineExecutionModel
@@ -29,7 +28,7 @@ class EtoSubRunPipelineExecutionRepository(BaseRepository[EtoSubRunPipelineExecu
     """
 
     @property
-    def model_class(self) -> Type[EtoSubRunPipelineExecutionModel]:
+    def model_class(self) -> type[EtoSubRunPipelineExecutionModel]:
         """Return the SQLAlchemy model class this repository manages"""
         return EtoSubRunPipelineExecutionModel
 
@@ -79,7 +78,7 @@ class EtoSubRunPipelineExecutionRepository(BaseRepository[EtoSubRunPipelineExecu
 
             return self._model_to_domain(model)
 
-    def get_by_id(self, execution_id: int) -> Optional[EtoSubRunPipelineExecution]:
+    def get_by_id(self, execution_id: int) -> EtoSubRunPipelineExecution | None:
         """
         Get pipeline execution by ID.
 
@@ -97,24 +96,21 @@ class EtoSubRunPipelineExecutionRepository(BaseRepository[EtoSubRunPipelineExecu
 
             return self._model_to_domain(model)
 
-    def update(self, execution_id: int, updates: EtoSubRunPipelineExecutionUpdate) -> Optional[EtoSubRunPipelineExecution]:
+    def update(self, execution_id: int, updates: EtoSubRunPipelineExecutionUpdate) -> EtoSubRunPipelineExecution | None:
         """
         Update pipeline execution. Only updates provided fields.
 
-        Uses dict keys to distinguish between:
-        - Field not provided (key absent) - field will not be updated
-        - Field explicitly set to None (key present, value None) - field will be cleared in database
-        - Field set to value (key present) - field will be updated to that value
+        Uses Pydantic's model_fields_set to distinguish between:
+        - Field not provided: not in model_fields_set (don't update)
+        - Field set to None: in model_fields_set with None value (set NULL)
+        - Field set to value: in model_fields_set with value (update)
 
         Args:
             execution_id: Pipeline execution ID
-            updates: Dict of fields to update (TypedDict with all fields optional)
+            updates: EtoSubRunPipelineExecutionUpdate with fields to update
 
         Returns:
             Updated EtoSubRunPipelineExecution dataclass or None if not found
-
-        Raises:
-            ValueError: If invalid field name provided
         """
         with self._get_session() as session:
             model = session.get(self.model_class, execution_id)
@@ -122,11 +118,10 @@ class EtoSubRunPipelineExecutionRepository(BaseRepository[EtoSubRunPipelineExecu
             if model is None:
                 return None
 
-            # Update only provided fields (iterate over dict keys)
-            for field, value in updates.items():
-                if not hasattr(model, field):
-                    raise ValueError(f"Invalid field for pipeline execution update: {field}")
-                setattr(model, field, value)
+            # Update only fields that were explicitly set
+            for field_name in updates.model_fields_set:
+                value = getattr(updates, field_name)
+                setattr(model, field_name, value)
 
             session.flush()  # Persist changes
 
@@ -134,7 +129,7 @@ class EtoSubRunPipelineExecutionRepository(BaseRepository[EtoSubRunPipelineExecu
 
     # ========== Query Operations ==========
 
-    def get_by_sub_run_id(self, sub_run_id: int) -> Optional[EtoSubRunPipelineExecution]:
+    def get_by_sub_run_id(self, sub_run_id: int) -> EtoSubRunPipelineExecution | None:
         """
         Get pipeline execution by sub-run ID.
         Each sub-run should have at most one pipeline execution record.
@@ -153,7 +148,7 @@ class EtoSubRunPipelineExecutionRepository(BaseRepository[EtoSubRunPipelineExecu
 
             return self._model_to_domain(model)
 
-    def get_by_status(self, status: str, limit: Optional[int] = None) -> List[EtoSubRunPipelineExecution]:
+    def get_by_status(self, status: str, limit: int | None = None) -> list[EtoSubRunPipelineExecution]:
         """
         Get pipeline executions by status.
         Useful for monitoring/debugging pipeline processing.

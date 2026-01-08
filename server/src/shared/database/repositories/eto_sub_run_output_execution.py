@@ -4,7 +4,7 @@ Repository for eto_sub_run_output_executions table with CRUD operations
 """
 import json
 import logging
-from typing import Any, Dict, Type, Optional, List, cast
+from typing import Any, cast
 
 from shared.database.repositories.base import BaseRepository
 from shared.database.models import EtoSubRunOutputExecutionModel
@@ -30,19 +30,19 @@ class EtoSubRunOutputExecutionRepository(BaseRepository[EtoSubRunOutputExecution
     """
 
     @property
-    def model_class(self) -> Type[EtoSubRunOutputExecutionModel]:
+    def model_class(self) -> type[EtoSubRunOutputExecutionModel]:
         """Return the SQLAlchemy model class this repository manages"""
         return EtoSubRunOutputExecutionModel
 
     # ========== Serialization Methods ==========
 
-    def _deserialize_json_dict(self, json_str: Optional[str]) -> Optional[Dict[str, Any]]:
+    def _deserialize_json_dict(self, json_str: str | None) -> dict[str, Any] | None:
         """Convert JSON string to dict"""
         if json_str is None:
             return None
         return json.loads(json_str)
 
-    def _serialize_json_dict(self, data: Optional[Dict[str, Any]]) -> Optional[str]:
+    def _serialize_json_dict(self, data: dict[str, Any] | None) -> str | None:
         """Convert dict to JSON string, handling datetime objects"""
         if data is None:
             return None
@@ -106,7 +106,7 @@ class EtoSubRunOutputExecutionRepository(BaseRepository[EtoSubRunOutputExecution
 
             return self._model_to_domain(model)
 
-    def get_by_id(self, output_execution_id: int) -> Optional[EtoSubRunOutputExecution]:
+    def get_by_id(self, output_execution_id: int) -> EtoSubRunOutputExecution | None:
         """
         Get output execution by ID.
 
@@ -124,19 +124,21 @@ class EtoSubRunOutputExecutionRepository(BaseRepository[EtoSubRunOutputExecution
 
             return self._model_to_domain(model)
 
-    def update(self, output_execution_id: int, updates: EtoSubRunOutputExecutionUpdate) -> Optional[EtoSubRunOutputExecution]:
+    def update(self, output_execution_id: int, updates: EtoSubRunOutputExecutionUpdate) -> EtoSubRunOutputExecution | None:
         """
         Update output execution. Only updates provided fields.
 
+        Uses Pydantic's model_fields_set to distinguish between:
+        - Field not provided: not in model_fields_set (don't update)
+        - Field set to None: in model_fields_set with None value (set NULL)
+        - Field set to value: in model_fields_set with value (update)
+
         Args:
             output_execution_id: Output execution ID
-            updates: Dict of fields to update (TypedDict with all fields optional)
+            updates: EtoSubRunOutputExecutionUpdate with fields to update
 
         Returns:
             Updated EtoSubRunOutputExecution dataclass or None if not found
-
-        Raises:
-            ValueError: If invalid field name provided
         """
         with self._get_session() as session:
             model = session.get(self.model_class, output_execution_id)
@@ -144,11 +146,10 @@ class EtoSubRunOutputExecutionRepository(BaseRepository[EtoSubRunOutputExecution
             if model is None:
                 return None
 
-            # Update only provided fields
-            for field, value in updates.items():
-                if not hasattr(model, field):
-                    raise ValueError(f"Invalid field for output execution update: {field}")
-                setattr(model, field, value)
+            # Update only fields that were explicitly set
+            for field_name in updates.model_fields_set:
+                value = getattr(updates, field_name)
+                setattr(model, field_name, value)
 
             session.flush()
 
@@ -156,7 +157,7 @@ class EtoSubRunOutputExecutionRepository(BaseRepository[EtoSubRunOutputExecution
 
     # ========== Query Operations ==========
 
-    def get_by_sub_run_id(self, sub_run_id: int) -> List[EtoSubRunOutputExecution]:
+    def get_by_sub_run_id(self, sub_run_id: int) -> list[EtoSubRunOutputExecution]:
         """
         Get all output executions for a sub-run.
 
@@ -170,7 +171,7 @@ class EtoSubRunOutputExecutionRepository(BaseRepository[EtoSubRunOutputExecution
             models = session.query(self.model_class).filter_by(sub_run_id=sub_run_id).all()
             return [self._model_to_domain(model) for model in models]
 
-    def get_by_status(self, status: str, limit: Optional[int] = None) -> List[EtoSubRunOutputExecution]:
+    def get_by_status(self, status: str, limit: int | None = None) -> list[EtoSubRunOutputExecution]:
         """
         Get output executions by status.
 
@@ -191,7 +192,7 @@ class EtoSubRunOutputExecutionRepository(BaseRepository[EtoSubRunOutputExecution
 
             return [self._model_to_domain(model) for model in models]
 
-    def get_pending(self, limit: Optional[int] = None) -> List[EtoSubRunOutputExecution]:
+    def get_pending(self, limit: int | None = None) -> list[EtoSubRunOutputExecution]:
         """
         Get pending output executions (convenience method).
 
@@ -203,7 +204,7 @@ class EtoSubRunOutputExecutionRepository(BaseRepository[EtoSubRunOutputExecution
         """
         return self.get_by_status("pending", limit=limit)
 
-    def get_by_customer_and_hawb(self, customer_id: int, hawb: str) -> List[EtoSubRunOutputExecution]:
+    def get_by_customer_and_hawb(self, customer_id: int, hawb: str) -> list[EtoSubRunOutputExecution]:
         """
         Get output executions by customer_id and hawb.
         Useful for looking up all executions for a specific order identifier.
