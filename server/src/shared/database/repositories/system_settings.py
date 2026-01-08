@@ -1,33 +1,74 @@
 """
 System Settings Repository
 Repository for system_settings table with key-value operations
+
+Note: This repository does not extend BaseRepository because SystemSettingModel
+uses 'key' as its primary key instead of 'id'. It handles its own session management.
 """
 import logging
+from contextlib import contextmanager
 from datetime import datetime, timezone
-from typing import Optional, Type
 
 from sqlalchemy import select
+from sqlalchemy.orm import Session
 
-from shared.database.repositories.base import BaseRepository
+from shared.database.connection import DatabaseConnectionManager
 from shared.database.models import SystemSettingModel
 
 logger = logging.getLogger(__name__)
 
 
-class SystemSettingsRepository(BaseRepository[SystemSettingModel]):
+class SystemSettingsRepository:
     """
     Repository for system settings key-value operations.
 
     Provides simple get/set operations for application-wide settings.
     Values are stored as strings (JSON-serialized for complex types).
+
+    Note: Does not extend BaseRepository since SystemSettingModel uses
+    'key' as primary key instead of 'id'.
     """
 
-    @property
-    def model_class(self) -> Type[SystemSettingModel]:
-        """Return the SQLAlchemy model class this repository manages"""
-        return SystemSettingModel
+    def __init__(
+        self,
+        session: Session | None = None,
+        connection_manager: DatabaseConnectionManager | None = None
+    ):
+        """
+        Initialize repository.
 
-    def get(self, key: str) -> Optional[str]:
+        Args:
+            session: If provided, use this session (we're in a UoW transaction)
+            connection_manager: If no session, use this to create sessions per operation
+
+        Raises:
+            ValueError: If neither or both parameters are provided
+        """
+        if session is None and connection_manager is None:
+            raise ValueError("Must provide either session or connection_manager")
+
+        if session is not None and connection_manager is not None:
+            raise ValueError("Provide either session OR connection_manager, not both")
+
+        self.session = session
+        self.connection_manager = connection_manager
+
+    @contextmanager
+    def _get_session(self):
+        """
+        Get session for an operation.
+
+        If we have a session (in UoW), use it without committing.
+        Otherwise create a new session for this operation and commit after.
+        """
+        if self.session:
+            yield self.session
+        else:
+            assert self.connection_manager is not None
+            with self.connection_manager.session() as session:
+                yield session
+
+    def get(self, key: str) -> str | None:
         """
         Get a setting value by key.
 
@@ -46,7 +87,7 @@ class SystemSettingsRepository(BaseRepository[SystemSettingModel]):
 
             return result.value
 
-    def set(self, key: str, value: Optional[str]) -> None:
+    def set(self, key: str, value: str | None) -> None:
         """
         Set a setting value by key.
 
@@ -93,7 +134,7 @@ class SystemSettingsRepository(BaseRepository[SystemSettingModel]):
 
             return False
 
-    def get_all(self) -> dict[str, Optional[str]]:
+    def get_all(self) -> dict[str, str | None]:
         """
         Get all settings as a dictionary.
 
@@ -106,7 +147,7 @@ class SystemSettingsRepository(BaseRepository[SystemSettingModel]):
 
             return {setting.key: setting.value for setting in results}
 
-    def get_by_prefix(self, prefix: str) -> dict[str, Optional[str]]:
+    def get_by_prefix(self, prefix: str) -> dict[str, str | None]:
         """
         Get all settings with keys starting with a prefix.
 

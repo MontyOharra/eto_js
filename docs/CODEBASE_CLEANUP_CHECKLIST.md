@@ -46,7 +46,7 @@ Track file-by-file cleanup progress for the server codebase.
 - [x] `api/routers/pdf_files.py`
 - [x] `api/routers/pdf_templates.py`
 - [x] `api/routers/pipelines.py`
-- [ ] `api/routers/system_settings.py`
+- [x] `api/routers/system_settings.py`
 
 #### api/schemas/
 - [ ] `api/schemas/__init__.py`
@@ -60,7 +60,7 @@ Track file-by-file cleanup progress for the server codebase.
 - [x] `api/schemas/pdf_files.py`
 - [x] `api/schemas/pdf_templates.py`
 - [x] `api/schemas/pipelines.py`
-- [ ] `api/schemas/system_settings.py`
+- [x] `api/schemas/system_settings.py`
 
 ---
 
@@ -227,7 +227,7 @@ Track file-by-file cleanup progress for the server codebase.
 - [ ] `shared/database/repositories/pending_update_history.py`
 - [x] `shared/database/repositories/pipeline_definition.py`
 - [x] `shared/database/repositories/pipeline_definition_step.py`
-- [ ] `shared/database/repositories/system_settings.py`
+- [x] `shared/database/repositories/system_settings.py`
 - [ ] `shared/database/repositories/unified_actions.py`
 
 #### shared/events/
@@ -278,5 +278,5 @@ Track file-by-file cleanup progress for the server codebase.
 ## Progress Summary
 
 - **Total files:** 156 (4 deleted, 5 new)
-- **Completed:** 95
-- **Remaining:** 61
+- **Completed:** 98
+- **Remaining:** 58
