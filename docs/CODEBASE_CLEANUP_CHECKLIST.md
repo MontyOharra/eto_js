@@ -54,7 +54,7 @@ Track file-by-file cleanup progress for the server codebase.
 - [x] `api/schemas/auth.py` (new)
 - [x] `api/schemas/email_accounts.py`
 - [x] `api/schemas/email_ingestion_configs.py`
-- [ ] `api/schemas/eto_runs.py`
+- [x] `api/schemas/eto_runs.py`
 - [x] `api/schemas/modules.py`
 - [ ] `api/schemas/order_management.py`
 - [x] `api/schemas/pdf_files.py`
