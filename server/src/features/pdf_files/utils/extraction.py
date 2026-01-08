@@ -3,17 +3,17 @@ PDF Text Extraction Utilities
 Extract text from PDF using bounding boxes for data extraction
 """
 import logging
-from typing import List, Dict, Tuple, Any
+from typing import Any
 
 logger = logging.getLogger(__name__)
 
 
 # Type alias for bbox coordinates
-BBox = Tuple[float, float, float, float]  # [x0, y0, x1, y1]
+BBox = tuple[float, float, float, float]  # [x0, y0, x1, y1]
 
 
 def extract_text_from_bbox(
-    text_words: List[Dict[str, Any]],
+    text_words: list[dict[str, Any]],
     bbox: BBox,
     page: int
 ) -> str:
@@ -79,7 +79,7 @@ def extract_text_from_bbox(
 
 
 def _is_word_in_bbox(
-    word: Dict[str, Any],
+    word: dict[str, Any],
     bbox: BBox,
     tolerance: float = 2.0
 ) -> bool:
@@ -137,9 +137,9 @@ def _is_word_in_bbox(
 
 
 def _group_words_into_lines(
-    words: List[Dict[str, Any]],
+    words: list[dict[str, Any]],
     y_tolerance: float = 5.0
-) -> List[List[Dict[str, Any]]]:
+) -> list[list[dict[str, Any]]]:
     """
     Group words into lines based on y-coordinate proximity.
 
@@ -180,9 +180,9 @@ def _group_words_into_lines(
 
 
 def extract_data_from_pdf_objects(
-    pdf_objects: List[Dict[str, Any]],
-    extraction_fields: List[Dict[str, Any]]
-) -> Dict[str, str]:
+    pdf_objects: list[dict[str, Any]],
+    extraction_fields: list[dict[str, Any]]
+) -> dict[str, str]:
     """
     Extract data from PDF objects using extraction fields.
 
@@ -207,7 +207,7 @@ def extract_data_from_pdf_objects(
     # Filter for text_word objects
     text_words = [obj for obj in pdf_objects if obj.get("type") == "text_word"]
 
-    extracted_data: Dict[str, str] = {}
+    extracted_data: dict[str, str] = {}
 
     for field in extraction_fields:
         field_name = field.get("name")

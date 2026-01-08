@@ -164,8 +164,8 @@ Track file-by-file cleanup progress for the server codebase.
 - [x] `features/pdf_files/service.py`
 
 ##### features/pdf_files/utils/
-- [ ] `features/pdf_files/utils/__init__.py`
-- [ ] `features/pdf_files/utils/extraction.py`
+- [x] `features/pdf_files/utils/__init__.py`
+- [x] `features/pdf_files/utils/extraction.py`
 
 #### features/pdf_templates/
 - [x] `features/pdf_templates/__init__.py`
@@ -278,5 +278,5 @@ Track file-by-file cleanup progress for the server codebase.
 ## Progress Summary
 
 - **Total files:** 156 (4 deleted, 5 new)
-- **Completed:** 98
-- **Remaining:** 58
+- **Completed:** 100
+- **Remaining:** 56
