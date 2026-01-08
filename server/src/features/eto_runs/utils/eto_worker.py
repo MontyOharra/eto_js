@@ -4,7 +4,8 @@ Background async worker for processing ETO runs
 """
 import asyncio
 import logging
-from typing import Callable, Optional, List, Set, Dict, Any
+from collections.abc import Callable
+from typing import Any
 
 from shared.types.eto_sub_runs import EtoSubRun
 
@@ -37,10 +38,10 @@ class EtoWorker:
         self,
         # Phase 1 callbacks (Template Matching)
         process_template_matching_callback: Callable[[int], bool],
-        get_pending_template_matching_callback: Callable[[int], List[EtoSubRun]],
+        get_pending_template_matching_callback: Callable[[int], list[EtoSubRun]],
         # Phase 2 callbacks (Extraction + Pipeline)
         process_extraction_pipeline_callback: Callable[[int], bool],
-        get_pending_extraction_pipeline_callback: Callable[[int], List[EtoSubRun]],
+        get_pending_extraction_pipeline_callback: Callable[[int], list[EtoSubRun]],
         # Reset callback
         reset_run_callback: Callable[[int], None],
         # Configuration
@@ -83,8 +84,8 @@ class EtoWorker:
         # State
         self.running = False
         self.paused = False
-        self.worker_task: Optional[asyncio.Task] = None
-        self.currently_processing: Set[int] = set()
+        self.worker_task: asyncio.Task[None] | None = None
+        self.currently_processing: set[int] = set()
 
         logger.debug(
             f"EtoWorker initialized (two-phase) - enabled: {enabled}, "
@@ -187,7 +188,7 @@ class EtoWorker:
         logger.info("ETO background worker RESUMED - processing restarted")
         return True
 
-    def get_status(self) -> Dict[str, Any]:
+    def get_status(self) -> dict[str, Any]:
         """
         Get current worker status and metrics.
 
@@ -318,10 +319,10 @@ class EtoWorker:
 
     def _log_batch_results(
         self,
-        results: list,
-        runs: List[EtoSubRun],
+        results: list[bool | Exception],
+        runs: list[EtoSubRun],
         phase_name: str
-    ):
+    ) -> None:
         """Log batch processing results."""
         successful = sum(1 for r in results if not isinstance(r, Exception) and r is True)
         failed = len(results) - successful

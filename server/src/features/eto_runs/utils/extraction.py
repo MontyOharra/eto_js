@@ -9,8 +9,9 @@ import logging
 from typing import TypedDict
 
 from features.pdf_files.service import PdfFilesService
-from shared.types.pdf_templates import ExtractionField
+from features.pdf_files.utils.extraction import extract_text_from_bbox
 from shared.types.pdf_files import PdfObjects
+from shared.types.pdf_templates import ExtractionField
 
 logger = logging.getLogger(__name__)
 
@@ -25,9 +26,9 @@ class ExtractedFieldData(TypedDict):
 
 
 def extract_data_from_pdf(
-    pdf_file_service: 'PdfFilesService',
+    pdf_file_service: PdfFilesService,
     pdf_file_id: int,
-    extraction_fields: list['ExtractionField']
+    extraction_fields: list[ExtractionField]
 ) -> list[ExtractedFieldData]:
     """
     Extract text from PDF using extraction fields.
@@ -44,8 +45,6 @@ def extract_data_from_pdf(
     Returns:
         List of ExtractedFieldData with name, bbox, page, and extracted value
     """
-    from features.pdf_files.utils.extraction import extract_text_from_bbox
-
     logger.debug(f"Extracting data from PDF file {pdf_file_id} with {len(extraction_fields)} fields")
 
     # Get PDF objects from file
@@ -87,7 +86,7 @@ def extract_data_from_pdf(
 
 def extract_data_from_pdf_objects(
     pdf_objects: PdfObjects,
-    extraction_fields: list['ExtractionField']
+    extraction_fields: list[ExtractionField]
 ) -> list[ExtractedFieldData]:
     """
     Extract text from PDF objects using extraction fields.
@@ -102,8 +101,6 @@ def extract_data_from_pdf_objects(
     Returns:
         List of ExtractedFieldData with name, bbox, page, and extracted value
     """
-    from features.pdf_files.utils.extraction import extract_text_from_bbox
-
     logger.debug(f"Extracting data from PDF objects with {len(extraction_fields)} fields")
 
     # Extract text using same logic
@@ -141,9 +138,9 @@ def extract_data_from_pdf_objects(
 
 
 def extract_data_from_pdf_pages(
-    pdf_file_service: 'PdfFilesService',
+    pdf_file_service: PdfFilesService,
     pdf_file_id: int,
-    extraction_fields: list['ExtractionField'],
+    extraction_fields: list[ExtractionField],
     page_numbers: list[int]
 ) -> list[ExtractedFieldData]:
     """
