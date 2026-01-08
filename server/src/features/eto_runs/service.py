@@ -19,6 +19,8 @@ from shared.database.repositories.eto_sub_run_extraction import EtoSubRunExtract
 from shared.database.repositories.eto_sub_run_pipeline_execution import EtoSubRunPipelineExecutionRepository
 from shared.database.repositories.eto_sub_run_pipeline_execution_step import EtoSubRunPipelineExecutionStepRepository
 from shared.database.repositories.eto_sub_run_output_execution import EtoSubRunOutputExecutionRepository
+from shared.database.repositories.pipeline_definition import PipelineDefinitionRepository
+from shared.database.repositories.pipeline_definition_step import PipelineDefinitionStepRepository
 
 from shared.events.eto_events import eto_event_manager
 
@@ -116,6 +118,8 @@ class EtoRunsService:
     sub_run_pipeline_execution_repo: EtoSubRunPipelineExecutionRepository
     sub_run_pipeline_execution_step_repo: EtoSubRunPipelineExecutionStepRepository
     sub_run_output_execution_repo: EtoSubRunOutputExecutionRepository
+    pipeline_definition_repo: PipelineDefinitionRepository
+    pipeline_definition_step_repo: PipelineDefinitionStepRepository
 
     def __init__(
         self,
@@ -151,6 +155,8 @@ class EtoRunsService:
         self.sub_run_pipeline_execution_repo: EtoSubRunPipelineExecutionRepository = EtoSubRunPipelineExecutionRepository(connection_manager=connection_manager)
         self.sub_run_pipeline_execution_step_repo: EtoSubRunPipelineExecutionStepRepository = EtoSubRunPipelineExecutionStepRepository(connection_manager=connection_manager)
         self.sub_run_output_execution_repo: EtoSubRunOutputExecutionRepository = EtoSubRunOutputExecutionRepository(connection_manager=connection_manager)
+        self.pipeline_definition_repo: PipelineDefinitionRepository = PipelineDefinitionRepository(connection_manager=connection_manager)
+        self.pipeline_definition_step_repo: PipelineDefinitionStepRepository = PipelineDefinitionStepRepository(connection_manager=connection_manager)
 
         # Worker configuration from environment
         worker_enabled = os.getenv('ETO_WORKER_ENABLED', 'true').lower() == 'true'
@@ -964,7 +970,7 @@ class EtoRunsService:
             raise ServiceError(
                 f"Template version {sub_run.template_version_id} has no pipeline definition"
             )
-        pipeline_definition = self.pipeline_execution_service.pipeline_repo.get_by_id(
+        pipeline_definition = self.pipeline_definition_repo.get_by_id(
             template_version.pipeline_definition_id
         )
         if not pipeline_definition:
@@ -977,7 +983,7 @@ class EtoRunsService:
         )
 
         # Step 5: Get compiled steps
-        compiled_steps = self.pipeline_execution_service.step_repo.get_steps_by_definition_id(
+        compiled_steps = self.pipeline_definition_step_repo.get_steps_by_definition_id(
             pipeline_definition.id
         )
         if not compiled_steps:

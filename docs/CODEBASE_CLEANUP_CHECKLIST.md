@@ -91,7 +91,7 @@ Track file-by-file cleanup progress for the server codebase.
 
 #### features/eto_runs/
 - [x] `features/eto_runs/__init__.py`
-- [ ] `features/eto_runs/service.py`
+- [x] `features/eto_runs/service.py`
 
 ##### features/eto_runs/utils/
 - [x] `features/eto_runs/utils/__init__.py`
