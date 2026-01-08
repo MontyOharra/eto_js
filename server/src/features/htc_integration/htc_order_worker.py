@@ -7,7 +7,7 @@ import logging
 from datetime import datetime, timezone
 from typing import Callable
 
-from shared.types.pending_orders import PendingOrder
+from server.src.shared.types.pending_orders_old import PendingOrder
 
 logger = logging.getLogger(__name__)
 

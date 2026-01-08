@@ -7,7 +7,7 @@ from typing import Type, Optional, List, cast
 
 from shared.database.repositories.base import BaseRepository
 from shared.database.models import PendingUpdateModel
-from shared.types.pending_orders import (
+from server.src.shared.types.pending_orders_old import (
     PendingUpdate,
     PendingUpdateCreate,
     PendingUpdateUpdate,

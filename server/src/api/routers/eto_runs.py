@@ -6,7 +6,7 @@ import asyncio
 import json
 import logging
 from datetime import datetime
-from typing import Optional, Literal, Any
+from typing import Literal
 from fastapi import APIRouter, Query, status, Depends, File, UploadFile, Request
 from fastapi.responses import StreamingResponse
 
@@ -45,23 +45,23 @@ router = APIRouter(
 
 @router.get("", response_model=GetEtoRunsResponse)
 async def list_eto_runs(
-    is_read: Optional[bool] = Query(
+    is_read: bool | None = Query(
         None,
         description="Filter by read status (true=read, false=unread)"
     ),
-    has_sub_run_status: Optional[Literal["needs_template", "failure", "success", "skipped", "processing"]] = Query(
+    has_sub_run_status: Literal["needs_template", "failure", "success", "skipped", "processing"] | None = Query(
         None,
         description="Filter runs that have at least one sub-run with this status"
     ),
-    search: Optional[str] = Query(
+    search: str | None = Query(
         None,
         description="Search in PDF filename, email sender, and subject"
     ),
-    date_from: Optional[datetime] = Query(
+    date_from: datetime | None = Query(
         None,
         description="Filter runs created on or after this date (ISO 8601)"
     ),
-    date_to: Optional[datetime] = Query(
+    date_to: datetime | None = Query(
         None,
         description="Filter runs created on or before this date (ISO 8601)"
     ),

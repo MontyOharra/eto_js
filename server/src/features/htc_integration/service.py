@@ -35,7 +35,7 @@ from features.htc_integration.lookup_utils import (
 from features.htc_integration.address_utils import HtcAddressUtils
 from features.htc_integration.order_utils import HtcOrderUtils, PreparedOrderData
 from features.htc_integration.attachment_utils import AttachmentManager, PdfSource, AttachmentResult
-from shared.types.pending_orders import PendingOrder
+from server.src.shared.types.pending_orders_old import PendingOrder
 
 logger = get_logger(__name__)
 

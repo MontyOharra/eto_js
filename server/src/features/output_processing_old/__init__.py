@@ -9,6 +9,6 @@ This is the automated processing layer - no user interaction.
 User-facing operations are handled by the order_management feature.
 """
 
-from features.output_processing.service import OutputProcessingService
+from features.output_processing_old.service import OutputProcessingService
 
 __all__ = ["OutputProcessingService"]

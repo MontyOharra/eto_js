@@ -13,8 +13,8 @@ if TYPE_CHECKING:
     from features.pipelines.service import PipelineService
     from features.pipeline_execution.service import PipelineExecutionService
     from features.htc_integration.service import HtcIntegrationService
-    from features.output_processing.service import OutputProcessingService
-    from features.order_management.service import OrderManagementService
+    from features.output_processing_old.service import OutputProcessingService
+    from features.order_management_old.service import OrderManagementService
     from features.eto_runs.service import EtoRunsService
     from features.auth.service import AuthService
     from shared.database.connection import DatabaseConnectionManager

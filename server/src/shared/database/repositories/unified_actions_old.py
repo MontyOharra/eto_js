@@ -9,7 +9,7 @@ from sqlalchemy import case
 
 from shared.database.repositories.base import BaseRepository
 from shared.database.models import UnifiedActionsViewModel
-from shared.types.pending_orders import (
+from server.src.shared.types.pending_orders_old import (
     UnifiedAction,
     UnifiedActionType,
     UnifiedActionsListResult,

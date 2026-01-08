@@ -65,7 +65,7 @@ from shared.types.pipeline_execution import (
 )
 
 # Pending orders types
-from shared.types.pending_orders import (
+from server.src.shared.types.pending_orders_old import (
     PendingOrderStatus,
     PendingUpdateStatus,
     FieldState,

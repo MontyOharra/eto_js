@@ -12,6 +12,6 @@ This is the user interaction layer - all read/write operations triggered by user
 Automated processing is handled by the output_processing feature.
 """
 
-from features.order_management.service import OrderManagementService
+from features.order_management_old.service import OrderManagementService
 
 __all__ = ["OrderManagementService"]

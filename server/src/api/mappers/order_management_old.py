@@ -4,13 +4,13 @@ Convert between service domain types and API Pydantic models
 """
 from typing import Dict, List, Optional
 
-from features.order_management.service import (
+from features.order_management_old.service import (
     PendingOrderDetail as PendingOrderDetailDomain,
     FieldWithOptions,
     FieldOption,
     ContributingSource,
 )
-from api.schemas.order_management import (
+from server.src.api.schemas.order_management_old import (
     PendingOrderDetail as PendingOrderDetailSchema,
     FieldDetail,
     FieldSource,

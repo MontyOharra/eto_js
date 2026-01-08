@@ -77,7 +77,7 @@ from shared.types.email import Email
 from features.pdf_templates.service import PdfTemplateService
 from features.pdf_files.service import PdfFilesService
 from features.pipeline_execution.service import PipelineExecutionService
-from features.output_processing.service import OutputProcessingService
+from features.output_processing_old.service import OutputProcessingService
 
 logger = get_logger(__name__)
 

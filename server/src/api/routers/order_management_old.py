@@ -10,9 +10,9 @@ from typing import Optional, Literal
 from fastapi import APIRouter, Query, Depends, HTTPException, status, Request
 from fastapi.responses import StreamingResponse
 
-from shared.events.order_events import order_event_manager
+from server.src.shared.events.order_events_old import order_event_manager
 
-from api.schemas.order_management import (
+from server.src.api.schemas.order_management_old import (
     # Pending Orders
     GetPendingOrdersResponse,
     PendingOrderListItem,
@@ -54,9 +54,9 @@ from api.schemas.order_management import (
     get_field_label,
     FIELD_LABELS,
 )
-from api.mappers.order_management import map_pending_order_detail_to_api
+from server.src.api.mappers.order_management_old import map_pending_order_detail_to_api
 from shared.services.service_container import ServiceContainer
-from shared.types.pending_orders import REQUIRED_FIELDS, VALID_FIELD_NAMES
+from server.src.shared.types.pending_orders_old import REQUIRED_FIELDS, VALID_FIELD_NAMES
 
 logger = logging.getLogger(__name__)
 

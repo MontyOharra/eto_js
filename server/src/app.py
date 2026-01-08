@@ -256,7 +256,7 @@ async def cleanup_services() -> None:
             logger.warning(f"Failed to close ETO SSE connections: {e}")
 
         try:
-            from shared.events.order_events import order_event_manager
+            from server.src.shared.events.order_events_old import order_event_manager
             await order_event_manager.shutdown()
             logger.info("Order SSE connections closed gracefully")
         except Exception as e:

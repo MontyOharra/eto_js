@@ -14,10 +14,10 @@ from .pipeline_definition import PipelineDefinitionRepository
 from .pipeline_definition_step import PipelineDefinitionStepRepository
 from .module import ModuleRepository
 from .output_channel_type import OutputChannelTypeRepository
-from .pending_order import PendingOrderRepository
-from .pending_order_history import PendingOrderHistoryRepository
-from .pending_update import PendingUpdateRepository
-from .pending_update_history import PendingUpdateHistoryRepository
+from .pending_order_old import PendingOrderRepository
+from .pending_order_history_old import PendingOrderHistoryRepository
+from .pending_update_old import PendingUpdateRepository
+from .pending_update_history_old import PendingUpdateHistoryRepository
 
 __all__ = [
     'BaseRepository',
