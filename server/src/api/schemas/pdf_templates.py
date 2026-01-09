@@ -4,7 +4,7 @@ PDF Templates API Schemas
 Pydantic models for PDF template endpoints.
 Reuses domain types from shared/types where possible.
 """
-from typing import Any, Literal
+from typing import Any
 
 from pydantic import BaseModel, Field, model_validator
 
@@ -16,7 +16,7 @@ from shared.types.pdf_templates import (
     PdfTemplateStatus,
     PdfTemplateVersionSummary,
 )
-from shared.types.pipeline_execution import PipelineExecutionStepResult
+from shared.types.pipeline_execution import PipelineExecutionStatus, PipelineExecutionStepResult
 
 
 # ========== List Response ==========
@@ -145,7 +145,7 @@ class ExtractedFieldResult(BaseModel):
 class SimulateTemplateResponse(BaseModel):
     """Response for POST /pdf-templates/simulate"""
     extraction_results: list[ExtractedFieldResult]
-    pipeline_status: Literal["success", "failed"]
+    pipeline_status: PipelineExecutionStatus
     pipeline_steps: list[PipelineExecutionStepResult]
     output_channel_values: dict[str, Any] = Field(default_factory=dict)
     pipeline_error: str | None = None
