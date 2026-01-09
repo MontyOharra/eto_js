@@ -6,7 +6,7 @@ Sub-runs represent page-set business logic units within a parent ETO run.
 Each sub-run handles a specific set of pages that matched a template (or no template).
 """
 from datetime import datetime
-from typing import Any
+from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict
 
@@ -15,6 +15,15 @@ from shared.types.eto_runs import (
     EtoRunExtractionDetailView,
     EtoRunPipelineExecutionDetailView,
 )
+
+
+# =========================
+# Status Types
+# =========================
+
+EtoSubRunStatus = Literal[
+    "not_started", "matched", "processing", "success", "failure", "needs_template", "skipped"
+]
 
 
 # =========================
@@ -66,7 +75,7 @@ class EtoSubRun(BaseModel):
     eto_run_id: int
     matched_pages: str  # JSON string like "[1,2,3]"
     template_version_id: int | None
-    status: str
+    status: EtoSubRunStatus
     error_type: str | None
     error_message: str | None
     error_details: str | None
@@ -96,7 +105,7 @@ class EtoSubRunDetailView(BaseModel):
     id: int
     eto_run_id: int
     matched_pages: list[int]  # Parsed from JSON string
-    status: str
+    status: EtoSubRunStatus
 
     # Template info (None for unmatched groups)
     template_id: int | None

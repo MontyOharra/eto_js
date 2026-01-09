@@ -12,6 +12,17 @@ if TYPE_CHECKING:
 
 
 # =========================
+# Status Types
+# =========================
+
+EtoSourceType = Literal["email", "manual"]
+EtoMasterStatus = Literal["not_started", "processing", "success", "failure", "skipped"]
+EtoRunProcessingStep = Literal["template_matching", "sub_runs"]
+EtoStepStatus = Literal["processing", "success", "failure"]
+EtoOutputStatus = Literal["pending", "processing", "success", "error", "manual_review"]
+
+
+# =========================
 # ETO Run Types
 # =========================
 
@@ -26,7 +37,7 @@ class EtoRunCreate(BaseModel):
     model_config = ConfigDict(frozen=True)
 
     pdf_file_id: int
-    source_type: Literal['email', 'manual']
+    source_type: EtoSourceType
     source_email_id: int | None = None
 
 
@@ -59,10 +70,10 @@ class EtoRun(BaseModel):
 
     id: int
     pdf_file_id: int
-    source_type: str
+    source_type: EtoSourceType
     source_email_id: int | None
-    status: str
-    processing_step: str | None
+    status: EtoMasterStatus
+    processing_step: EtoRunProcessingStep | None
     is_read: bool
     error_type: str | None
     error_message: str | None
@@ -91,10 +102,10 @@ class EtoRunListView(BaseModel):
 
     # Core ETO run fields
     id: int
-    source_type: str
+    source_type: EtoSourceType
     source_email_id: int | None
-    status: str
-    processing_step: str | None
+    status: EtoMasterStatus
+    processing_step: EtoRunProcessingStep | None
     is_read: bool
     started_at: datetime | None
     completed_at: datetime | None
@@ -158,7 +169,7 @@ class EtoRunExtractionDetailView(BaseModel):
     model_config = ConfigDict(frozen=True)
 
     # From EtoRunExtraction
-    status: Literal["processing", "success", "failure"]
+    status: EtoStepStatus
     started_at: datetime | None
     completed_at: datetime | None
 
@@ -187,7 +198,7 @@ class EtoRunPipelineExecutionDetailView(BaseModel):
     model_config = ConfigDict(frozen=True)
 
     # From EtoRunPipelineExecution
-    status: Literal["processing", "success", "failure"]
+    status: EtoStepStatus
     started_at: datetime | None
     completed_at: datetime | None
 
@@ -215,10 +226,10 @@ class EtoRunDetailView(BaseModel):
 
     # Core run data
     id: int
-    source_type: str
+    source_type: EtoSourceType
     source_email_id: int | None
-    status: str
-    processing_step: str | None
+    status: EtoMasterStatus
+    processing_step: EtoRunProcessingStep | None
     is_read: bool
     started_at: datetime | None
     completed_at: datetime | None

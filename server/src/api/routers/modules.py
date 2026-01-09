@@ -39,7 +39,7 @@ async def list_modules(
             version=m.version,
             name=m.name,
             description=m.description,
-            module_kind=m.module_kind.value,
+            module_kind=m.module_kind,
             meta=m.meta.model_dump(),
             config_schema=m.config_schema,
             color=m.color,

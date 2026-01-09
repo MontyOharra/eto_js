@@ -17,6 +17,8 @@ from sqlalchemy.sql import func
 from sqlalchemy import Enum as SAEnum
 
 from shared.types.email_accounts import ProviderType
+from shared.types.eto_runs import EtoSourceType, EtoMasterStatus, EtoRunProcessingStep, EtoStepStatus, EtoOutputStatus
+from shared.types.eto_sub_runs import EtoSubRunStatus
 from shared.types.modules import ModuleKind
 from shared.types.output_channels import OutputChannelDataType, OutputChannelCategory
 from shared.types.pdf_templates import PdfTemplateStatus
@@ -40,6 +42,14 @@ class ViewBase(DeclarativeBase):
 # =========================
 # ENUMS for new ETO design
 # =========================
+
+# Source type for ETO runs
+ETO_SOURCE_TYPE = SAEnum(
+    'email', 'manual',
+    name='eto_source_type',
+    native_enum=False,
+    validate_strings=True
+)
 
 # Parent orchestration status
 ETO_MASTER_STATUS = SAEnum(
@@ -483,15 +493,6 @@ class PipelineDefinitionStepModel(BaseModel):
     )
 
 
-# Source type enum for ETO runs
-ETO_SOURCE_TYPE = SAEnum(
-    'email', 'manual',
-    name='eto_source_type',
-    native_enum=False,
-    validate_strings=True
-)
-
-
 # =========================
 # eto_runs (NEW: parent orchestration level)
 # =========================
@@ -503,7 +504,7 @@ class EtoRunModel(BaseModel):
     pdf_file_id: Mapped[int] = mapped_column(ForeignKey("pdf_files.id"), nullable=False, index=True)
 
     # Source tracking (where this run came from)
-    source_type: Mapped[str] = mapped_column(
+    source_type: Mapped[EtoSourceType] = mapped_column(
         ETO_SOURCE_TYPE,
         nullable=False,
     )
@@ -514,14 +515,14 @@ class EtoRunModel(BaseModel):
     )
 
     # Parent orchestration status
-    status: Mapped[str] = mapped_column(
+    status: Mapped[EtoMasterStatus] = mapped_column(
         ETO_MASTER_STATUS,
         nullable=False,
         server_default="not_started",
     )
 
     # Processing step indicator
-    processing_step: Mapped[Optional[str]] = mapped_column(
+    processing_step: Mapped[EtoRunProcessingStep | None] = mapped_column(
         ETO_RUN_PROCESSING_STEP,
         nullable=True,
     )
@@ -580,7 +581,7 @@ class EtoSubRunModel(BaseModel):
     )
 
     # Sub-run business logic status
-    status: Mapped[str] = mapped_column(
+    status: Mapped[EtoSubRunStatus] = mapped_column(
         ETO_RUN_STATUS,
         nullable=False,
         server_default="not_started",
@@ -634,7 +635,7 @@ class EtoSubRunExtractionModel(BaseModel):
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
     sub_run_id: Mapped[int] = mapped_column(ForeignKey("eto_sub_runs.id", ondelete="CASCADE"), nullable=False, index=True)
 
-    status: Mapped[str] = mapped_column(
+    status: Mapped[EtoStepStatus] = mapped_column(
         ETO_STEP_STATUS,
         nullable=False,
         server_default="processing",
@@ -671,7 +672,7 @@ class EtoSubRunPipelineExecutionModel(BaseModel):
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
     sub_run_id: Mapped[int] = mapped_column(ForeignKey("eto_sub_runs.id", ondelete="CASCADE"), nullable=False, index=True)
 
-    status: Mapped[str] = mapped_column(
+    status: Mapped[EtoStepStatus] = mapped_column(
         ETO_STEP_STATUS,
         nullable=False,
         server_default="processing",
@@ -772,7 +773,7 @@ class EtoSubRunOutputExecutionModel(BaseModel):
     output_channel_data: Mapped[str] = mapped_column(Text, nullable=False)
 
     # Execution status: pending -> processing -> success/error
-    status: Mapped[str] = mapped_column(
+    status: Mapped[EtoOutputStatus] = mapped_column(
         ETO_OUTPUT_STATUS,
         nullable=False,
         server_default="pending",
