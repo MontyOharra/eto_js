@@ -6,7 +6,7 @@ from typing import Dict, Any, Union
 from pydantic import BaseModel, Field
 from shared.types import ModuleMeta, IOShape, IOSideShape, NodeGroup, NodeTypeRule
 from features.modules.registry import register
-from features.modules.base import ComparatorModule
+from features.modules.base import BaseModule
 
 
 # Number Equals
@@ -15,11 +15,12 @@ class NumberEqualsConfig(BaseModel):
     tolerance: float = Field(0.0001, description="Tolerance for float comparison (ignored for ints)")
 
 @register
-class NumberEquals(ComparatorModule):
+class NumberEquals(BaseModule):
     identifier = "number_equals"
     version = "1.0.0"
     title = "Number Equals"
     description = "Check if input number equals a configured value"
+    kind = "comparator"
     category = "Number"
     color = "#EF4444"  # red-500 (middle ground between light and dark red)
     ConfigModel = NumberEqualsConfig
@@ -73,11 +74,12 @@ class NumberGreaterThanConfig(BaseModel):
     threshold: Union[int, float] = Field(..., description="Threshold value")
 
 @register
-class NumberGreaterThan(ComparatorModule):
-    id = "number_greater_than"
+class NumberGreaterThan(BaseModule):
+    identifier = "number_greater_than"
     version = "1.0.0"
     title = "Number Greater Than"
     description = "Check if input number is greater than a threshold"
+    kind = "comparator"
     category = "Number"
     color = "#EF4444"  # red-500 (middle ground between light and dark red)
     ConfigModel = NumberGreaterThanConfig
@@ -161,11 +163,12 @@ class NumberLessThanConfig(BaseModel):
     threshold: Union[int, float] = Field(..., description="Threshold value")
 
 @register
-class NumberLessThan(ComparatorModule):
-    id = "number_less_than"
+class NumberLessThan(BaseModule):
+    identifier = "number_less_than"
     version = "1.0.0"
     title = "Number Less Than"
     description = "Check if input number is less than a threshold"
+    kind = "comparator"
     category = "Number"
     color = "#EF4444"  # red-500 (middle ground between light and dark red)
     ConfigModel = NumberLessThanConfig

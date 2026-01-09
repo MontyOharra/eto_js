@@ -7,7 +7,7 @@ from pydantic import BaseModel, Field
 
 from shared.types import ModuleMeta, IOShape, IOSideShape, NodeGroup, NodeTypeRule
 from features.modules.registry import register
-from features.modules.base import TransformModule
+from features.modules.base import BaseModule
 
 
 class StripTextConfig(BaseModel):
@@ -19,7 +19,7 @@ class StripTextConfig(BaseModel):
 
 
 @register
-class StripText(TransformModule):
+class StripText(BaseModule):
     """
     Strip specific text from the start and/or end of a string.
     Only removes the text if it actually exists at the specified position.
@@ -31,6 +31,7 @@ class StripText(TransformModule):
     title = "Strip Text"
     description = "Remove specific text from the beginning and/or end of a string"
     category = "String"
+    kind = "transform"
     color = "#3B82F6"  # Blue - matches string comparators
 
     # Configuration model

@@ -8,7 +8,7 @@ from pydantic import BaseModel
 
 from shared.types import ModuleMeta, IOShape, IOSideShape, NodeGroup, NodeTypeRule
 from features.modules.registry import register
-from features.modules.base import TransformModule
+from features.modules.base import BaseModule
 
 logger = logging.getLogger(__name__)
 
@@ -24,7 +24,7 @@ class DimBuilderConfig(BaseModel):
 
 
 @register
-class DimBuilder(TransformModule):
+class DimBuilder(BaseModule):
     """
     Dim Builder transform module
     Builds a dimension object from height, length, width, qty, and weight inputs
@@ -36,6 +36,7 @@ class DimBuilder(TransformModule):
     title = "Dim Builder"
     description = "Build a dimension object from individual components (count, L, W, H, weight)"
     category = "Cargo"
+    kind = "transform"
     color = "#F97316"  # Orange
 
     # Configuration model

@@ -8,7 +8,7 @@ from pydantic import BaseModel, Field
 
 from shared.types import ModuleMeta, IOShape, IOSideShape, NodeGroup, NodeTypeRule
 from features.modules.registry import register
-from features.modules.base import TransformModule
+from features.modules.base import BaseModule
 
 
 class TextCleanerConfig(BaseModel):
@@ -21,7 +21,7 @@ class TextCleanerConfig(BaseModel):
     to_lowercase: bool = Field(False, description="Convert text to lowercase")
 
 @register
-class BasicTextCleaner(TransformModule):
+class BasicTextCleaner(BaseModule):
     """
     Basic text cleaning transform module
     Cleans and normalizes text input
@@ -33,6 +33,7 @@ class BasicTextCleaner(TransformModule):
     title = "Basic Text Cleaner"
     description = "Clean and normalize text by removing extra whitespace and applying basic transformations"
     category = "Text"
+    kind = "transform"
     color = "#0EA5E9"  # Sky blue
 
     # Configuration model

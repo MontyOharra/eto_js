@@ -7,7 +7,7 @@ from pydantic import BaseModel, Field
 import re
 from shared.types import ModuleMeta, IOShape, IOSideShape, NodeGroup, NodeTypeRule
 from features.modules.registry import register
-from features.modules.base import ComparatorModule
+from features.modules.base import BaseModule
 
 
 # String Equals
@@ -16,11 +16,12 @@ class StringEqualsConfig(BaseModel):
     case_sensitive: bool = Field(True, description="Whether comparison is case-sensitive")
 
 @register
-class StringEquals(ComparatorModule):
+class StringEquals(BaseModule):
     identifier = "string_equals"
     version = "1.0.0"
     title = "String Equals"
     description = "Check if input string equals a configured value"
+    kind = "comparator"
     category = "String"
     color = "#3B82F6"  # Blue
     ConfigModel = StringEqualsConfig
@@ -79,11 +80,12 @@ class StringContainsConfig(BaseModel):
     case_sensitive: bool = Field(True, description="Whether search is case-sensitive")
 
 @register
-class StringContains(ComparatorModule):
-    id = "string_contains"
+class StringContains(BaseModule):
+    identifier = "string_contains"
     version = "1.0.0"
     title = "String Contains"
     description = "Check if input string contains a substring"
+    kind = "comparator"
     category = "String"
     color = "#3B82F6"  # Blue
     ConfigModel = StringContainsConfig
@@ -142,11 +144,12 @@ class StringStartsWithConfig(BaseModel):
     case_sensitive: bool = Field(True, description="Whether check is case-sensitive")
 
 @register
-class StringStartsWith(ComparatorModule):
-    id = "string_starts_with"
+class StringStartsWith(BaseModule):
+    identifier = "string_starts_with"
     version = "1.0.0"
     title = "String Starts With"
     description = "Check if input string starts with a prefix"
+    kind = "comparator"
     category = "String"
     color = "#3B82F6"  # Blue
     ConfigModel = StringStartsWithConfig
@@ -205,11 +208,12 @@ class StringEndsWithConfig(BaseModel):
     case_sensitive: bool = Field(True, description="Whether check is case-sensitive")
 
 @register
-class StringEndsWith(ComparatorModule):
-    id = "string_ends_with"
+class StringEndsWith(BaseModule):
+    identifier = "string_ends_with"
     version = "1.0.0"
     title = "String Ends With"
     description = "Check if input string ends with a suffix"
+    kind = "comparator"
     category = "String"
     color = "#3B82F6"  # Blue
     ConfigModel = StringEndsWithConfig
@@ -267,11 +271,12 @@ class StringMatchesRegexConfig(BaseModel):
     pattern: str = Field(..., description="Regular expression pattern to match")
 
 @register
-class StringMatchesRegex(ComparatorModule):
-    id = "string_matches_regex"
+class StringMatchesRegex(BaseModule):
+    identifier = "string_matches_regex"
     version = "1.0.0"
     title = "String Matches Regex"
     description = "Check if input string matches a regular expression pattern"
+    kind = "comparator"
     category = "String"
     color = "#3B82F6"  # Blue
     ConfigModel = StringMatchesRegexConfig
@@ -329,11 +334,12 @@ class StringIsEmptyConfig(BaseModel):
     trim_whitespace: bool = Field(True, description="Whether to trim whitespace before checking")
 
 @register
-class StringIsEmpty(ComparatorModule):
-    id = "string_is_empty"
+class StringIsEmpty(BaseModule):
+    identifier = "string_is_empty"
     version = "1.0.0"
     title = "String Is Empty"
     description = "Check if input string is empty or contains only whitespace"
+    kind = "comparator"
     category = "String"
     color = "#3B82F6"  # Blue
     ConfigModel = StringIsEmptyConfig

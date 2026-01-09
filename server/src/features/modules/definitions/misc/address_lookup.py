@@ -8,7 +8,7 @@ from pydantic import BaseModel, Field
 
 from shared.types import ModuleMeta, IOShape, IOSideShape, NodeGroup, NodeTypeRule
 from features.modules.registry import register
-from features.modules.base import MiscModule
+from features.modules.base import BaseModule
 from shared.database.access_connection import AccessConnectionManager
 
 logger = logging.getLogger(__name__)
@@ -31,7 +31,7 @@ class AddressLookupConfig(BaseModel):
 
 
 @register
-class AddressLookup(MiscModule):
+class AddressLookup(BaseModule):
     """
     Address Lookup Module
 
@@ -58,6 +58,7 @@ class AddressLookup(MiscModule):
     title = "Address Lookup"
     description = "Find address ID from parsed address components"
     category = "Database"
+    kind = "misc"
     color = "#EAB308"  # Yellow
 
     # Configuration model

@@ -7,7 +7,7 @@ from pydantic import BaseModel
 
 from shared.types import ModuleMeta, IOShape, IOSideShape, NodeGroup, NodeTypeRule
 from features.modules.registry import register
-from features.modules.base import TransformModule
+from features.modules.base import BaseModule
 
 
 class DataDuplicatorConfig(BaseModel):
@@ -15,7 +15,7 @@ class DataDuplicatorConfig(BaseModel):
     pass
 
 @register
-class DataDuplicator(TransformModule):
+class DataDuplicator(BaseModule):
     """
     Data Duplicator transform module
     Takes one input and duplicates it to multiple outputs
@@ -28,6 +28,7 @@ class DataDuplicator(TransformModule):
     title = "Data Duplicator"
     description = "Duplicate input data to multiple outputs"
     category = "Flow Control"
+    kind = "transform"
     color = "#6B7280"  # Gray
 
     # Configuration model

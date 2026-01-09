@@ -7,19 +7,20 @@ from pydantic import BaseModel, Field
 from datetime import datetime, date
 from shared.types import ModuleMeta, IOShape, IOSideShape, NodeGroup, NodeTypeRule
 from features.modules.registry import register
-from features.modules.base import ComparatorModule
+from features.modules.base import BaseModule
 
 
-# Date Before
+# Date Before (DateBefore already has kind = "comparator")
 class DateBeforeConfig(BaseModel):
     compare_date: str = Field(..., description="Date to compare against (ISO format YYYY-MM-DD or YYYY-MM-DDTHH:MM:SS)")
 
 @register
-class DateBefore(ComparatorModule):
+class DateBefore(BaseModule):
     identifier = "date_before"
     version = "1.0.0"
     title = "Date Before"
     description = "Check if input date is before a configured date"
+    kind = "comparator"
     category = "Date"
     color = "#A855F7"  # Purple
     ConfigModel = DateBeforeConfig
@@ -86,11 +87,12 @@ class DateAfterConfig(BaseModel):
     compare_date: str = Field(..., description="Date to compare against (ISO format YYYY-MM-DD or YYYY-MM-DDTHH:MM:SS)")
 
 @register
-class DateAfter(ComparatorModule):
-    id = "date_after"
+class DateAfter(BaseModule):
+    identifier = "date_after"
     version = "1.0.0"
     title = "Date After"
     description = "Check if input date is after a configured date"
+    kind = "comparator"
     category = "Date"
     color = "#A855F7"  # Purple
     ConfigModel = DateAfterConfig
@@ -159,11 +161,12 @@ class DateInRangeConfig(BaseModel):
     inclusive: bool = Field(True, description="Whether range bounds are inclusive")
 
 @register
-class DateInRange(ComparatorModule):
-    id = "date_in_range"
+class DateInRange(BaseModule):
+    identifier = "date_in_range"
     version = "1.0.0"
     title = "Date In Range"
     description = "Check if input date is within a specified date range"
+    kind = "comparator"
     category = "Date"
     color = "#A855F7"  # Purple
     ConfigModel = DateInRangeConfig
@@ -244,11 +247,12 @@ class DateIsTodayConfig(BaseModel):
     pass  # No configuration needed - will compare to current date
 
 @register
-class DateIsToday(ComparatorModule):
-    id = "date_is_today"
+class DateIsToday(BaseModule):
+    identifier = "date_is_today"
     version = "1.0.0"
     title = "Date Is Today"
     description = "Check if input date is today's date (compares date only, ignoring time)"
+    kind = "comparator"
     category = "Date"
     color = "#A855F7"  # Purple
     ConfigModel = DateIsTodayConfig

@@ -3,13 +3,20 @@ PDF Template Types
 Domain types for template management, versioning, and wizard data
 """
 from datetime import datetime
-from typing import Any
+from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field
 
 from .pdf_files import PdfObjects
 from .pipelines import PipelineState
 from .pipeline_execution import PipelineExecutionResult
+
+
+# =========================
+# Status Type
+# =========================
+
+PdfTemplateStatus = Literal["active", "inactive"]
 
 
 class ExtractionField(BaseModel):
@@ -104,7 +111,7 @@ class PdfTemplate(BaseModel):
     name: str
     description: str | None = None
     customer_id: int | None = None  # References external Access DB
-    status: str
+    status: PdfTemplateStatus
     is_autoskip: bool
     source_pdf_id: int
     current_version_id: int | None = None
@@ -122,7 +129,7 @@ class PdfTemplateListView(BaseModel):
     name: str
     description: str | None = None
     customer_id: int | None = None  # References external Access DB
-    status: str
+    status: PdfTemplateStatus
     is_autoskip: bool
     source_pdf_id: int
     current_version_id: int | None = None

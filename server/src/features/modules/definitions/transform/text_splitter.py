@@ -9,7 +9,7 @@ from pydantic import BaseModel, Field
 
 from shared.types import ModuleMeta, IOShape, IOSideShape, NodeGroup, NodeTypeRule
 from features.modules.registry import register
-from features.modules.base import TransformModule
+from features.modules.base import BaseModule
 
 logger = logging.getLogger(__name__)
 
@@ -31,7 +31,7 @@ class TextSplitterConfig(BaseModel):
 
 
 @register
-class TextSplitter(TransformModule):
+class TextSplitter(BaseModule):
     """
     Text Splitter transform module
     Splits a string into a list of strings based on a delimiter
@@ -43,6 +43,7 @@ class TextSplitter(TransformModule):
     title = "Text Splitter"
     description = "Split text into a list of strings based on a delimiter"
     category = "Text"
+    kind = "transform"
     color = "#8B5CF6"  # Purple
 
     # Configuration model

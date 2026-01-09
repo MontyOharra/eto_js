@@ -7,7 +7,7 @@ from pydantic import BaseModel
 
 from shared.types import ModuleMeta, IOShape, IOSideShape, NodeGroup, NodeTypeRule
 from features.modules.registry import register
-from features.modules.base import LogicModule
+from features.modules.base import BaseModule
 
 
 class BooleanOrConfig(BaseModel):
@@ -15,7 +15,7 @@ class BooleanOrConfig(BaseModel):
     pass
 
 @register
-class BooleanOr(LogicModule):
+class BooleanOr(BaseModule):
     """
     Boolean OR logic gate
     Takes two boolean inputs and outputs their logical OR result
@@ -27,6 +27,7 @@ class BooleanOr(LogicModule):
     title = "Boolean OR"
     description = "Logical OR operation on two boolean inputs"
     category = "Gate"
+    kind = "logic"
     color = "#10B981"  # Green
 
     # Configuration model

@@ -5,7 +5,6 @@ Contains type definitions for module metadata and catalog entries.
 Base classes for module implementations are in features/modules/base.py.
 """
 from datetime import datetime
-from enum import Enum
 from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict
@@ -17,13 +16,7 @@ AllowedNodeType = Literal[
 ]
 
 
-class ModuleKind(str, Enum):
-    """Module kind."""
-    TRANSFORM = "transform"
-    LOGIC = "logic"
-    COMPARATOR = "comparator"
-    MISC = "misc"
-    OUTPUT = "output"
+ModuleKind = Literal["transform", "logic", "comparator", "misc", "output"]
 
 
 # ========== Module Metadata Types ==========

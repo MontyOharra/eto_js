@@ -11,7 +11,7 @@ from pydantic import BaseModel
 
 from shared.types import ModuleMeta, IOShape, IOSideShape, NodeGroup, NodeTypeRule
 from features.modules.registry import register
-from features.modules.base import TransformModule
+from features.modules.base import BaseModule
 
 logger = logging.getLogger(__name__)
 
@@ -23,7 +23,7 @@ class DateTimeExtractorConfig(BaseModel):
 
 
 @register
-class DateTimeExtractor(TransformModule):
+class DateTimeExtractor(BaseModule):
     """
     DateTime Extractor transform module
     Uses OpenAI API to extract date and time information from varied text formats
@@ -45,6 +45,7 @@ class DateTimeExtractor(TransformModule):
     title = "DateTime Extractor"
     description = "Extract time start/end as full datetime objects using AI"
     category = "LLM"
+    kind = "transform"
     color = "#F97316"  # Orange
 
     # Configuration model

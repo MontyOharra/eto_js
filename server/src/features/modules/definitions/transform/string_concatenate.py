@@ -8,7 +8,7 @@ from pydantic import BaseModel, Field
 
 from shared.types import ModuleMeta, IOShape, IOSideShape, NodeGroup, NodeTypeRule
 from features.modules.registry import register
-from features.modules.base import TransformModule
+from features.modules.base import BaseModule
 
 logger = logging.getLogger(__name__)
 
@@ -22,7 +22,7 @@ class StringConcatenateConfig(BaseModel):
 
 
 @register
-class StringConcatenate(TransformModule):
+class StringConcatenate(BaseModule):
     """
     String Concatenate transform module
     Concatenates multiple string inputs with a configurable separator
@@ -34,6 +34,7 @@ class StringConcatenate(TransformModule):
     title = "String Concatenate"
     description = "Concatenate multiple strings with a separator"
     category = "Text"
+    kind = "transform"
     color = "#0EA5E9"  # Sky blue
 
     # Configuration model

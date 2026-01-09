@@ -7,7 +7,7 @@ from pydantic import BaseModel
 
 from shared.types import ModuleMeta, IOShape, IOSideShape, NodeGroup, NodeTypeRule
 from features.modules.registry import register
-from features.modules.base import LogicModule
+from features.modules.base import BaseModule
 from shared.database.access_connection import AccessConnectionManager
 
 
@@ -16,7 +16,7 @@ class BooleanAndConfig(BaseModel):
     pass
 
 @register
-class BooleanAnd(LogicModule):
+class BooleanAnd(BaseModule):
     """
     Boolean AND logic gate
     Takes two boolean inputs and outputs their logical AND result
@@ -28,6 +28,7 @@ class BooleanAnd(LogicModule):
     title = "Boolean AND"
     description = "Logical AND operation on two boolean inputs"
     category = "Gate"
+    kind = "logic"
     color = "#10B981"  # Green
 
     # Configuration model

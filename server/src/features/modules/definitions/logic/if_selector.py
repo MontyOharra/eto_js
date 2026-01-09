@@ -7,7 +7,7 @@ from pydantic import BaseModel
 
 from shared.types import ModuleMeta, IOShape, IOSideShape, NodeGroup, NodeTypeRule
 from features.modules.registry import register
-from features.modules.base import LogicModule
+from features.modules.base import BaseModule
 
 
 class IfSelectorConfig(BaseModel):
@@ -15,7 +15,7 @@ class IfSelectorConfig(BaseModel):
     pass
 
 @register
-class IfSelector(LogicModule):
+class IfSelector(BaseModule):
     """
     If Selector logic module
     Takes a boolean condition and two variable inputs, outputs one of the inputs based on the condition
@@ -28,6 +28,7 @@ class IfSelector(LogicModule):
     title = "If Selector"
     description = "Select one of two values based on a boolean condition"
     category = "Flow Control"
+    kind = "logic"
     color = "#6B7280"  # Gray
 
     # Configuration model

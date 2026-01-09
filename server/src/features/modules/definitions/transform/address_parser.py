@@ -8,7 +8,7 @@ from pydantic import BaseModel
 
 from shared.types import ModuleMeta, IOShape, IOSideShape, NodeGroup, NodeTypeRule
 from features.modules.registry import register
-from features.modules.base import TransformModule
+from features.modules.base import BaseModule
 
 logger = logging.getLogger(__name__)
 
@@ -20,7 +20,7 @@ class AddressParserConfig(BaseModel):
 
 
 @register
-class AddressParser(TransformModule):
+class AddressParser(BaseModule):
     """
     Address Parser transform module
     Parses a US address string into components using the usaddress library
@@ -31,6 +31,7 @@ class AddressParser(TransformModule):
     version = "1.0.0"
     title = "Address Parser"
     description = "Parse US address string into components (street, city, state, zip)"
+    kind = "transform"
     category = "Text"
     color = "#0EA5E9"  # Sky blue
 

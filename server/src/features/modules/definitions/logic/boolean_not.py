@@ -7,7 +7,7 @@ from pydantic import BaseModel
 
 from shared.types import ModuleMeta, IOShape, IOSideShape, NodeGroup, NodeTypeRule
 from features.modules.registry import register
-from features.modules.base import LogicModule
+from features.modules.base import BaseModule
 
 
 class BooleanNotConfig(BaseModel):
@@ -15,7 +15,7 @@ class BooleanNotConfig(BaseModel):
     pass
 
 @register
-class BooleanNot(LogicModule):
+class BooleanNot(BaseModule):
     """
     Boolean NOT logic gate
     Takes one boolean input and outputs its logical NOT result
@@ -27,6 +27,7 @@ class BooleanNot(LogicModule):
     title = "Boolean NOT"
     description = "Logical NOT operation on one boolean input"
     category = "Gate"
+    kind = "logic"
     color = "#10B981"  # Green
 
     # Configuration model

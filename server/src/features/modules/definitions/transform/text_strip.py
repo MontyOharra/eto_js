@@ -7,7 +7,7 @@ from pydantic import BaseModel, Field
 
 from shared.types import ModuleMeta, IOShape, IOSideShape, NodeGroup, NodeTypeRule
 from features.modules.registry import register
-from features.modules.base import TransformModule
+from features.modules.base import BaseModule
 
 
 class StripCharactersConfig(BaseModel):
@@ -18,7 +18,7 @@ class StripCharactersConfig(BaseModel):
 
 
 @register
-class StripCharacters(TransformModule):
+class StripCharacters(BaseModule):
     """
     Strip a specified number of characters from the start and/or end of a text string.
     Can strip from the beginning, end, or both.
@@ -30,6 +30,7 @@ class StripCharacters(TransformModule):
     title = "Strip Characters"
     description = "Remove a specified number of characters from the beginning and/or end of a text string"
     category = "String"
+    kind = "transform"
     color = "#3B82F6"  # Blue - matches string comparators
 
     # Configuration model

@@ -7,7 +7,7 @@ from pydantic import BaseModel
 
 from shared.types import ModuleMeta, IOShape, IOSideShape, NodeGroup, NodeTypeRule
 from features.modules.registry import register
-from features.modules.base import TransformModule
+from features.modules.base import BaseModule
 
 
 class TypeConverterConfig(BaseModel):
@@ -15,7 +15,7 @@ class TypeConverterConfig(BaseModel):
     pass
 
 @register
-class TypeConverter(TransformModule):
+class TypeConverter(BaseModule):
     """
     Type Converter transform module
     Converts input data from one type to another type
@@ -28,6 +28,7 @@ class TypeConverter(TransformModule):
     title = "Type Converter"
     description = "Convert data from one type to another"
     category = "Flow Control"
+    kind = "transform"
     color = "#6B7280"  # Gray
 
     # Configuration model

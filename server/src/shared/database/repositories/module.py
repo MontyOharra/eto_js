@@ -63,7 +63,7 @@ class ModuleRepository(BaseRepository[ModuleModel]):
             version=model.version,
             name=model.name,
             description=model.description,
-            module_kind=ModuleKind(model.module_kind),
+            module_kind=model.module_kind,
             meta=self._deserialize_module_meta(model.meta),
             config_schema=self._deserialize_config_schema(model.config_schema),
             handler_name=model.handler_name,
@@ -87,21 +87,19 @@ class ModuleRepository(BaseRepository[ModuleModel]):
             Created Module domain object
         """
         with self._get_session() as session:
-            data = {
-                'identifier': module_create.identifier,
-                'version': module_create.version,
-                'name': module_create.name,
-                'description': module_create.description,
-                'module_kind': module_create.module_kind.value,
-                'meta': self._serialize_module_meta(module_create.meta),
-                'config_schema': self._serialize_config_schema(module_create.config_schema),
-                'handler_name': module_create.handler_name,
-                'color': module_create.color,
-                'category': module_create.category,
-                'is_active': module_create.is_active,
-            }
-
-            model = self.model_class(**data)
+            model = self.model_class(
+                identifier=module_create.identifier,
+                version=module_create.version,
+                name=module_create.name,
+                description=module_create.description,
+                module_kind=module_create.module_kind,
+                meta=self._serialize_module_meta(module_create.meta),
+                config_schema=self._serialize_config_schema(module_create.config_schema),
+                handler_name=module_create.handler_name,
+                color=module_create.color,
+                category=module_create.category,
+                is_active=module_create.is_active,                                     
+            )
             session.add(model)
             session.flush()
 

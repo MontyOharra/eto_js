@@ -8,7 +8,7 @@ from pydantic import BaseModel
 
 from shared.types import ModuleMeta, IOShape, IOSideShape, NodeGroup, NodeTypeRule
 from features.modules.registry import register
-from features.modules.base import TransformModule
+from features.modules.base import BaseModule
 
 logger = logging.getLogger(__name__)
 
@@ -19,7 +19,7 @@ class DimListCollectorConfig(BaseModel):
 
 
 @register
-class DimListCollector(TransformModule):
+class DimListCollector(BaseModule):
     """
     Dim List Collector transform module
     Collects multiple dim objects into a list[dim] for output channels
@@ -31,6 +31,7 @@ class DimListCollector(TransformModule):
     title = "Dim List Collector"
     description = "Collect multiple dim objects into a list"
     category = "Cargo"
+    kind = "transform"
     color = "#F97316"  # Orange (same as DimBuilder)
 
     # Configuration model

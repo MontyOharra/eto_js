@@ -17,7 +17,9 @@ from sqlalchemy.sql import func
 from sqlalchemy import Enum as SAEnum
 
 from shared.types.email_accounts import ProviderType
+from shared.types.modules import ModuleKind
 from shared.types.output_channels import OutputChannelDataType, OutputChannelCategory
+from shared.types.pdf_templates import PdfTemplateStatus
 
 class BaseModel(DeclarativeBase):
     """Base class for all table models. Used by create_all() to create tables."""
@@ -297,6 +299,16 @@ class PdfFileModel(BaseModel):
 # =========================
 # pdf_templates
 # =========================
+
+# PDF template status enum
+PDF_TEMPLATE_STATUS = SAEnum(
+    'active', 'inactive',
+    name='pdf_template_status',
+    native_enum=False,
+    validate_strings=True
+)
+
+
 class PdfTemplateModel(BaseModel):
     __tablename__ = "pdf_templates"
 
@@ -307,11 +319,7 @@ class PdfTemplateModel(BaseModel):
     customer_id: Mapped[Optional[int]] = mapped_column(Integer, index=True)  # References external Access DB
     source_pdf_id: Mapped[int] = mapped_column(ForeignKey("pdf_files.id"), nullable=False, index=True)
 
-    status: Mapped[str] = mapped_column(
-        SAEnum('active', 'inactive', native_enum=False, validate_strings=True, name="pdf_template_status"),
-        nullable=False,
-        default='active',
-    )
+    status: Mapped[PdfTemplateStatus] = mapped_column(PDF_TEMPLATE_STATUS, nullable=False, default='active')
     is_autoskip: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     current_version_id: Mapped[Optional[int]] = mapped_column(ForeignKey("pdf_template_versions.id"))
 
@@ -362,6 +370,15 @@ class PdfTemplateVersionModel(BaseModel):
 # modules
 # =========================
 
+# Module kind enum
+MODULE_KIND = SAEnum(
+    'transform', 'logic', 'comparator', 'misc', 'output',
+    name='module_kind',
+    native_enum=False,
+    validate_strings=True
+)
+
+
 class ModuleModel(BaseModel):
     __tablename__ = "modules"
 
@@ -370,7 +387,7 @@ class ModuleModel(BaseModel):
     version: Mapped[str] = mapped_column(String(50), nullable=False)       # e.g., "1.0.0"
     name: Mapped[str] = mapped_column(String(255), nullable=False)         # Display name
     description: Mapped[str | None] = mapped_column(Text)
-    module_kind: Mapped[str] = mapped_column(String(20), nullable=False)
+    module_kind: Mapped[ModuleKind] = mapped_column(MODULE_KIND, nullable=False)
     meta: Mapped[str] = mapped_column(Text, nullable=False)
     config_schema: Mapped[str] = mapped_column(Text, nullable=False, default="{}")
     handler_name: Mapped[str] = mapped_column(String(255), nullable=False)
@@ -877,7 +894,7 @@ PENDING_UPDATE_STATUS = SAEnum(
 # =========================
 # pending_orders (aggregated order state by HAWB)
 # =========================
-
+'''
 class PendingOrderModel(BaseModel):
     """
     Aggregated order state for a single HAWB.
@@ -1161,7 +1178,7 @@ class PendingUpdateHistoryModel(BaseModel):
         Index("idx_puh_sub_run", "sub_run_id"),
         Index("idx_puh_selected", "pending_update_id", "field_name", "is_selected"),
     )
-
+'''
 
 # ============================================================
 # system_settings - Application configuration key-value store
@@ -1189,7 +1206,7 @@ class SystemSettingModel(BaseModel):
 # =========================
 # DATABASE VIEWS
 # =========================
-
+'''
 class UnifiedActionsViewModel(ViewBase):
     """
     Maps to the unified_actions_view VIEW (read-only).
@@ -1223,3 +1240,4 @@ class UnifiedActionsViewModel(ViewBase):
     last_processed_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+'''

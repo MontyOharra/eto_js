@@ -8,7 +8,7 @@ from pydantic import BaseModel
 
 from shared.types import ModuleMeta, IOShape, IOSideShape, NodeGroup, NodeTypeRule
 from features.modules.registry import register
-from features.modules.base import LogicModule
+from features.modules.base import BaseModule
 
 logger = logging.getLogger(__name__)
 
@@ -19,7 +19,7 @@ class IfBranchConfig(BaseModel):
 
 
 @register
-class IfBranch(LogicModule):
+class IfBranch(BaseModule):
     """
     If Branch logic module
     Routes a value to one of two output paths based on a boolean condition
@@ -46,6 +46,7 @@ class IfBranch(LogicModule):
     title = "If Branch"
     description = "Route value to one of two paths based on boolean condition"
     category = "Flow Control"
+    kind = "logic"
     color = "#6B7280"  # Gray
 
     # Configuration model

@@ -7,7 +7,7 @@ from pydantic import BaseModel, Field
 
 from shared.types import ModuleMeta, IOShape, IOSideShape, NodeGroup, NodeTypeRule
 from features.modules.registry import register
-from features.modules.base import MiscModule
+from features.modules.base import BaseModule
 
 
 class GeneratorConfig(BaseModel):
@@ -15,7 +15,7 @@ class GeneratorConfig(BaseModel):
     output_value: str = Field(..., description="Value to output from the generator (coalesces to the output node type)")
 
 @register
-class Generator(MiscModule):
+class Generator(BaseModule):
     """
     Value Generator
     Outputs a configured value with no inputs
@@ -28,6 +28,7 @@ class Generator(MiscModule):
     title = "Value Generator"
     description = "Output a configured value (no inputs required)"
     category = "Generator"
+    kind = "misc"
     color = "#000000"  # Green
 
     # Configuration model
