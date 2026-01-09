@@ -5,9 +5,13 @@ Domain types for pipeline execution results (in-memory, no persistence)
 Note: Actual persistence of execution steps is handled by ETO sub-runs.
 See eto_sub_run_pipeline_execution_steps.py for persisted execution types.
 """
-from typing import Any
+from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict
+
+
+# Pipeline execution status (in-memory result, not persisted)
+PipelineExecutionStatus = Literal["success", "failed", "partial"]
 
 
 class PipelineExecutionStepResult(BaseModel):
@@ -34,7 +38,7 @@ class PipelineExecutionResult(BaseModel):
     """
     model_config = ConfigDict(frozen=True)
 
-    status: str
+    status: PipelineExecutionStatus
     steps: list[PipelineExecutionStepResult]
     output_channel_values: dict[str, Any]  # {channel_type: value} e.g., {"hawb": "ABC123"}
     error: str | None

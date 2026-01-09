@@ -40,7 +40,7 @@ async def list_modules(
             name=m.name,
             description=m.description,
             module_kind=m.module_kind,
-            meta=m.meta.model_dump(),
+            meta=m.meta,
             config_schema=m.config_schema,
             color=m.color,
             category=m.category,

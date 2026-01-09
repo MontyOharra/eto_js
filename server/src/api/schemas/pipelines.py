@@ -18,6 +18,7 @@ from shared.types.pipeline_definition import (
     PipelineDefinitionCreate,
 )
 from shared.types.pipeline_execution import (
+    PipelineExecutionStatus,
     PipelineExecutionStepResult,
     PipelineExecutionResult,
 )
@@ -96,7 +97,7 @@ ExecutionStepResultResponse = PipelineExecutionStepResult
 
 class ExecutePipelineResponse(BaseModel):
     """Response for POST /pipelines/{id}/execute"""
-    status: str  # "success" | "failed" | "partial"
+    status: PipelineExecutionStatus
     steps: list[PipelineExecutionStepResult]
     output_channel_values: dict[str, Any] = Field(
         default_factory=dict,

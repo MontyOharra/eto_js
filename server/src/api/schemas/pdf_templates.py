@@ -4,7 +4,7 @@ PDF Templates API Schemas
 Pydantic models for PDF template endpoints.
 Reuses domain types from shared/types where possible.
 """
-from typing import Any
+from typing import Any, Literal
 
 from pydantic import BaseModel, Field, model_validator
 
@@ -13,6 +13,7 @@ from shared.types.pipelines import PipelineState, VisualState
 from shared.types.pdf_files import PdfObjects
 from shared.types.pdf_templates import (
     ExtractionField,
+    PdfTemplateStatus,
     PdfTemplateVersionSummary,
 )
 from shared.types.pipeline_execution import PipelineExecutionStepResult
@@ -34,7 +35,7 @@ class TemplateListItem(BaseModel):
     description: str | None = None
     customer_id: int | None = None
     customer_name: str | None = None  # Enriched from Access DB
-    status: str
+    status: PdfTemplateStatus
     is_autoskip: bool = False
     source_pdf_id: int
     current_version: TemplateVersionSummary
@@ -66,7 +67,7 @@ class PdfTemplateResponse(BaseModel):
     description: str | None = None
     customer_id: int | None = None
     customer_name: str | None = None  # Enriched from Access DB
-    status: str
+    status: PdfTemplateStatus
     is_autoskip: bool = False
     source_pdf_id: int
     current_version_id: int | None = None
@@ -144,7 +145,7 @@ class ExtractedFieldResult(BaseModel):
 class SimulateTemplateResponse(BaseModel):
     """Response for POST /pdf-templates/simulate"""
     extraction_results: list[ExtractedFieldResult]
-    pipeline_status: str  # "success" | "failed"
+    pipeline_status: Literal["success", "failed"]
     pipeline_steps: list[PipelineExecutionStepResult]
     output_channel_values: dict[str, Any] = Field(default_factory=dict)
     pipeline_error: str | None = None

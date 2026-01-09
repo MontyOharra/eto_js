@@ -20,8 +20,11 @@ from shared.types.eto_runs import (
     EtoRunExtractionDetailView,
     EtoRunPipelineExecutionDetailView,
     EtoRunPipelineExecutionStepDetailView,
+    EtoMasterStatus,
+    EtoRunProcessingStep,
+    EtoStepStatus,
 )
-from shared.types.eto_sub_runs import EtoSubRunDetailView
+from shared.types.eto_sub_runs import EtoSubRunDetailView, EtoSubRunStatus
 from shared.types.pdf_files import ExtractedFieldData
 
 
@@ -108,7 +111,7 @@ class EtoSubRunDetail(BaseModel):
     UI will filter sub-runs by status to display in appropriate sections.
     """
     id: int
-    status: str
+    status: EtoSubRunStatus
     matched_pages: list[int]  # Page numbers this sub-run covers
     template: EtoSubRunTemplate | None = None  # None for needs_template sub-runs
     transform_results: list[TransformResult] = []  # Empty for now
@@ -131,7 +134,7 @@ class EtoSubRunExtractionDetail(BaseModel):
     Note: This is an API-specific version that converts datetime to ISO strings.
     The domain type EtoRunExtractionDetailView uses datetime objects.
     """
-    status: str  # 'processing' | 'success' | 'failure'
+    status: EtoStepStatus
     started_at: str | None = None  # ISO 8601
     completed_at: str | None = None  # ISO 8601
     extraction_results: list[ExtractionResult] = []
@@ -161,7 +164,7 @@ class EtoSubRunPipelineExecutionDetail(BaseModel):
     Note: This is an API-specific version that converts datetime to ISO strings.
     The domain type EtoRunPipelineExecutionDetailView uses datetime objects.
     """
-    status: str  # 'processing' | 'success' | 'failure'
+    status: EtoStepStatus
     started_at: str | None = None  # ISO 8601
     completed_at: str | None = None  # ISO 8601
     pipeline_definition_id: int | None = None
@@ -177,7 +180,7 @@ class EtoSubRunFullDetail(BaseModel):
     """
     id: int
     eto_run_id: int
-    status: str
+    status: EtoSubRunStatus
     matched_pages: list[int]
     template: EtoSubRunTemplate | None = None
     template_version_id: int | None = None
@@ -204,7 +207,7 @@ class EtoRunOverview(BaseModel):
 class PageStatus(BaseModel):
     """Page breakdown entry showing status per page"""
     page_number: int
-    status: str  # Uses EtoSubRunStatus values directly
+    status: EtoSubRunStatus
     sub_run_id: int
 
 
@@ -219,7 +222,7 @@ class EtoSubRunListItem(BaseModel):
     """
     id: int
     sequence: int | None = None
-    status: str
+    status: EtoSubRunStatus
     matched_pages: list[int]
     template: EtoMatchedTemplate | None = None
 
@@ -236,8 +239,8 @@ class EtoRunListItem(BaseModel):
     Includes core run data plus embedded related data (PDF, source, sub-runs summary).
     """
     id: int
-    status: str
-    processing_step: str | None = None
+    status: EtoMasterStatus
+    processing_step: EtoRunProcessingStep | None = None
     is_read: bool
     started_at: str | None = None  # ISO 8601
     completed_at: str | None = None  # ISO 8601
@@ -293,7 +296,7 @@ class CreateEtoRunResponse(BaseModel):
     Returns the created run with initial status.
     """
     id: int
-    status: str
+    status: EtoMasterStatus
     pdf_file_id: int
     started_at: str | None = None
     created_at: str  # ISO 8601
@@ -378,8 +381,8 @@ class EtoRunDetail(BaseModel):
     """
     # Core run data
     id: int
-    status: str
-    processing_step: str | None = None
+    status: EtoMasterStatus
+    processing_step: EtoRunProcessingStep | None = None
     started_at: str | None = None  # ISO 8601
     completed_at: str | None = None  # ISO 8601
     error_type: str | None = None

@@ -6,6 +6,7 @@ from typing import Any
 
 from pydantic import BaseModel
 
+from shared.types.modules import ModuleKind, ModuleMeta
 from shared.types.output_channels import OutputChannelCategory, OutputChannelDataType
 
 
@@ -19,8 +20,8 @@ class ModuleResponse(BaseModel):
     version: str
     name: str
     description: str | None = None
-    module_kind: str  # "transform", "logic", "comparator", "misc", "output"
-    meta: dict[str, Any]  # Module I/O metadata
+    module_kind: ModuleKind
+    meta: ModuleMeta
     config_schema: dict[str, Any]  # JSON schema for module configuration
     color: str
     category: str
