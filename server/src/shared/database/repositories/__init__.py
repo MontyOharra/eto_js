@@ -14,9 +14,8 @@ from .pipeline_definition import PipelineDefinitionRepository
 from .pipeline_definition_step import PipelineDefinitionStepRepository
 from .module import ModuleRepository
 from .output_channel_type import OutputChannelTypeRepository
-
-# Note: Old pending order/update repositories moved to deprecated/
-# New unified pending_action repository to be created
+from .pending_action import PendingActionRepository
+from .pending_action_field import PendingActionFieldRepository
 
 __all__ = [
     'BaseRepository',
@@ -33,4 +32,6 @@ __all__ = [
     'PipelineDefinitionStepRepository',
     'ModuleRepository',
     'OutputChannelTypeRepository',
+    'PendingActionRepository',
+    'PendingActionFieldRepository',
 ]

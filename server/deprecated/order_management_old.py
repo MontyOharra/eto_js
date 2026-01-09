@@ -56,7 +56,7 @@ from server.src.api.schemas.order_management_old import (
 )
 from server.src.api.mappers.order_management_old import map_pending_order_detail_to_api
 from shared.services.service_container import ServiceContainer
-from server.src.shared.types.pending_orders_old import REQUIRED_FIELDS, VALID_FIELD_NAMES
+from server.deprecated.pending_orders_old import REQUIRED_FIELDS, VALID_FIELD_NAMES
 
 logger = logging.getLogger(__name__)
 

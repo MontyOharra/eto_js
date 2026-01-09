@@ -28,7 +28,7 @@ from shared.database.repositories.email import EmailRepository
 from shared.database.repositories.pdf_template_version import PdfTemplateVersionRepository
 from shared.database.repositories.pdf_template import PdfTemplateRepository
 from shared.database.repositories.system_settings import SystemSettingsRepository
-from server.src.shared.types.pending_orders_old import (
+from server.deprecated.pending_orders_old import (
     PendingOrder,
     PendingOrderHistory,
     PendingUpdate,

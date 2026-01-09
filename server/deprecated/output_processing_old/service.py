@@ -21,7 +21,7 @@ from server.src.shared.database.repositories.pending_order_old import PendingOrd
 from server.src.shared.database.repositories.pending_order_history_old import PendingOrderHistoryRepository
 from server.src.shared.database.repositories.pending_update_old import PendingUpdateRepository
 from server.src.shared.database.repositories.pending_update_history_old import PendingUpdateHistoryRepository
-from server.src.shared.types.pending_orders_old import (
+from server.deprecated.pending_orders_old import (
     PendingOrder,
     PendingOrderCreate,
     PendingOrderUpdate,

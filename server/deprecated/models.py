@@ -872,12 +872,6 @@ class OutputChannelTypeModel(BaseModel):
     )
 
 
-
-# =========================
-# pending_actions (unified order action system)
-# =========================
-
-
 # =========================
 # ENUMS for pending orders system
 # =========================
@@ -919,6 +913,322 @@ PENDING_ACTION_STATUS = SAEnum(
     validate_strings=True
 )
 
+
+# =========================
+# pending_orders (aggregated order state by HAWB)
+# =========================
+'''
+class PendingOrderModel(BaseModel):
+    """
+    Aggregated order state for a single HAWB.
+
+    Compiles data from multiple sub-runs into a single order.
+    When all required fields are present and no conflicts exist,
+    the order becomes 'ready' for HTC creation by the worker.
+
+    Status flow:
+    - incomplete: Missing required fields or has conflicts
+    - ready: All required fields present, queued for HTC creation
+    - processing: Worker is currently creating HTC order
+    - created: Successfully created in HTC
+    - failed: HTC creation failed (see error_message)
+
+    Unique identifier is (customer_id, hawb) since different customers
+    may have overlapping HAWB values.
+    """
+    __tablename__ = "pending_orders"
+
+    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
+
+    # Unique identifier (customer_id + hawb)
+    customer_id: Mapped[int] = mapped_column(Integer, nullable=False, index=True)
+    hawb: Mapped[str] = mapped_column(String(100), nullable=False, index=True)
+
+    # Status: incomplete -> ready -> processing -> created/failed/rejected
+    status: Mapped[str] = mapped_column(
+        PENDING_ORDER_STATUS,
+        nullable=False,
+        server_default="incomplete",
+    )
+
+    # HTC integration (set when order created in HTC)
+    htc_order_number: Mapped[Optional[float]] = mapped_column(nullable=True)
+    htc_created_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
+
+    # Error tracking (for failed HTC creation)
+    error_message: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    error_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
+
+    # Required fields (all must be non-null for status='ready')
+    pickup_company_name: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
+    pickup_address: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    pickup_time_start: Mapped[Optional[str]] = mapped_column(String(20), nullable=True)
+    pickup_time_end: Mapped[Optional[str]] = mapped_column(String(20), nullable=True)
+    delivery_company_name: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
+    delivery_address: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    delivery_time_start: Mapped[Optional[str]] = mapped_column(String(20), nullable=True)
+    delivery_time_end: Mapped[Optional[str]] = mapped_column(String(20), nullable=True)
+
+    # Optional fields
+    mawb: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
+    pickup_notes: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    delivery_notes: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    order_notes: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+
+    # Dimensions (JSON array of dim objects)
+    # Each dim: {"height": float, "length": float, "width": float, "qty": int, "weight": float, "dim_weight": float}
+    dims: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+
+    # Read/unread tracking for UI
+    is_read: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default="0")
+
+    # Timestamps
+    # last_processed_at: Updated when actual processing occurs (field changes, status changes)
+    # NOT updated on read/unread toggle - use for stable list sorting
+    last_processed_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.getutcdate(), nullable=False
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.getutcdate(), onupdate=func.getutcdate(), nullable=False
+    )
+
+    # Relationships
+    history: Mapped[List["PendingOrderHistoryModel"]] = relationship(
+        back_populates="pending_order", cascade="all, delete-orphan"
+    )
+
+    __table_args__ = (
+        UniqueConstraint("customer_id", "hawb", name="uq_pending_orders_customer_hawb"),
+        Index("idx_pending_orders_status", "status"),
+        Index("idx_pending_orders_customer_hawb", "customer_id", "hawb"),
+    )
+
+
+# =========================
+# pending_order_history (field contribution audit trail)
+# =========================
+
+class PendingOrderHistoryModel(BaseModel):
+    """
+    Tracks each field contribution from sub-runs.
+
+    Used to compute field state (set/conflict/confirmed) and provide
+    audit trail of which sub-runs contributed which data.
+
+    One row per field per contribution (a sub-run contributing 5 fields = 5 rows).
+    """
+    __tablename__ = "pending_order_history"
+
+    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
+
+    # Parent pending order
+    pending_order_id: Mapped[int] = mapped_column(
+        ForeignKey("pending_orders.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True
+    )
+
+    # Source tracking
+    sub_run_id: Mapped[int] = mapped_column(
+        ForeignKey("eto_sub_runs.id", ondelete="SET NULL"),
+        nullable=True,  # Nullable due to SET NULL on delete
+        index=True
+    )
+
+    # Field contribution
+    field_name: Mapped[str] = mapped_column(String(50), nullable=False)
+    field_value: Mapped[str] = mapped_column(Text, nullable=False)
+
+    # Conflict resolution - TRUE if user explicitly chose this value
+    is_selected: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+
+    # Timestamp
+    contributed_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.getutcdate(), nullable=False
+    )
+
+    # Relationships
+    pending_order: Mapped["PendingOrderModel"] = relationship(back_populates="history")
+    sub_run: Mapped[Optional["EtoSubRunModel"]] = relationship()
+
+    __table_args__ = (
+        Index("idx_poh_pending_order", "pending_order_id"),
+        Index("idx_poh_field", "pending_order_id", "field_name"),
+        Index("idx_poh_sub_run", "sub_run_id"),
+        Index("idx_poh_selected", "pending_order_id", "field_name", "is_selected"),
+    )
+
+
+# =========================
+# pending_updates (approval queue for existing HTC orders)
+# =========================
+
+class PendingUpdateModel(BaseModel):
+    """
+    Aggregated proposed changes for a single HAWB that already exists in HTC.
+
+    When pipeline outputs data for a HAWB that's already in HTC,
+    updates are queued here for user approval instead of auto-applying.
+
+    Structure mirrors PendingOrderModel - one record per unique (customer_id, hawb)
+    with status='pending'. Multiple field changes accumulate into the same record
+    via PendingUpdateHistoryModel until user approves/rejects.
+
+    Status flow:
+    - pending: Awaiting user review, may accumulate more field changes
+    - approved: User approved, changes applied to HTC
+    - rejected: User rejected the changes
+
+    After approval/rejection, a NEW pending_update record is created for
+    subsequent field changes from ETO.
+    """
+    __tablename__ = "pending_updates"
+
+    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
+
+    # Order identification (unique per customer_id + hawb when status='pending')
+    customer_id: Mapped[int] = mapped_column(Integer, nullable=False, index=True)
+    hawb: Mapped[str] = mapped_column(String(100), nullable=False, index=True)
+    # NULL when multiple HTC orders exist (manual_review status)
+    htc_order_number: Mapped[Optional[float]] = mapped_column(nullable=True, index=True)
+
+    # Status: pending -> approved/rejected
+    status: Mapped[str] = mapped_column(
+        PENDING_UPDATE_STATUS,
+        nullable=False,
+        server_default="pending",
+    )
+
+    # Proposed field values (NULL means no change proposed for that field)
+    # Required fields
+    pickup_company_name: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
+    pickup_address: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    pickup_time_start: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
+    pickup_time_end: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
+    delivery_company_name: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
+    delivery_address: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    delivery_time_start: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
+    delivery_time_end: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
+
+    # Optional fields
+    mawb: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
+    pickup_notes: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    delivery_notes: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    order_notes: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+
+    # Dimensions (JSON array of dim objects)
+    # Each dim: {"height": float, "length": float, "width": float, "qty": int, "weight": float, "dim_weight": float}
+    dims: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+
+    # Read/unread tracking for UI
+    is_read: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default="0")
+
+    # Timestamps
+    # last_processed_at: Updated when actual processing occurs (field changes, status changes)
+    # NOT updated on read/unread toggle - use for stable list sorting
+    last_processed_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.getutcdate(), nullable=False
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.getutcdate(), onupdate=func.getutcdate(), nullable=False
+    )
+    reviewed_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
+
+    # Relationships
+    history: Mapped[List["PendingUpdateHistoryModel"]] = relationship(
+        back_populates="pending_update", cascade="all, delete-orphan"
+    )
+
+    __table_args__ = (
+        Index("idx_pending_updates_status", "status"),
+        Index("idx_pending_updates_customer_hawb", "customer_id", "hawb"),
+        Index("idx_pending_updates_order", "htc_order_number"),
+    )
+
+
+# =========================
+# pending_update_history (field contribution audit trail for updates)
+# =========================
+
+class PendingUpdateHistoryModel(BaseModel):
+    """
+    Tracks each field contribution from sub-runs for pending updates.
+
+    Mirrors PendingOrderHistoryModel structure for consistency.
+    Used to track which sub-runs contributed which proposed changes
+    and support conflict resolution if multiple sub-runs propose
+    different values for the same field.
+    """
+    __tablename__ = "pending_update_history"
+
+    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
+
+    # Parent pending update
+    pending_update_id: Mapped[int] = mapped_column(
+        ForeignKey("pending_updates.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True
+    )
+
+    # Source tracking
+    sub_run_id: Mapped[int] = mapped_column(
+        ForeignKey("eto_sub_runs.id", ondelete="SET NULL"),
+        nullable=True,  # Nullable due to SET NULL on delete
+        index=True
+    )
+
+    # Field contribution
+    field_name: Mapped[str] = mapped_column(String(50), nullable=False)
+    field_value: Mapped[str] = mapped_column(Text, nullable=False)
+
+    # Conflict resolution - TRUE if user explicitly chose this value
+    is_selected: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+
+    # Timestamp
+    contributed_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.getutcdate(), nullable=False
+    )
+
+    # Relationships
+    pending_update: Mapped["PendingUpdateModel"] = relationship(back_populates="history")
+    sub_run: Mapped[Optional["EtoSubRunModel"]] = relationship()
+
+    __table_args__ = (
+        Index("idx_puh_pending_update", "pending_update_id"),
+        Index("idx_puh_field", "pending_update_id", "field_name"),
+        Index("idx_puh_sub_run", "sub_run_id"),
+        Index("idx_puh_selected", "pending_update_id", "field_name", "is_selected"),
+    )
+'''
+
+# ============================================================
+# system_settings - Application configuration key-value store
+# ============================================================
+
+
+class SystemSettingModel(BaseModel):
+    """
+    Key-value store for application-wide settings.
+
+    Used for storing configuration like:
+    - email.default_sender_account_id - Which email account to use for sending
+    - Future: notification preferences, default recipients, etc.
+    """
+
+    __tablename__ = "system_settings"
+
+    key: Mapped[str] = mapped_column(String(100), primary_key=True)
+    value: Mapped[Optional[str]] = mapped_column(Text, nullable=True)  # JSON serialized for complex values
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.getutcdate(), onupdate=func.getutcdate(), nullable=False
+    )
+
+
+# =========================
+# pending_actions (unified order action system)
+# =========================
 
 class PendingActionModel(BaseModel):
     """
@@ -1076,24 +1386,41 @@ class PendingActionFieldModel(BaseModel):
     )
 
 
-# ============================================================
-# system_settings - Application configuration key-value store
-# ============================================================
-
-
-class SystemSettingModel(BaseModel):
+# =========================
+# DATABASE VIEWS
+# =========================
+'''
+class UnifiedActionsViewModel(ViewBase):
     """
-    Key-value store for application-wide settings.
+    Maps to the unified_actions_view VIEW (read-only).
 
-    Used for storing configuration like:
-    - email.default_sender_account_id - Which email account to use for sending
-    - Future: notification preferences, default recipients, etc.
+    Combines pending_orders and pending_updates into a single queryable view.
+    Used by the Orders page to display both types in a unified list with
+    efficient filtering, sorting, and pagination.
+
+    NOTE: This is a VIEW, not a table. INSERT/UPDATE/DELETE will fail.
+    The view is created by database_creator.py from views.py SQL.
+
+    Inherits from ViewBase (not BaseModel) so it's excluded from create_all().
     """
+    __tablename__ = "unified_actions_view"
 
-    __tablename__ = "system_settings"
+    # Composite primary key (id alone is not unique across types)
+    type: Mapped[str] = mapped_column(String(10), primary_key=True)  # 'create' or 'update'
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
 
-    key: Mapped[str] = mapped_column(String(100), primary_key=True)
-    value: Mapped[Optional[str]] = mapped_column(Text, nullable=True)  # JSON serialized for complex values
-    updated_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), server_default=func.getutcdate(), onupdate=func.getutcdate(), nullable=False
-    )
+    # Common fields
+    customer_id: Mapped[int] = mapped_column(Integer, nullable=False)
+    hawb: Mapped[str] = mapped_column(String(100), nullable=False)
+    htc_order_number: Mapped[Optional[float]] = mapped_column(nullable=True)
+    status: Mapped[str] = mapped_column(String(20), nullable=False)
+    is_read: Mapped[bool] = mapped_column(Boolean, nullable=False)
+
+    # Type-specific fields (may be NULL for the other type)
+    error_message: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+
+    # Timestamps
+    last_processed_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+'''
