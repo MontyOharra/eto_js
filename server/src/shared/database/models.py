@@ -22,6 +22,7 @@ from shared.types.eto_sub_runs import EtoSubRunStatus
 from shared.types.modules import ModuleKind
 from shared.types.output_channels import OutputChannelDataType, OutputChannelCategory
 from shared.types.pdf_templates import PdfTemplateStatus
+from shared.types.pending_actions import PendingActionType, PendingActionStatus
 
 class BaseModel(DeclarativeBase):
     """Base class for all table models. Used by create_all() to create tables."""
@@ -891,6 +892,27 @@ PENDING_UPDATE_STATUS = SAEnum(
     validate_strings=True
 )
 
+# =========================
+# ENUMS for unified pending actions system
+# =========================
+
+# Pending action type (create vs update vs ambiguous)
+PENDING_ACTION_TYPE = SAEnum(
+    'create', 'update', 'ambiguous',
+    name='pending_action_type',
+    native_enum=False,
+    validate_strings=True
+)
+
+# Pending action status
+PENDING_ACTION_STATUS = SAEnum(
+    'accumulating', 'incomplete', 'conflict', 'ambiguous', 'ready',
+    'processing', 'completed', 'failed', 'rejected',
+    name='pending_action_status',
+    native_enum=False,
+    validate_strings=True
+)
+
 
 # =========================
 # pending_orders (aggregated order state by HAWB)
@@ -1201,6 +1223,166 @@ class SystemSettingModel(BaseModel):
     value: Mapped[Optional[str]] = mapped_column(Text, nullable=True)  # JSON serialized for complex values
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.getutcdate(), onupdate=func.getutcdate(), nullable=False
+    )
+
+
+# =========================
+# pending_actions (unified order action system)
+# =========================
+
+class PendingActionModel(BaseModel):
+    """
+    Unified pending action for order creation or update.
+
+    Replaces the old separate pending_orders and pending_updates tables.
+    Action type (create vs update) is determined at execution time, not
+    accumulation time, to protect against TOCTOU race conditions.
+
+    Key Design:
+    - Lightweight main record with denormalized counts
+    - Field values stored in pending_action_fields table
+    - Status determined by field state (conflicts, required fields)
+
+    Status Flow:
+    - accumulating: Still receiving data from sub-runs
+    - incomplete: Missing required fields
+    - conflict: Has unresolved field conflicts
+    - ambiguous: Multiple HTC orders exist for this HAWB
+    - ready: Ready for execution
+    - processing: Currently executing against HTC
+    - completed: Successfully executed
+    - failed: Execution failed (retryable)
+    - rejected: User rejected the action
+
+    Unique constraint on (customer_id, hawb) for active actions only.
+    """
+    __tablename__ = "pending_actions"
+
+    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
+
+    # Unique identifier (customer_id + hawb for active actions)
+    customer_id: Mapped[int] = mapped_column(Integer, nullable=False, index=True)
+    hawb: Mapped[str] = mapped_column(String(100), nullable=False, index=True)
+
+    # HTC order number (set for updates, set after create succeeds)
+    htc_order_number: Mapped[Optional[float]] = mapped_column(nullable=True, index=True)
+
+    # Action type: create, update, or ambiguous (multiple HTC orders exist)
+    action_type: Mapped[PendingActionType] = mapped_column(
+        PENDING_ACTION_TYPE,
+        nullable=False,
+        server_default="create",
+    )
+
+    # Status
+    status: Mapped[PendingActionStatus] = mapped_column(
+        PENDING_ACTION_STATUS,
+        nullable=False,
+        server_default="accumulating",
+    )
+
+    # Denormalized counts for quick status evaluation
+    required_fields_present: Mapped[int] = mapped_column(Integer, nullable=False, server_default="0")
+    conflict_count: Mapped[int] = mapped_column(Integer, nullable=False, server_default="0")
+
+    # Error tracking (for failed execution)
+    error_message: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    error_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
+
+    # Read/unread tracking for UI
+    is_read: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default="0")
+
+    # Timestamps
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.getutcdate(), nullable=False
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.getutcdate(), onupdate=func.getutcdate(), nullable=False
+    )
+    # last_processed_at: Updated on actual processing (not read/unread toggle)
+    last_processed_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
+
+    # Relationships
+    fields: Mapped[List["PendingActionFieldModel"]] = relationship(
+        back_populates="pending_action", cascade="all, delete-orphan"
+    )
+
+    __table_args__ = (
+        # Unique constraint only for active actions (not completed/rejected/failed)
+        # Note: SQLite doesn't support partial unique indexes, so this is enforced in code
+        Index("idx_pending_actions_customer_hawb", "customer_id", "hawb"),
+        Index("idx_pending_actions_status", "status"),
+        Index("idx_pending_actions_action_type", "action_type"),
+        Index("idx_pending_actions_htc_order", "htc_order_number"),
+    )
+
+
+# =========================
+# pending_action_fields (field values + history combined)
+# =========================
+
+class PendingActionFieldModel(BaseModel):
+    """
+    Individual field value for a pending action.
+
+    Serves as both current value storage and audit trail. The "current"
+    value for a field is WHERE is_selected = TRUE.
+
+    Key Design:
+    - Multiple values per field allowed (for conflict resolution)
+    - sub_run_id = NULL indicates user-provided value (manual entry)
+    - is_selected tracks which value is chosen for this field
+    - is_approved_for_update allows partial updates (updates only)
+
+    Conflict Resolution:
+    - First value for a field: is_selected = TRUE
+    - Same value again: is_selected = FALSE (duplicate)
+    - Different value: ALL is_selected = FALSE (conflict - user must resolve)
+
+    User-Provided Values:
+    - Created via set_user_value() service method
+    - sub_run_id = NULL distinguishes from extracted values
+    - Deleted when all extracted values are removed (no orphan manual entries)
+    """
+    __tablename__ = "pending_action_fields"
+
+    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
+
+    # Parent pending action
+    pending_action_id: Mapped[int] = mapped_column(
+        ForeignKey("pending_actions.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True
+    )
+
+    # Source tracking (NULL = user-provided value)
+    sub_run_id: Mapped[Optional[int]] = mapped_column(
+        ForeignKey("eto_sub_runs.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True
+    )
+
+    # Field identification
+    field_name: Mapped[str] = mapped_column(String(50), nullable=False)
+
+    # Field value (JSON - string, dict, or list depending on field type)
+    value: Mapped[str] = mapped_column(Text, nullable=False)
+
+    # Selection state for conflict resolution
+    is_selected: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default="0")
+
+    # Approval state for partial updates (only relevant for action_type='update')
+    is_approved_for_update: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default="1")
+
+    # Relationships
+    pending_action: Mapped["PendingActionModel"] = relationship(back_populates="fields")
+    sub_run: Mapped[Optional["EtoSubRunModel"]] = relationship()
+
+    __table_args__ = (
+        Index("idx_paf_pending_action", "pending_action_id"),
+        Index("idx_paf_field", "pending_action_id", "field_name"),
+        Index("idx_paf_sub_run", "sub_run_id"),
+        Index("idx_paf_selected", "pending_action_id", "field_name", "is_selected"),
     )
 
 

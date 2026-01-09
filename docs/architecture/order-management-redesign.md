@@ -65,16 +65,30 @@ pending_actions
 pending_action_fields
 ├── id: int PK
 ├── pending_action_id: int FK
-├── sub_run_id: int FK NULL
-├── field_name: str  -- validated against ORDER_FIELDS constant
-├── value: JSON  -- string, object, array depending on field type
-├── is_selected: bool
-├── contributed_at: datetime
+├── sub_run_id: int FK NULL       -- NULL = user-provided value (manual entry)
+├── field_name: str               -- validated against ORDER_FIELDS constant
+├── value: JSON                   -- string, object, array depending on field type
+├── is_selected: bool             -- TRUE = this is the chosen value for this field
+├── is_approved_for_update: bool  -- TRUE = include this field in HTC update (updates only)
 │
 └── INDEX(pending_action_id, field_name, is_selected)
 ```
 
-**Key Design Decision**: Instead of hardcoding 13+ field columns on the main record plus a separate history table, we use one table that serves both purposes. The "current value" for a field is simply `WHERE is_selected = TRUE`.
+**Key Design Decisions**:
+
+1. **Single table for values + history**: Instead of hardcoding 13+ field columns on the main record plus a separate history table, we use one table that serves both purposes. The "current value" for a field is simply `WHERE is_selected = TRUE`.
+
+2. **User-provided values**: When `sub_run_id = NULL`, the value was manually entered by the user (not extracted from a document). This allows users to override extracted data with their own values.
+
+3. **Partial updates**: The `is_approved_for_update` flag allows users to cherry-pick which fields to include when executing an update. For creates, all selected fields are sent. For updates, only fields where `is_selected = TRUE AND is_approved_for_update = TRUE` are sent to HTC.
+
+**Field Selection Logic**:
+- `is_selected = TRUE` → This value is chosen for conflict resolution
+- `is_approved_for_update = TRUE` → User wants this field included in the HTC update
+
+**Execution Logic**:
+- `action_type = 'create'`: Send all fields where `is_selected = TRUE`
+- `action_type = 'update'`: Send only fields where `is_selected = TRUE AND is_approved_for_update = TRUE`
 
 ---
 
@@ -284,9 +298,9 @@ New:       NEW COMPANY (NEW): 456 OAK AVE, DALLAS, TX
 │        pending_action_id,                                                   │
 │        sub_run_id,                                                          │
 │        field_name,                                                          │
-│        value,           -- JSON                                             │
-│        is_selected,     -- determined in next step                          │
-│        contributed_at                                                       │
+│        value,                    -- JSON                                    │
+│        is_selected,              -- determined in next step                 │
+│        is_approved_for_update    -- default TRUE for new values             │
 │    )                                                                        │
 │                                                                             │
 └─────────────────────────────────────────────────────────────────────────────┘
@@ -355,15 +369,17 @@ New:       NEW COMPANY (NEW): 456 OAK AVE, DALLAS, TX
 │  STEP E2: EXECUTE BASED ON ACTION TYPE                                      │
 │                                                                             │
 │  If action_type = 'create':                                                 │
+│    - Get all fields WHERE is_selected = TRUE                                │
 │    - For each location field: create address if address_id is null          │
 │    - Create dims records in HTC                                             │
-│    - Create order in HTC with all field values                              │
+│    - Create order in HTC with all selected field values                     │
 │    - Attach PDFs                                                            │
 │    - Send notification emails                                               │
 │                                                                             │
 │  If action_type = 'update':                                                 │
-│    - Compare selected values to current HTC values                          │
-│    - Only update fields that differ                                         │
+│    - Get fields WHERE is_selected = TRUE AND is_approved_for_update = TRUE  │
+│    - Compare approved values to current HTC values                          │
+│    - Only update fields that differ AND are approved                        │
 │    - Handle address/dims updates appropriately                              │
 │    - Send notification emails                                               │
 │                                                                             │
@@ -466,6 +482,37 @@ class OrderManagementService:
     ) -> None:
         """
         User selects which value to use for a conflicting field.
+        Sets is_selected = TRUE for the chosen value, FALSE for others.
+        """
+        ...
+
+    def set_user_value(
+        self,
+        pending_action_id: int,
+        field_name: str,
+        value: Any
+    ) -> int:
+        """
+        User provides their own value for a field (overriding extracted data).
+
+        Creates a new pending_action_fields row with sub_run_id = NULL.
+        Sets is_selected = TRUE for this value, FALSE for all others.
+
+        Returns the new field_id.
+        """
+        ...
+
+    def set_field_approval(
+        self,
+        pending_action_id: int,
+        field_name: str,
+        is_approved: bool
+    ) -> None:
+        """
+        User toggles whether a field should be included in an update.
+
+        Sets is_approved_for_update on the currently selected value.
+        Only relevant for action_type = 'update'.
         """
         ...
 
@@ -477,17 +524,171 @@ class OrderManagementService:
 
     def retry_failed_action(self, pending_action_id: int) -> None:
         """
-        Reset a failed action to 'ready' status for retry.
+        Re-attempt execution of a failed action.
+
+        Preserves all field values and user modifications.
+        Just retries the HTC write - no data re-extraction.
+
+        Status: 'failed' → 'ready' (worker picks up) or 'processing' (immediate)
         """
         ...
 
-    def cleanup_sub_run_contributions(self, sub_run_id: int) -> dict:
+    def cleanup_sub_run_contributions(self, sub_run_id: int) -> CleanupResult:
         """
         Remove all field contributions from a sub_run being deleted/reprocessed.
-        Recalculates field selections and status.
+
+        Called by EtoRunsService when a sub-run is reprocessed or deleted.
+
+        Steps:
+        1. Delete all pending_action_fields WHERE sub_run_id = ?
+        2. For each affected pending_action:
+           a. Check if any extracted fields remain (sub_run_id IS NOT NULL)
+           b. If NO extracted fields remain: delete the entire pending_action
+              (user-provided values without document source don't make sense to keep)
+           c. If extracted fields remain: recalculate status
+
+        Returns CleanupResult with affected action IDs and whether they were deleted.
         """
         ...
 ```
+
+---
+
+## Sub-Run Reprocessing & Retry
+
+### Two Types of "Retry"
+
+There are two distinct scenarios that users might call "retry":
+
+#### 1. Retry Execution (HTC write failed)
+
+The field data is fine, but the HTC write failed (network error, database locked, etc.).
+
+**Solution:** Call `retry_failed_action()` - just re-attempt execution without touching field values.
+
+- Preserves all user modifications (manual values, selections, approvals)
+- Status: `failed` → `ready` → `processing` → `completed`/`failed`
+- Available from the Orders page detail view
+
+#### 2. Reprocess from Source (data was wrong)
+
+User realizes extracted data was wrong and wants to re-extract from the source documents.
+
+**Solution:** Reprocess the sub-run(s) via ETO Runs page, which triggers `cleanup_sub_run_contributions()`.
+
+- This is a "rebuild" not a "retry"
+- Clears field contributions from the reprocessed sub-run(s)
+- Re-runs pipeline execution on the sub-run(s)
+- New field values accumulate into the pending action
+
+### Reprocessing Scenarios
+
+**Scenario A: Single sub-run contributes to action**
+
+```
+pending_action (customer=123, hawb="ABC")
+└── pending_action_fields
+    ├── pickup_time (sub_run_id=5)
+    ├── delivery_time (sub_run_id=5)
+    └── manual_note (sub_run_id=NULL, user-provided)
+```
+
+User reprocesses sub-run 5:
+1. `cleanup_sub_run_contributions(5)` called
+2. All fields from sub_run_id=5 deleted
+3. No extracted fields remain → **entire pending_action deleted** (including user-provided manual_note)
+4. Sub-run 5 re-executes, creates new pending_action with fresh data
+
+**Scenario B: Multiple sub-runs from same ETO run**
+
+```
+pending_action (customer=123, hawb="ABC")
+└── pending_action_fields
+    ├── pickup_time (sub_run_id=5, eto_run=100)
+    ├── delivery_time (sub_run_id=6, eto_run=100)
+    └── dims (sub_run_id=6, eto_run=100)
+```
+
+User reprocesses entire ETO run 100:
+1. All sub-runs (5, 6) are reprocessed
+2. `cleanup_sub_run_contributions()` called for each
+3. All fields removed → pending_action deleted
+4. Sub-runs re-execute, create new pending_action
+
+**Scenario C: Multiple ETO runs contribute**
+
+```
+pending_action (customer=123, hawb="ABC")
+└── pending_action_fields
+    ├── pickup_time (sub_run_id=5, eto_run=100)
+    ├── delivery_time (sub_run_id=10, eto_run=200)
+    └── dims (sub_run_id=10, eto_run=200)
+```
+
+User reprocesses only ETO run 100:
+1. `cleanup_sub_run_contributions(5)` called
+2. pickup_time field deleted
+3. Extracted fields from sub_run_id=10 still remain
+4. Status recalculated (may become `incomplete` if pickup_time was required)
+5. Sub-run 5 re-executes, new pickup_time value accumulates
+
+### Key Design Decision
+
+**User-provided values do NOT survive when all extracted values are removed.**
+
+Rationale: User-provided values are meant to augment or override extracted data, not to exist independently. If there's no document source, there's no context for the manual entry. The user can re-enter manual values after reprocessing if needed.
+
+---
+
+## User Interaction Capabilities
+
+### 1. Conflict Resolution
+
+When multiple sub-runs contribute different values for the same field, a conflict occurs (`is_selected = FALSE` for all values). User must pick one:
+
+```
+Field: pickup_time_start
+├── Value: "08:00" (from sub-run 123) [○ not selected]
+├── Value: "09:00" (from sub-run 456) [○ not selected]
+└── [User clicks to select one]
+```
+
+After selection, the chosen value gets `is_selected = TRUE`.
+
+### 2. Manual Value Entry
+
+User can override any field with their own value:
+
+```
+Field: pickup_time_start
+├── Value: "08:00" (from sub-run 123) [○ not selected]
+├── Value: "09:00" (from sub-run 456) [○ not selected]
+└── Value: "10:00" (user-provided)    [● selected]
+```
+
+User-provided values have `sub_run_id = NULL` to distinguish them from extracted values.
+
+### 3. Partial Update Approval (Updates Only)
+
+For updates, user can choose which fields to actually send to HTC:
+
+```
+Action Type: UPDATE (Order #12345)
+
+Fields to update:
+☑ pickup_time_start: "08:00" → "09:00"  [will be sent]
+☐ pickup_notes: "" → "Call ahead"        [will NOT be sent]
+☑ dims: [...] → [...]                    [will be sent]
+```
+
+Only fields with `is_approved_for_update = TRUE` are included in the HTC update.
+
+### 4. Source Visibility
+
+UI can show where each value came from:
+
+- **Extracted**: `sub_run_id IS NOT NULL` - "From document (sub-run #123)"
+- **Manual**: `sub_run_id IS NULL` - "Manually entered"
 
 ---
 
