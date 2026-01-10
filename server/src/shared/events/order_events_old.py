@@ -3,7 +3,7 @@ Order Management Event Manager
 Manages Server-Sent Events (SSE) for real-time pending order/update notifications
 """
 import asyncio
-from typing import Dict, Any, Set, Optional
+from typing import Dict, Any, Set
 from datetime import datetime
 
 from shared.logging import get_logger
@@ -25,6 +25,10 @@ class OrderEventManager:
     - pending_update_created: New pending update created (for existing HTC order)
     - pending_update_updated: Pending update fields or status changed
     - pending_update_resolved: Pending update approved or rejected
+
+    Note: This manager is stateless regarding shutdown. When the server shuts
+    down, uvicorn cancels active tasks and the SSE generators handle
+    CancelledError gracefully. Clients are responsible for reconnection.
     """
 
     _instance = None
@@ -40,8 +44,6 @@ class OrderEventManager:
             return
 
         self._clients: Set[asyncio.Queue] = set()
-        self._shutdown_flag = False
-        self._shutdown_event: Optional[asyncio.Event] = None
         self._initialized = True
         logger.info("OrderEventManager initialized")
 
@@ -128,50 +130,6 @@ class OrderEventManager:
     def get_client_count(self) -> int:
         """Get number of connected SSE clients"""
         return len(self._clients)
-
-    def is_shutting_down(self) -> bool:
-        """Check if server is shutting down"""
-        return self._shutdown_flag
-
-    def get_shutdown_event(self) -> asyncio.Event:
-        """Get the shutdown event for awaiting (lazy initialized)"""
-        if self._shutdown_event is None:
-            self._shutdown_event = asyncio.Event()
-        return self._shutdown_event
-
-    async def shutdown(self) -> None:
-        """
-        Gracefully shutdown all SSE connections.
-
-        Sends a shutdown event to all clients and closes their connections.
-        Called during server shutdown to allow SSE streams to complete.
-        """
-        logger.info(f"Initiating graceful order SSE shutdown for {len(self._clients)} clients")
-        self._shutdown_flag = True
-
-        if self._shutdown_event:
-            self._shutdown_event.set()  # Wake up all waiting event generators
-
-        # Send shutdown event to all clients
-        shutdown_event = {
-            "type": "server_shutdown",
-            "data": {"message": "Server is shutting down"},
-            "timestamp": datetime.utcnow().isoformat()
-        }
-
-        for client_queue in list(self._clients):
-            try:
-                client_queue.put_nowait(shutdown_event)
-            except Exception as e:
-                logger.debug(f"Failed to send shutdown event to order SSE client: {e}")
-
-        # Give clients a moment to receive the shutdown event
-        await asyncio.sleep(0.1)
-
-        # Clear all clients (the event generators will see the shutdown flag and exit)
-        client_count = len(self._clients)
-        self._clients.clear()
-        logger.info(f"Order SSE shutdown complete - disconnected {client_count} clients")
 
 
 # Global singleton instance

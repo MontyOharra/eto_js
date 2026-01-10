@@ -372,14 +372,14 @@ class PendingActionFieldRepository(BaseRepository[PendingActionFieldModel]):
             results = (
                 session.query(
                     self.model_class.field_name,
-                    func.count(self.model_class.id).label("count"),
+                    func.count(self.model_class.id).label("row_count"),
                 )
                 .filter(self.model_class.pending_action_id == action_id)
                 .group_by(self.model_class.field_name)
                 .all()
             )
 
-            return {row.field_name: row.count for row in results}
+            return {row.field_name: row.row_count for row in results}
 
     def has_extracted_fields(self, action_id: int) -> bool:
         """

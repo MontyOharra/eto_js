@@ -13,8 +13,6 @@ if TYPE_CHECKING:
     from features.pipelines.service import PipelineService
     from features.pipeline_execution.service import PipelineExecutionService
     from features.htc_integration.service import HtcIntegrationService
-    from features.output_processing_old.service import OutputProcessingService
-    from features.order_management_old.service import OrderManagementService
     from features.eto_runs.service import EtoRunsService
     from features.auth.service import AuthService
     from shared.database.connection import DatabaseConnectionManager
@@ -177,7 +175,7 @@ class ServiceContainer:
             },
             'eto_runs': {
                 'class': 'features.eto_runs.service.EtoRunsService',
-                'args': [cls._main_connection, '_service:pdf_templates', '_service:pdf_files', '_service:pipeline_execution', '_service:output_processing'],
+                'args': [cls._main_connection, '_service:pdf_templates', '_service:pdf_files', '_service:pipeline_execution'],
                 'singleton': True,
                 'description': 'ETO runs service for processing lifecycle management'
             },
@@ -391,16 +389,6 @@ class ServiceContainer:
     def get_htc_integration_service(cls) -> 'HtcIntegrationService':
         """Get the HTC integration service"""
         return cls.get('htc_integration')
-
-    @classmethod
-    def get_output_processing_service(cls) -> 'OutputProcessingService':
-        """Get the output processing service"""
-        return cls.get('output_processing')
-
-    @classmethod
-    def get_order_management_service(cls) -> 'OrderManagementService':
-        """Get the order management service"""
-        return cls.get('order_management')
 
     @classmethod
     def get_eto_runs_service(cls) -> 'EtoRunsService':

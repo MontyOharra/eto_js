@@ -35,7 +35,6 @@ from features.htc_integration.lookup_utils import (
 from features.htc_integration.address_utils import HtcAddressUtils
 from features.htc_integration.order_utils import HtcOrderUtils, PreparedOrderData
 from features.htc_integration.attachment_utils import AttachmentManager, PdfSource, AttachmentResult
-from server.deprecated.pending_orders_old import PendingOrder
 
 logger = get_logger(__name__)
 
@@ -657,7 +656,7 @@ class HtcIntegrationService:
             logger.error(f"Failed to create HTC order: {e}")
             # Note: OIW entry remains if we fail - will be skipped by next order number generation
             raise OutputExecutionError(f"Failed to create HTC order: {e}") from e
-
+    '''
     def create_order_from_pending(self, pending_order: PendingOrder) -> float:
         """
         Create an HTC order from a pending order.
@@ -703,7 +702,7 @@ class HtcIntegrationService:
             order_notes=pending_order.order_notes,
             dims=dims_list,
         )
-
+    '''
     # ==================== Order Update Orchestrator ====================
 
     def update_order(

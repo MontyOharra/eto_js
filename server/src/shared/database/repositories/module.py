@@ -144,8 +144,7 @@ class ModuleRepository(BaseRepository[ModuleModel]):
                     value = self._serialize_module_meta(value)
                 elif field_name == 'config_schema' and value is not None:
                     value = self._serialize_config_schema(value)
-                elif field_name == 'module_kind' and value is not None:
-                    value = value.value
+                # Note: module_kind is now a Literal string, no conversion needed
 
                 setattr(model, field_name, value)
 

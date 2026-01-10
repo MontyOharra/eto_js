@@ -3,12 +3,9 @@ ETO Run Domain Types
 Pydantic models representing eto_runs table and related operations
 """
 from datetime import datetime
-from typing import TYPE_CHECKING, Any, Literal
+from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict
-
-if TYPE_CHECKING:
-    from shared.types.eto_sub_runs import EtoSubRunDetailView
 
 
 # =========================
@@ -143,70 +140,11 @@ class EtoRunListView(BaseModel):
 
 
 # =========================
-# Detail View Stage Types
+# Detail View
 # =========================
-# NOTE: These stage types are now used within EtoSubRunDetailView
-# rather than directly in EtoRunDetailView
 
-class EtoRunExtractionDetailView(BaseModel):
-    """
-    Data extraction stage with parsed extracted_data JSON.
-
-    Used in EtoSubRunDetailView to provide extracted field values.
-
-    extracted_data format:
-    [
-        {
-            "name": "field_name",
-            "description": "field description",
-            "bbox": [x1, y1, x2, y2],
-            "page": 1,
-            "extracted_value": "the extracted text"
-        },
-        ...
-    ]
-    """
-    model_config = ConfigDict(frozen=True)
-
-    # From EtoRunExtraction
-    status: EtoStepStatus
-    started_at: datetime | None
-    completed_at: datetime | None
-
-    # Parsed from extracted_data JSON string field (repository handles deserialization)
-    extracted_data: list[dict[str, Any]] | None = None
-
-
-class EtoRunPipelineExecutionStepDetailView(BaseModel):
-    """Individual step in pipeline execution with inputs/outputs"""
-    model_config = ConfigDict(frozen=True)
-
-    id: int
-    step_number: int
-    module_instance_id: str
-    inputs: dict[str, dict[str, Any]] | None
-    outputs: dict[str, dict[str, Any]] | None
-    error: dict[str, Any] | None
-
-
-class EtoRunPipelineExecutionDetailView(BaseModel):
-    """
-    Pipeline execution stage with execution steps.
-
-    Used in EtoRunDetailView to provide pipeline execution results and visualization data.
-    """
-    model_config = ConfigDict(frozen=True)
-
-    # From EtoRunPipelineExecution
-    status: EtoStepStatus
-    started_at: datetime | None
-    completed_at: datetime | None
-
-    # Pipeline definition ID from matched template version
-    pipeline_definition_id: int | None = None
-
-    # Execution steps for pipeline visualization
-    steps: list[EtoRunPipelineExecutionStepDetailView] | None = None
+# Import here to avoid circular dependency - eto_sub_runs imports EtoStepStatus from this file
+from shared.types.eto_sub_runs import EtoSubRunDetailView  # noqa: E402
 
 
 class EtoRunDetailView(BaseModel):
@@ -252,7 +190,7 @@ class EtoRunDetailView(BaseModel):
 
     # Sub-runs (list of all sub-runs for this PDF)
     # Will be split into matchedSubRuns, needsTemplateSubRuns, skippedSubRuns by API mapper
-    sub_runs: list['EtoSubRunDetailView']
+    sub_runs: list[EtoSubRunDetailView]
 
     # Timestamps
     created_at: datetime

@@ -5,7 +5,6 @@ Handles pipeline definition, compilation, validation, and lifecycle management
 import logging
 import json
 from typing import List, Dict, Set, Optional, Any
-from dataclasses import replace
 
 from shared.database import DatabaseConnectionManager
 from shared.database.repositories import (
@@ -452,7 +451,7 @@ class PipelineService:
 
                 # Update step records with pipeline_definition_id
                 steps_with_def_id = [
-                    replace(step, pipeline_definition_id=pipeline_def.id)
+                    step.model_copy(update={"pipeline_definition_id": pipeline_def.id})
                     for step in steps
                 ]
 

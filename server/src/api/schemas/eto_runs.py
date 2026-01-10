@@ -17,14 +17,17 @@ from pydantic import BaseModel, Field
 from shared.types.eto_runs import (
     EtoRunListView,
     EtoRunDetailView,
-    EtoRunExtractionDetailView,
-    EtoRunPipelineExecutionDetailView,
-    EtoRunPipelineExecutionStepDetailView,
     EtoMasterStatus,
     EtoRunProcessingStep,
     EtoStepStatus,
 )
-from shared.types.eto_sub_runs import EtoSubRunDetailView, EtoSubRunStatus
+from shared.types.eto_sub_runs import (
+    EtoSubRunDetailView,
+    EtoSubRunStatus,
+    EtoRunExtractionDetailView,
+    EtoRunPipelineExecutionDetailView,
+    EtoRunPipelineExecutionStepDetailView,
+)
 from shared.types.pdf_files import ExtractedFieldData
 
 

@@ -4,17 +4,15 @@ Pydantic models representing eto_sub_runs table and related operations
 
 Sub-runs represent page-set business logic units within a parent ETO run.
 Each sub-run handles a specific set of pages that matched a template (or no template).
+
+Also contains stage detail view types (Extraction, PipelineExecution) used by sub-runs.
 """
 from datetime import datetime
 from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict
 
-# Import stage detail view types from eto_runs for reuse
-from shared.types.eto_runs import (
-    EtoRunExtractionDetailView,
-    EtoRunPipelineExecutionDetailView,
-)
+from shared.types.eto_runs import EtoStepStatus
 
 
 # =========================
@@ -86,7 +84,72 @@ class EtoSubRun(BaseModel):
 
 
 # =========================
-# Detail View Types
+# Stage Detail View Types
+# =========================
+
+class EtoRunExtractionDetailView(BaseModel):
+    """
+    Data extraction stage with parsed extracted_data JSON.
+
+    Used in EtoSubRunDetailView to provide extracted field values.
+
+    extracted_data format:
+    [
+        {
+            "name": "field_name",
+            "description": "field description",
+            "bbox": [x1, y1, x2, y2],
+            "page": 1,
+            "extracted_value": "the extracted text"
+        },
+        ...
+    ]
+    """
+    model_config = ConfigDict(frozen=True)
+
+    # From EtoRunExtraction
+    status: EtoStepStatus
+    started_at: datetime | None
+    completed_at: datetime | None
+
+    # Parsed from extracted_data JSON string field (repository handles deserialization)
+    extracted_data: list[dict[str, Any]] | None = None
+
+
+class EtoRunPipelineExecutionStepDetailView(BaseModel):
+    """Individual step in pipeline execution with inputs/outputs"""
+    model_config = ConfigDict(frozen=True)
+
+    id: int
+    step_number: int
+    module_instance_id: str
+    inputs: dict[str, dict[str, Any]] | None
+    outputs: dict[str, dict[str, Any]] | None
+    error: dict[str, Any] | None
+
+
+class EtoRunPipelineExecutionDetailView(BaseModel):
+    """
+    Pipeline execution stage with execution steps.
+
+    Used in EtoSubRunDetailView to provide pipeline execution results and visualization data.
+    """
+    model_config = ConfigDict(frozen=True)
+
+    # From EtoRunPipelineExecution
+    status: EtoStepStatus
+    started_at: datetime | None
+    completed_at: datetime | None
+
+    # Pipeline definition ID from matched template version
+    pipeline_definition_id: int | None = None
+
+    # Execution steps for pipeline visualization
+    steps: list[EtoRunPipelineExecutionStepDetailView] | None = None
+
+
+# =========================
+# Sub-Run Detail View
 # =========================
 
 class EtoSubRunDetailView(BaseModel):
@@ -123,7 +186,6 @@ class EtoSubRunDetailView(BaseModel):
     template_customer_id: int | None = None  # Customer ID from pdf_templates (for Access DB lookup)
 
     # Stage data (optional - depends on sub-run progress)
-    # Reuses existing stage detail view types from eto_runs
     extraction: EtoRunExtractionDetailView | None = None
     pipeline_execution: EtoRunPipelineExecutionDetailView | None = None
 

@@ -121,42 +121,126 @@ Examples:
 
 ### Field Mapping Layer
 
-A mapping layer transforms output channels into order fields:
+A mapping layer transforms output channels into order fields. This is implemented as utility functions in `features/order_management/field_transforms.py`.
+
+**Field Definitions** (in `shared/types/pending_actions.py`):
 
 ```python
-@dataclass
-class OrderFieldDef:
-    name: str
-    label: str
-    data_type: Literal['string', 'json', 'location', 'dims']
-    required: bool
-    source_channels: list[str]  # which output channels feed this field
-
-
 ORDER_FIELDS = {
-    # Simple string fields (1:1 mapping)
-    "mawb": OrderFieldDef("mawb", "MAWB", "string", False, ["mawb"]),
-    "pickup_time_start": OrderFieldDef("pickup_time_start", "Pickup Start", "string", True, ["pickup_time_start"]),
-    "pickup_time_end": OrderFieldDef("pickup_time_end", "Pickup End", "string", True, ["pickup_time_end"]),
-    "delivery_time_start": OrderFieldDef("delivery_time_start", "Delivery Start", "string", True, ["delivery_time_start"]),
-    "delivery_time_end": OrderFieldDef("delivery_time_end", "Delivery End", "string", True, ["delivery_time_end"]),
-    "pickup_notes": OrderFieldDef("pickup_notes", "Pickup Notes", "string", False, ["pickup_notes"]),
-    "delivery_notes": OrderFieldDef("delivery_notes", "Delivery Notes", "string", False, ["delivery_notes"]),
-    "order_notes": OrderFieldDef("order_notes", "Order Notes", "string", False, ["order_notes"]),
+    # Passthrough string fields (1:1 mapping from output channel)
+    "mawb": OrderFieldDef("mawb", "MAWB", "string", False, ("mawb",)),
+    "pickup_time_start": OrderFieldDef("pickup_time_start", "Pickup Start", "string", True, ("pickup_time_start",)),
+    "pickup_time_end": OrderFieldDef("pickup_time_end", "Pickup End", "string", True, ("pickup_time_end",)),
+    "delivery_time_start": OrderFieldDef("delivery_time_start", "Delivery Start", "string", True, ("delivery_time_start",)),
+    "delivery_time_end": OrderFieldDef("delivery_time_end", "Delivery End", "string", True, ("delivery_time_end",)),
+    "pickup_notes": OrderFieldDef("pickup_notes", "Pickup Notes", "string", False, ("pickup_notes",)),
+    "delivery_notes": OrderFieldDef("delivery_notes", "Delivery Notes", "string", False, ("delivery_notes",)),
+    "order_notes": OrderFieldDef("order_notes", "Order Notes", "string", False, ("order_notes",)),
 
     # Complex fields (multiple channels → one field)
-    "pickup_location": OrderFieldDef(
-        "pickup_location", "Pickup Location", "location", True,
-        ["pickup_company_name", "pickup_address"]
-    ),
-    "delivery_location": OrderFieldDef(
-        "delivery_location", "Delivery Location", "location", True,
-        ["delivery_company_name", "delivery_address"]
-    ),
-    "dims": OrderFieldDef("dims", "Dimensions", "dims", False, ["dims"]),
+    "pickup_location": OrderFieldDef("pickup_location", "Pickup Location", "location", True, ("pickup_company_name", "pickup_address")),
+    "delivery_location": OrderFieldDef("delivery_location", "Delivery Location", "location", True, ("delivery_company_name", "delivery_address")),
+    "dims": OrderFieldDef("dims", "Dimensions", "dims", False, ("dims",)),
 }
+```
 
-REQUIRED_FIELDS = [f.name for f in ORDER_FIELDS.values() if f.required]
+**Transform Utility Functions**:
+
+```python
+# field_transforms.py
+
+def resolve_location(
+    address: str | None,
+    company_name: str | None,
+    htc_service: HtcIntegrationService,
+) -> LocationValue | None:
+    """
+    Transform address + company_name into a LocationValue.
+
+    Uses htc_service.find_address_id(address) to lookup existing address.
+    Company name is stored for use at creation time (not needed for lookup).
+
+    Returns None if both address and company_name are empty.
+    """
+    if not address and not company_name:
+        return None
+
+    address_id = None
+    if address:
+        address_id = htc_service.find_address_id(address)
+
+    return LocationValue(
+        address_id=address_id,  # float | None
+        name=company_name or "",
+        address=address or "",
+    )
+
+
+def resolve_dims(dims: list[dict] | None) -> list[DimObject] | None:
+    """
+    Transform dims output channel into list of DimObject with calculated dim_weight.
+
+    The dims output channel is already typed as list[dim] from the pipeline.
+    This adds the calculated dim_weight field (L*W*H/144).
+    """
+    if not dims:
+        return None
+
+    return [
+        DimObject(
+            length=dim["length"],
+            width=dim["width"],
+            height=dim["height"],
+            qty=dim["qty"],
+            weight=dim["weight"],
+            dim_weight=round((dim["length"] * dim["width"] * dim["height"]) / 144, 2),
+        )
+        for dim in dims
+    ]
+
+
+def transform_output_channels_to_fields(
+    output_channel_data: dict[str, Any],
+    htc_service: HtcIntegrationService,
+) -> dict[str, Any]:
+    """
+    Transform raw output channel data into order field values.
+
+    Returns dict of field_name -> resolved_value.
+    Only includes fields that have data in output_channel_data.
+    """
+    result = {}
+
+    # Passthrough string fields
+    for field in ["mawb", "pickup_time_start", "pickup_time_end",
+                  "delivery_time_start", "delivery_time_end",
+                  "pickup_notes", "delivery_notes", "order_notes"]:
+        if field in output_channel_data:
+            result[field] = output_channel_data[field]
+
+    # Location fields
+    pickup_location = resolve_location(
+        address=output_channel_data.get("pickup_address"),
+        company_name=output_channel_data.get("pickup_company_name"),
+        htc_service=htc_service,
+    )
+    if pickup_location:
+        result["pickup_location"] = pickup_location
+
+    delivery_location = resolve_location(
+        address=output_channel_data.get("delivery_address"),
+        company_name=output_channel_data.get("delivery_company_name"),
+        htc_service=htc_service,
+    )
+    if delivery_location:
+        result["delivery_location"] = delivery_location
+
+    # Dims
+    dims = resolve_dims(output_channel_data.get("dims"))
+    if dims:
+        result["dims"] = dims
+
+    return result
 ```
 
 ---

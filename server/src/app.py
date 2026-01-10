@@ -2,13 +2,16 @@
 Transformation Pipeline Server - FastAPI Application
 Node-based pipeline system with Dask execution
 """
-import logging
 import os
 import sys
 from typing import Any
 
 # Add src directory to path BEFORE any local imports
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+
+# Setup custom logger class BEFORE any loggers are created
+from shared.logging import configure_logging, get_logger, setup_logger_class
+setup_logger_class()
 
 from contextlib import asynccontextmanager
 
@@ -17,7 +20,6 @@ from fastapi.responses import JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.exceptions import RequestValidationError, HTTPException as FastAPIHTTPException
 
-from shared.logging import configure_logging
 from shared.database import init_database_connection
 from shared.database.access_connection import AccessConnectionManager
 from shared.services.service_container import ServiceContainer
@@ -25,7 +27,7 @@ from shared.config.storage import get_storage_configuration
 from shared.config.database import load_database_connections
 from shared.exceptions.service import ObjectNotFoundError, ConflictError, ValidationError, ServiceError
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 # Global variables to store initialized database connections
 _main_connection = None  # SQL Server system database (via SQLAlchemy)
@@ -117,7 +119,7 @@ async def initialize_services() -> None:
             logger.warning(f"Failed to initialize storage config: {e}")
 
         # 2. Initialize modules service (triggers auto-discovery)
-        """try:
+        try:
             modules_service = ServiceContainer.get_modules_service()
             logger.info("Modules service initialized (auto-discovery complete)")
         except Exception as e:
@@ -131,62 +133,48 @@ async def initialize_services() -> None:
         except Exception as e:
             logger.warning(f"Failed to initialize PDF files service: {e}")
 
-        """try:
+        try:
             pipeline_execution_service = ServiceContainer.get_pipeline_execution_service()
             logger.info("Pipeline execution service initialized")
         except Exception as e:
-            logger.warning(f"Failed to initialize pipeline execution service: {e}")"""
+            logger.warning(f"Failed to initialize pipeline execution service: {e}")
 
-        """try:
+        try:
             pipeline_service = ServiceContainer.get_pipeline_service()
             logger.info("Pipeline service initialized")
         except Exception as e:
-            logger.warning(f"Failed to initialize pipeline service: {e}")"""
+            logger.warning(f"Failed to initialize pipeline service: {e}")
 
-        """try:
+        try:
             pdf_template_service = ServiceContainer.get_pdf_template_service()
             logger.info("PDF template service initialized")
         except Exception as e:
-            logger.warning(f"Failed to initialize PDF template service: {e}")"""
+            logger.warning(f"Failed to initialize PDF template service: {e}")
 
         # 4. Initialize ingestion services and start email polling
-        """try:
+        try:
             email_service = ServiceContainer.get_email_service()
             logger.info("Email service initialized")
             # Start polling for active email configs
             email_service.startup()
             logger.info("Email service startup complete (pollers started for active configs)")
         except Exception as e:
-            logger.warning(f"Failed to initialize/start email service: {e}")"""
+            logger.warning(f"Failed to initialize/start email service: {e}")
 
         # 5. Initialize HTC integration service (needed by output_processing and order_management)
-        """htc_integration_service = None
+        htc_integration_service = None
         try:
             htc_integration_service = ServiceContainer.get_htc_integration_service()
             logger.info("HTC integration service initialized")
         except Exception as e:
-            logger.warning(f"Failed to initialize HTC integration service: {e}")"""
-
-        # 6. Initialize output processing service (needed by eto_runs)
-        """try:
-            output_processing_service = ServiceContainer.get_output_processing_service()
-            logger.info("Output processing service initialized")
-        except Exception as e:
-            logger.warning(f"Failed to initialize output processing service: {e}")"""
+            logger.warning(f"Failed to initialize HTC integration service: {e}")
 
         # 7. Initialize ETO runs service
-        """try:
+        try:
             eto_runs_service = ServiceContainer.get_eto_runs_service()
             logger.info("ETO runs service initialized")
         except Exception as e:
-            logger.warning(f"Failed to initialize ETO runs service: {e}")"""
-
-        # 8. Initialize order management service
-        """try:
-            order_management_service = ServiceContainer.get_order_management_service()
-            logger.info("Order management service initialized")
-        except Exception as e:
-            logger.warning(f"Failed to initialize order management service: {e}")"""
+            logger.warning(f"Failed to initialize ETO runs service: {e}")
 
         # 9. Initialize auth service (for user authentication)
         try:
@@ -201,7 +189,7 @@ async def initialize_services() -> None:
         logger.info("All services initialized successfully")
 
         # Sync modules and output channels to database
-        """try:
+        try:
             modules_service.sync_registry_to_database()
             logger.info("Module registry synced to database")
         except Exception as e:
@@ -211,10 +199,10 @@ async def initialize_services() -> None:
             result = modules_service.sync_output_channel_types()
             logger.info(f"Output channel types synced: {result['total']} types ({result['created']} created, {result['updated']} updated)")
         except Exception as e:
-            logger.warning(f"Failed to sync output channel types: {e}")"""
+            logger.warning(f"Failed to sync output channel types: {e}")
 
         # Start ETO processing worker (background polling)
-        """try:
+        try:
             eto_runs_service = ServiceContainer.get_eto_runs_service()
             worker_started = await eto_runs_service.startup()
             if worker_started:
@@ -222,18 +210,7 @@ async def initialize_services() -> None:
             else:
                 logger.warning("ETO processing worker failed to start or is disabled")
         except Exception as service_error:
-            logger.warning(f"ETO processing worker startup failed: {service_error}")"""
-
-        # Start HTC order worker (background polling for ready pending orders)
-        """try:
-            if order_management_service:
-                htc_worker_started = await order_management_service.startup()
-                if htc_worker_started:
-                    logger.info("HTC order worker started successfully")
-                else:
-                    logger.warning("HTC order worker failed to start or is disabled")
-        except Exception as service_error:
-            logger.warning(f"HTC order worker startup failed: {service_error}")"""
+            logger.warning(f"ETO processing worker startup failed: {service_error}")
 
 
     except Exception as e:
@@ -247,20 +224,9 @@ async def cleanup_services() -> None:
     global _main_connection, _access_connection_manager
 
     try:
-        # Gracefully close all SSE connections first
-        try:
-            from shared.events.eto_events import eto_event_manager
-            await eto_event_manager.shutdown()
-            logger.info("ETO SSE connections closed gracefully")
-        except Exception as e:
-            logger.warning(f"Failed to close ETO SSE connections: {e}")
-
-        try:
-            from server.src.shared.events.order_events_old import order_event_manager
-            await order_event_manager.shutdown()
-            logger.info("Order SSE connections closed gracefully")
-        except Exception as e:
-            logger.warning(f"Failed to close Order SSE connections: {e}")
+        # Note: SSE connections are handled by uvicorn's task cancellation.
+        # The SSE generators handle CancelledError gracefully and unregister.
+        # Clients are responsible for detecting disconnection and reconnecting.
 
         if ServiceContainer.is_initialized():
             # Stop email service pollers
@@ -279,15 +245,6 @@ async def cleanup_services() -> None:
                     logger.info("ETO processing worker stopped gracefully")
             except Exception as e:
                 logger.warning(f"Failed to stop ETO processing worker: {e}")
-
-            # Stop HTC order worker if running
-            try:
-                order_management_service = ServiceContainer.get_order_management_service()
-                if hasattr(order_management_service, 'shutdown'):
-                    await order_management_service.shutdown(graceful=True)
-                    logger.info("HTC order worker stopped gracefully")
-            except Exception as e:
-                logger.warning(f"Failed to stop HTC order worker: {e}")
 
         # Cleanup database connections
         if _main_connection:
@@ -479,7 +436,6 @@ def register_routers(app: FastAPI) -> None:
             modules_router,
             admin_router,
             eto_runs_router,
-            order_management_router,
             system_settings_router,
             auth_router,
         )
@@ -508,9 +464,6 @@ def register_routers(app: FastAPI) -> None:
 
         app.include_router(eto_runs_router, prefix="/api")
         logger.info("Registered eto runs router at /api/eto-runs")
-
-        app.include_router(order_management_router, prefix="/api")
-        logger.info("Registered order management router at /api/order-management")
 
         app.include_router(system_settings_router, prefix="/api")
         logger.info("Registered system settings router at /api/settings")

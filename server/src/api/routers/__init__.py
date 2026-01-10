@@ -8,7 +8,6 @@ from .pipelines import router as pipelines_router
 from .modules import router as modules_router
 from .admin import router as admin_router
 from .eto_runs import router as eto_runs_router
-from .order_management_old import router as order_management_router
 from .system_settings import router as system_settings_router
 from .auth import router as auth_router
 
@@ -21,7 +20,6 @@ __all__ = [
     'modules_router',
     'admin_router',
     'eto_runs_router',
-    'order_management_router',
     'system_settings_router',
     'auth_router',
 ]

@@ -22,6 +22,7 @@ from api.schemas.eto_runs import (
     RunOperationResponse,
     EtoSubRunFullDetail,
 )
+from shared.types.eto_runs import EtoRunUpdate
 from api.mappers.eto_runs import (
     eto_run_list_to_api,
     eto_run_to_create_response,
@@ -157,51 +158,31 @@ async def eto_run_events_stream(request: Request):
     client_queue = asyncio.Queue(maxsize=100)  # Buffer up to 100 events
 
     async def event_generator():
-        # Register this client with the global event manager
+        """
+        SSE event generator. Handles CancelledError gracefully for clean shutdown.
+        Client is responsible for reconnection if connection drops.
+        """
         eto_event_manager.register_client(client_queue)
         logger.debug(f"SSE client connected - total: {eto_event_manager.get_client_count()}")
 
         try:
-            # Send initial connection event to establish the stream
-            yield f": connected\n\n"  # SSE comment - keeps connection alive
+            # Send initial connection comment to establish the stream
+            yield f": connected\n\n"
 
-            while not eto_event_manager.is_shutting_down():
+            while True:
                 try:
-                    # Check if client disconnected
-                    try:
-                        if await asyncio.wait_for(request.is_disconnected(), timeout=0.1):
-                            logger.debug("SSE client disconnected")
-                            break
-                    except asyncio.TimeoutError:
-                        pass  # Client still connected
-
-                    # Wait for next event with timeout
-                    event = await asyncio.wait_for(
-                        client_queue.get(),
-                        timeout=1.0  # Short timeout to check shutdown flag frequently
-                    )
-
-                    # Format as SSE: "data: {...}\n\n"
+                    # Wait for next event (blocks until event available)
+                    event = await client_queue.get()
                     yield f"data: {json.dumps(event)}\n\n"
-
-                    # If this was a shutdown event, exit gracefully
-                    if event.get("type") == "server_shutdown":
-                        logger.debug("SSE shutdown event received")
-                        break
-
-                except asyncio.TimeoutError:
-                    # No event - continue to next iteration
-                    continue
                 except asyncio.CancelledError:
-                    # If cancelled during any await, exit immediately
+                    # Server shutting down - exit cleanly
                     return
-
         except asyncio.CancelledError:
-            return  # Exit generator immediately
+            # Handle cancellation at any point
+            return
         except Exception as e:
             logger.error(f"SSE error: {e}", exc_info=True)
         finally:
-            # Always cleanup when connection closes
             eto_event_manager.unregister_client(client_queue)
             logger.debug(f"SSE client disconnected - remaining: {eto_event_manager.get_client_count()}")
 
@@ -276,13 +257,12 @@ async def update_eto_run(
     """
     logger.info(f"Updating ETO run {id}: {request.model_dump(exclude_none=True)}")
 
-    # Build updates dict from request, excluding None values
-    updates = {}
-    if request.is_read is not None:
-        updates["is_read"] = request.is_read
+    # Create EtoRunUpdate from request, only setting fields that were provided
+    update = EtoRunUpdate(is_read=request.is_read)
 
-    if updates:
-        service.update_run(id, updates)
+    # Only call service if there are actual updates (fields set)
+    if update.model_fields_set:
+        service.update_run(id, update)
 
     return None
 

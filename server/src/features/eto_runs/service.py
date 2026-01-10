@@ -41,8 +41,10 @@ from shared.types.eto_sub_runs import (
     EtoSubRunCreate,
     EtoSubRunUpdate,
     EtoSubRunDetailView,
+    EtoRunExtractionDetailView,
+    EtoRunPipelineExecutionDetailView,
+    EtoRunPipelineExecutionStepDetailView,
 )
-from shared.types.eto_runs import EtoRunExtractionDetailView, EtoRunPipelineExecutionDetailView, EtoRunPipelineExecutionStepDetailView
 from shared.types.eto_sub_run_extractions import (
     EtoSubRunExtraction,
     EtoSubRunExtractionCreate,
@@ -77,7 +79,6 @@ from shared.types.email import Email
 from features.pdf_templates.service import PdfTemplateService
 from features.pdf_files.service import PdfFilesService
 from features.pipeline_execution.service import PipelineExecutionService
-from features.output_processing_old.service import OutputProcessingService
 
 logger = get_logger(__name__)
 
@@ -108,7 +109,6 @@ class EtoRunsService:
     pdf_template_service: PdfTemplateService
     pdf_files_service: PdfFilesService
     pipeline_execution_service: PipelineExecutionService
-    output_processing_service: OutputProcessingService
 
     # ==================== Repositories ====================
 
@@ -127,7 +127,6 @@ class EtoRunsService:
         pdf_template_service: PdfTemplateService,
         pdf_files_service: PdfFilesService,
         pipeline_execution_service: PipelineExecutionService,
-        output_processing_service: OutputProcessingService
     ) -> None:
         """
         Initialize ETO Runs Service.
@@ -146,7 +145,6 @@ class EtoRunsService:
         self.pdf_template_service: PdfTemplateService = pdf_template_service
         self.pdf_files_service: PdfFilesService = pdf_files_service
         self.pipeline_execution_service: PipelineExecutionService = pipeline_execution_service
-        self.output_processing_service: OutputProcessingService = output_processing_service
 
         # Initialize repositories
         self.eto_run_repo: EtoRunRepository = EtoRunRepository(connection_manager=connection_manager)
@@ -910,9 +908,11 @@ class EtoRunsService:
         )
 
         # Update with results (repository handles JSON serialization)
+        # Convert ExtractedFieldData objects to dicts for storage
+        extracted_data_dicts = [field.model_dump() for field in extracted_data]
         self.sub_run_extraction_repo.update(extraction.id, EtoSubRunExtractionUpdate(
             status="success",
-            extracted_data=extracted_data,
+            extracted_data=extracted_data_dicts,
             started_at=datetime.now(timezone.utc),
             completed_at=datetime.now(timezone.utc)
         ))
@@ -997,8 +997,9 @@ class EtoRunsService:
 
         # Step 6: Convert extracted_data list to dict format for pipeline execution
         # Pipeline expects: {field_name: extracted_value}
+        # extracted_data contains ExtractedFieldData Pydantic objects
         extracted_data_dict = {
-            result["name"]: result["extracted_value"]
+            result.name: result.extracted_value
             for result in extracted_data
         }
 
@@ -1182,7 +1183,7 @@ class EtoRunsService:
             logger.debug(f"Sub-run {sub_run_id}: Created output_execution record {output_execution.id} for HAWB {hawb}")
 
             # Process via OutputProcessingService
-            self.output_processing_service.process(output_execution.id)
+            # self.output_processing_service.process(output_execution.id)
 
         logger.monitor(f"Sub-run {sub_run_id}: Output execution completed for {len(hawbs)} HAWB(s)")
 
@@ -1680,11 +1681,11 @@ class EtoRunsService:
         logger.debug(f"Run {run_id}: Collected {len(all_pages)} pages from {len(eligible_sub_runs)} sub-runs")
 
         # Clean up pending order contributions BEFORE deleting the sub-runs
-        for sub_run in eligible_sub_runs:
+        '''for sub_run in eligible_sub_runs:
             cleanup_result = self.output_processing_service.cleanup_sub_run_contributions(sub_run.id)
             if cleanup_result["deleted_history_count"] > 0:
                 logger.debug(f"Sub-run {sub_run.id} pending order cleanup: {cleanup_result}")
-
+        '''
         # Use Unit of Work for atomic transaction
         with self.connection_manager.unit_of_work() as uow:
             # Delete all eligible sub-runs and their child records
@@ -1779,12 +1780,13 @@ class EtoRunsService:
         all_pages = sorted(set(all_pages))
         logger.debug(f"Run {run_id}: Collected {len(all_pages)} pages from {len(eligible_sub_runs)} sub-runs")
 
+        '''
         # Clean up pending order contributions BEFORE deleting the sub-runs
         for sub_run in eligible_sub_runs:
             cleanup_result = self.output_processing_service.cleanup_sub_run_contributions(sub_run.id)
             if cleanup_result["deleted_history_count"] > 0:
                 logger.debug(f"Sub-run {sub_run.id} pending order cleanup: {cleanup_result}")
-
+        '''
         # Use Unit of Work for atomic transaction
         with self.connection_manager.unit_of_work() as uow:
             # Delete all eligible sub-runs and their child records
@@ -1868,8 +1870,8 @@ class EtoRunsService:
 
         # Clean up pending order contributions BEFORE deleting the sub-run
         # This ensures history records are properly cleaned up while sub_run_id still exists
-        cleanup_result = self.output_processing_service.cleanup_sub_run_contributions(sub_run_id)
-        logger.debug(f"Pending order cleanup result: {cleanup_result}")
+        # cleanup_result = self.output_processing_service.cleanup_sub_run_contributions(sub_run_id)
+        # logger.debug(f"Pending order cleanup result: {cleanup_result}")
 
         # Use Unit of Work for atomic transaction
         with self.connection_manager.unit_of_work() as uow:
@@ -1951,8 +1953,8 @@ class EtoRunsService:
         matched_pages = sub_run.matched_pages  # Already JSON string
 
         # Clean up pending order contributions BEFORE deleting the sub-run
-        cleanup_result = self.output_processing_service.cleanup_sub_run_contributions(sub_run_id)
-        logger.debug(f"Pending order cleanup result: {cleanup_result}")
+        # cleanup_result = self.output_processing_service.cleanup_sub_run_contributions(sub_run_id)
+        # logger.debug(f"Pending order cleanup result: {cleanup_result}")
 
         # Use Unit of Work for atomic transaction
         with self.connection_manager.unit_of_work() as uow:
