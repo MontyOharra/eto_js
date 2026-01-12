@@ -63,7 +63,6 @@ from shared.types.eto_sub_run_pipeline_execution_steps import (
 from shared.types.eto_sub_run_output_executions import (
     EtoSubRunOutputExecution,
     EtoSubRunOutputExecutionCreate,
-    EtoSubRunOutputExecutionUpdate,
 )
 from shared.types.pdf_templates import TemplateMatchingResult
 from shared.types.pipeline_execution import PipelineExecutionResult

@@ -210,13 +210,13 @@ class PendingActionFieldCreate(BaseModel):
     """
     Data required to create a new pending action field entry.
 
-    Created when a sub-run contributes a field value, or when user
-    provides a manual value (sub_run_id=None).
+    Created when an output execution contributes a field value, or when user
+    provides a manual value (output_execution_id=None).
     """
     model_config = ConfigDict(frozen=True)
 
     pending_action_id: int
-    sub_run_id: int | None  # None for user-provided values
+    output_execution_id: int | None  # None for user-provided values
     field_name: str
     value: Any  # JSON - string, dict, or list depending on field type
     is_selected: bool = False
@@ -244,7 +244,7 @@ class PendingActionField(BaseModel):
 
     id: int
     pending_action_id: int
-    sub_run_id: int | None  # None = user-provided value
+    output_execution_id: int | None  # None = user-provided value
     field_name: str
     value: Any  # JSON - string, dict, or list depending on field type
     is_selected: bool
@@ -268,8 +268,8 @@ class PendingActionFieldView(BaseModel):
     value: Any
     is_selected: bool
     is_approved_for_update: bool
-    sub_run_id: int | None
-    is_user_provided: bool  # Computed: sub_run_id is None
+    output_execution_id: int | None
+    is_user_provided: bool  # Computed: output_execution_id is None
 
 
 class PendingActionListView(BaseModel):
@@ -331,13 +331,13 @@ class PendingActionDetailView(BaseModel):
 
 class CleanupResult(BaseModel):
     """
-    Result of cleanup_sub_run_contributions operation.
+    Result of cleanup_output_execution_contributions operation.
 
-    Returned when a sub-run is reprocessed or deleted.
+    Returned when an output execution is reprocessed or deleted.
     """
     model_config = ConfigDict(frozen=True)
 
-    sub_run_id: int
+    output_execution_id: int
     affected_action_ids: list[int]  # Actions that had fields removed
     deleted_action_ids: list[int]   # Actions that were fully deleted (no extracted fields remaining)
     fields_removed_count: int

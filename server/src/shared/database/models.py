@@ -734,10 +734,11 @@ class EtoSubRunPipelineExecutionStepModel(BaseModel):
 
 class EtoSubRunOutputExecutionModel(BaseModel):
     """
-    Tracks output channel processing for a single HAWB from a sub-run.
+    Data snapshot of pipeline output for a single HAWB from a sub-run.
 
     One sub-run can produce multiple output executions (one per HAWB if list).
-    This is the crash-resilience layer - data persists before processing begins.
+    This table stores the raw pipeline output - all processing state tracking
+    is handled by the pending_actions system.
 
     The unique order identifier is (customer_id, hawb) since different customers
     may have overlapping HAWB values.
@@ -761,28 +762,7 @@ class EtoSubRunOutputExecutionModel(BaseModel):
     # e.g., {"pickup_address": "123 Main St", "pieces": 5, ...}
     output_channel_data: Mapped[str] = mapped_column(Text, nullable=False)
 
-    # Execution status: pending -> processing -> success/error
-    status: Mapped[EtoOutputStatus] = mapped_column(
-        ETO_OUTPUT_STATUS,
-        nullable=False,
-        server_default="pending",
-    )
-
-    # What action was taken (set after processing completes)
-    # Values: 'pending_order_created', 'pending_order_updated',
-    #         'pending_updates_created', 'order_created'
-    action_taken: Mapped[Optional[str]] = mapped_column(String(50), nullable=True)
-
-    # HTC order number if order was created during this execution
-    htc_order_number: Mapped[Optional[float]] = mapped_column(nullable=True)
-
-    # Error tracking
-    error_message: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
-    error_type: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
-
     # Timestamps
-    started_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True))
-    completed_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True))
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.getutcdate(), nullable=False
     )
@@ -795,7 +775,6 @@ class EtoSubRunOutputExecutionModel(BaseModel):
 
     __table_args__ = (
         Index("idx_output_exec_sub_run", "sub_run_id"),
-        Index("idx_output_exec_status", "status"),
         Index("idx_output_exec_customer_hawb", "customer_id", "hawb"),
     )
 
@@ -1008,7 +987,7 @@ class PendingActionFieldModel(BaseModel):
 
     Key Design:
     - Multiple values per field allowed (for conflict resolution)
-    - sub_run_id = NULL indicates user-provided value (manual entry)
+    - output_execution_id = NULL indicates user-provided value (manual entry)
     - is_selected tracks which value is chosen for this field
     - is_approved_for_update allows partial updates (updates only)
 
@@ -1019,7 +998,7 @@ class PendingActionFieldModel(BaseModel):
 
     User-Provided Values:
     - Created via set_user_value() service method
-    - sub_run_id = NULL distinguishes from extracted values
+    - output_execution_id = NULL distinguishes from extracted values
     - Deleted when all extracted values are removed (no orphan manual entries)
     """
     __tablename__ = "pending_action_fields"
@@ -1034,8 +1013,8 @@ class PendingActionFieldModel(BaseModel):
     )
 
     # Source tracking (NULL = user-provided value)
-    sub_run_id: Mapped[Optional[int]] = mapped_column(
-        ForeignKey("eto_sub_runs.id", ondelete="SET NULL"),
+    output_execution_id: Mapped[Optional[int]] = mapped_column(
+        ForeignKey("eto_sub_run_output_executions.id", ondelete="SET NULL"),
         nullable=True,
         index=True
     )
@@ -1054,12 +1033,12 @@ class PendingActionFieldModel(BaseModel):
 
     # Relationships
     pending_action: Mapped["PendingActionModel"] = relationship(back_populates="fields")
-    sub_run: Mapped[Optional["EtoSubRunModel"]] = relationship()
+    output_execution: Mapped[Optional["EtoSubRunOutputExecutionModel"]] = relationship()
 
     __table_args__ = (
         Index("idx_paf_pending_action", "pending_action_id"),
         Index("idx_paf_field", "pending_action_id", "field_name"),
-        Index("idx_paf_sub_run", "sub_run_id"),
+        Index("idx_paf_output_execution", "output_execution_id"),
         Index("idx_paf_selected", "pending_action_id", "field_name", "is_selected"),
     )
 

@@ -49,7 +49,7 @@ class PendingActionFieldRepository(BaseRepository[PendingActionFieldModel]):
         return PendingActionField(
             id=model.id,
             pending_action_id=model.pending_action_id,
-            sub_run_id=model.sub_run_id,
+            output_execution_id=model.output_execution_id,
             field_name=model.field_name,
             value=value,
             is_selected=model.is_selected,
@@ -85,7 +85,7 @@ class PendingActionFieldRepository(BaseRepository[PendingActionFieldModel]):
         with self._get_session() as session:
             model = self.model_class(
                 pending_action_id=data.pending_action_id,
-                sub_run_id=data.sub_run_id,
+                output_execution_id=data.output_execution_id,
                 field_name=data.field_name,
                 value=self._serialize_value(data.value),
                 is_selected=data.is_selected,
@@ -217,15 +217,15 @@ class PendingActionFieldRepository(BaseRepository[PendingActionFieldModel]):
                 for model in models
             }
 
-    def get_fields_by_sub_run(self, sub_run_id: int) -> list[PendingActionField]:
+    def get_fields_by_output_execution(self, output_execution_id: int) -> list[PendingActionField]:
         """
-        Get all fields contributed by a specific sub-run.
+        Get all fields contributed by a specific output execution.
 
         Used during cleanup to find fields that need to be removed when
-        a sub-run is reprocessed or deleted.
+        an output execution is reprocessed or deleted.
 
         Args:
-            sub_run_id: Sub-run ID
+            output_execution_id: Output execution ID
 
         Returns:
             List of PendingActionField dataclasses
@@ -233,20 +233,20 @@ class PendingActionFieldRepository(BaseRepository[PendingActionFieldModel]):
         with self._get_session() as session:
             models = (
                 session.query(self.model_class)
-                .filter(self.model_class.sub_run_id == sub_run_id)
+                .filter(self.model_class.output_execution_id == output_execution_id)
                 .all()
             )
 
             return [self._model_to_domain(model) for model in models]
 
-    def delete_by_sub_run(self, sub_run_id: int) -> int:
+    def delete_by_output_execution(self, output_execution_id: int) -> int:
         """
-        Delete all fields contributed by a specific sub-run.
+        Delete all fields contributed by a specific output execution.
 
-        Used during cleanup when a sub-run is reprocessed or deleted.
+        Used during cleanup when an output execution is reprocessed or deleted.
 
         Args:
-            sub_run_id: Sub-run ID
+            output_execution_id: Output execution ID
 
         Returns:
             Number of fields deleted
@@ -254,13 +254,13 @@ class PendingActionFieldRepository(BaseRepository[PendingActionFieldModel]):
         with self._get_session() as session:
             count = (
                 session.query(self.model_class)
-                .filter(self.model_class.sub_run_id == sub_run_id)
+                .filter(self.model_class.output_execution_id == output_execution_id)
                 .delete(synchronize_session=False)
             )
 
             session.flush()
 
-            logger.debug(f"Deleted {count} fields for sub-run {sub_run_id}")
+            logger.debug(f"Deleted {count} fields for output execution {output_execution_id}")
             return count
 
     def delete_by_action_id(self, action_id: int) -> int:
@@ -383,7 +383,7 @@ class PendingActionFieldRepository(BaseRepository[PendingActionFieldModel]):
 
     def has_extracted_fields(self, action_id: int) -> bool:
         """
-        Check if any fields with sub_run_id IS NOT NULL exist for an action.
+        Check if any fields with output_execution_id IS NOT NULL exist for an action.
 
         Used during cleanup to determine if action should be deleted
         (no extracted fields remaining) or just recalculated.
@@ -400,7 +400,7 @@ class PendingActionFieldRepository(BaseRepository[PendingActionFieldModel]):
                 .filter(
                     and_(
                         self.model_class.pending_action_id == action_id,
-                        self.model_class.sub_run_id.isnot(None),
+                        self.model_class.output_execution_id.isnot(None),
                     )
                 )
                 .first()

@@ -1,18 +1,19 @@
 """
 ETO Sub-Run Output Execution Repository
-Repository for eto_sub_run_output_executions table with CRUD operations
+
+Repository for eto_sub_run_output_executions table with CRUD operations.
+This table stores data snapshots of pipeline output - all processing state
+tracking is handled by the pending_actions system.
 """
 import json
 import logging
-from typing import Any, cast
+from typing import Any
 
 from shared.database.repositories.base import BaseRepository
 from shared.database.models import EtoSubRunOutputExecutionModel
 from shared.types.eto_sub_run_output_executions import (
     EtoSubRunOutputExecution,
     EtoSubRunOutputExecutionCreate,
-    EtoSubRunOutputExecutionUpdate,
-    OutputExecutionStatus,
 )
 
 logger = logging.getLogger(__name__)
@@ -26,7 +27,7 @@ class EtoSubRunOutputExecutionRepository(BaseRepository[EtoSubRunOutputExecution
     - Basic CRUD for eto_sub_run_output_executions table
     - Conversion between ORM models and domain dataclasses
     - JSON serialization/deserialization for output_channel_data
-    - Query operations for finding output executions by sub-run ID and status
+    - Query operations for finding output executions by sub-run ID
     """
 
     @property
@@ -69,13 +70,6 @@ class EtoSubRunOutputExecutionRepository(BaseRepository[EtoSubRunOutputExecution
             customer_id=model.customer_id,
             hawb=model.hawb,
             output_channel_data=self._deserialize_json_dict(model.output_channel_data) or {},
-            status=cast(OutputExecutionStatus, model.status),
-            action_taken=model.action_taken,
-            htc_order_number=model.htc_order_number,
-            error_message=model.error_message,
-            error_type=model.error_type,
-            started_at=model.started_at,
-            completed_at=model.completed_at,
             created_at=model.created_at,
             updated_at=model.updated_at,
         )
@@ -84,7 +78,7 @@ class EtoSubRunOutputExecutionRepository(BaseRepository[EtoSubRunOutputExecution
 
     def create(self, data: EtoSubRunOutputExecutionCreate) -> EtoSubRunOutputExecution:
         """
-        Create new sub-run output execution with status = "pending".
+        Create new sub-run output execution record.
 
         Args:
             data: EtoSubRunOutputExecutionCreate with sub_run_id, customer_id, hawb, output_channel_data
@@ -98,7 +92,6 @@ class EtoSubRunOutputExecutionRepository(BaseRepository[EtoSubRunOutputExecution
                 customer_id=data.customer_id,
                 hawb=data.hawb,
                 output_channel_data=self._serialize_json_dict(data.output_channel_data),
-                # status defaults to "pending" via model default
             )
 
             session.add(model)
@@ -124,37 +117,6 @@ class EtoSubRunOutputExecutionRepository(BaseRepository[EtoSubRunOutputExecution
 
             return self._model_to_domain(model)
 
-    def update(self, output_execution_id: int, updates: EtoSubRunOutputExecutionUpdate) -> EtoSubRunOutputExecution | None:
-        """
-        Update output execution. Only updates provided fields.
-
-        Uses Pydantic's model_fields_set to distinguish between:
-        - Field not provided: not in model_fields_set (don't update)
-        - Field set to None: in model_fields_set with None value (set NULL)
-        - Field set to value: in model_fields_set with value (update)
-
-        Args:
-            output_execution_id: Output execution ID
-            updates: EtoSubRunOutputExecutionUpdate with fields to update
-
-        Returns:
-            Updated EtoSubRunOutputExecution dataclass or None if not found
-        """
-        with self._get_session() as session:
-            model = session.get(self.model_class, output_execution_id)
-
-            if model is None:
-                return None
-
-            # Update only fields that were explicitly set
-            for field_name in updates.model_fields_set:
-                value = getattr(updates, field_name)
-                setattr(model, field_name, value)
-
-            session.flush()
-
-            return self._model_to_domain(model)
-
     # ========== Query Operations ==========
 
     def get_by_sub_run_id(self, sub_run_id: int) -> list[EtoSubRunOutputExecution]:
@@ -170,39 +132,6 @@ class EtoSubRunOutputExecutionRepository(BaseRepository[EtoSubRunOutputExecution
         with self._get_session() as session:
             models = session.query(self.model_class).filter_by(sub_run_id=sub_run_id).all()
             return [self._model_to_domain(model) for model in models]
-
-    def get_by_status(self, status: str, limit: int | None = None) -> list[EtoSubRunOutputExecution]:
-        """
-        Get output executions by status.
-
-        Args:
-            status: Status to filter by (e.g., "pending", "processing", "success", "error")
-            limit: Optional limit on number of results
-
-        Returns:
-            List of EtoSubRunOutputExecution dataclasses
-        """
-        with self._get_session() as session:
-            query = session.query(self.model_class).filter_by(status=status)
-
-            if limit:
-                query = query.limit(limit)
-
-            models = query.all()
-
-            return [self._model_to_domain(model) for model in models]
-
-    def get_pending(self, limit: int | None = None) -> list[EtoSubRunOutputExecution]:
-        """
-        Get pending output executions (convenience method).
-
-        Args:
-            limit: Optional limit on number of results
-
-        Returns:
-            List of EtoSubRunOutputExecution dataclasses with status="pending"
-        """
-        return self.get_by_status("pending", limit=limit)
 
     def get_by_customer_and_hawb(self, customer_id: int, hawb: str) -> list[EtoSubRunOutputExecution]:
         """
@@ -244,3 +173,24 @@ class EtoSubRunOutputExecutionRepository(BaseRepository[EtoSubRunOutputExecution
 
             logger.debug(f"Deleted output execution record {output_execution_id}")
             return True
+
+    def delete_by_sub_run_id(self, sub_run_id: int) -> int:
+        """
+        Delete all output execution records for a sub-run.
+
+        Args:
+            sub_run_id: Sub-run ID
+
+        Returns:
+            Number of records deleted
+        """
+        with self._get_session() as session:
+            count = (
+                session.query(self.model_class)
+                .filter_by(sub_run_id=sub_run_id)
+                .delete(synchronize_session=False)
+            )
+            session.flush()
+
+            logger.debug(f"Deleted {count} output execution records for sub-run {sub_run_id}")
+            return count

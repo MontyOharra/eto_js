@@ -333,8 +333,8 @@ class PendingActionRepository(BaseRepository[PendingActionModel]):
                     value=field.value,
                     is_selected=field.is_selected,
                     is_approved_for_update=field.is_approved_for_update,
-                    sub_run_id=field.sub_run_id,
-                    is_user_provided=field.sub_run_id is None,
+                    output_execution_id=field.output_execution_id,
+                    is_user_provided=field.output_execution_id is None,
                 )
 
                 if field.field_name not in fields_by_name:
