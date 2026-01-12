@@ -23,6 +23,8 @@ from shared.types.pending_actions import (
     ORDER_FIELDS,
 )
 
+from features.htc_integration import HtcIntegrationService
+
 from .transformers import FIELD_TRANSFORMERS
 
 logger = logging.getLogger(__name__)
@@ -48,16 +50,19 @@ class OrderManagementService:
     - cleanup_output_execution_contributions: Remove contributions when output execution reprocessed
     """
 
-    def __init__(self, connection_manager: DatabaseConnectionManager) -> None:
+    def __init__(
+        self,
+        connection_manager: DatabaseConnectionManager,
+        htc_integration_service: HtcIntegrationService,
+    ) -> None:
         """Initialize service with dependencies."""
         self.connection_manager = connection_manager
+        self.htc_service = htc_integration_service
 
         # Repositories
         self.pending_action_repo = PendingActionRepository(connection_manager)
         self.pending_action_field_repo = PendingActionFieldRepository(connection_manager)
         self.output_execution_repo = EtoSubRunOutputExecutionRepository(connection_manager)
-
-        # TODO: Inject HTC service for action type determination and execution
 
     # ========== Main Entry Point ==========
 
@@ -125,10 +130,31 @@ class OrderManagementService:
             - ("update", order_number) if exactly one existing order
             - ("ambiguous", None) if multiple existing orders
         """
-        # TODO: Implement HTC lookup
-        # For now, assume create
-        pass
-        return ("create", None)
+        # Count existing orders for this customer/HAWB
+        order_count = self.htc_service.count_orders_by_customer_and_hawb(
+            customer_id=customer_id,
+            hawb=hawb,
+        )
+
+        if order_count == 0:
+            logger.debug(f"No existing order for customer {customer_id}, HAWB '{hawb}' - action: create")
+            return ("create", None)
+
+        elif order_count == 1:
+            # Get the order number for the update
+            order_number = self.htc_service.lookup_order_by_customer_and_hawb(
+                customer_id=customer_id,
+                hawb=hawb,
+            )
+            logger.debug(f"Found existing order {order_number} for customer {customer_id}, HAWB '{hawb}' - action: update")
+            return ("update", order_number)
+
+        else:
+            # Multiple orders exist - ambiguous situation requiring user resolution
+            logger.warning(
+                f"Multiple orders ({order_count}) found for customer {customer_id}, HAWB '{hawb}' - action: ambiguous"
+            )
+            return ("ambiguous", None)
 
     def _get_or_create_pending_action(
         self,
