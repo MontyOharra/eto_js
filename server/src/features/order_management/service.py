@@ -4,6 +4,7 @@ Order Management Service
 Unified service for pending action processing. Handles accumulation of field values
 from output executions and manual input, execution against HTC, and user interactions.
 """
+import json
 import logging
 from typing import Any
 
@@ -16,11 +17,13 @@ from shared.types.pending_actions import (
     PendingAction,
     PendingActionCreate,
     PendingActionUpdate,
+    PendingActionFieldCreate,
     PendingActionType,
     PendingActionStatus,
     CleanupResult,
     ExecuteResult,
     ORDER_FIELDS,
+    REQUIRED_ORDER_FIELDS,
 )
 
 from features.htc_integration import HtcIntegrationService
@@ -262,8 +265,80 @@ class OrderManagementService:
         - If value matches existing: create with is_selected=False (duplicate)
         - If value differs: clear all selections, create with is_selected=False (conflict)
         """
-        # TODO: Implement field addition with conflict detection
-        pass
+        # Get all existing fields for this action
+        existing_fields = self.pending_action_field_repo.get_fields_for_action(pending_action_id)
+
+        # Group existing fields by field_name
+        fields_by_name: dict[str, list[Any]] = {}
+        for field in existing_fields:
+            if field.field_name not in fields_by_name:
+                fields_by_name[field.field_name] = []
+            fields_by_name[field.field_name].append(field)
+
+        for field_name, value in fields.items():
+            existing_for_field = fields_by_name.get(field_name, [])
+
+            # Serialize value for comparison (handles complex objects like LocationValue)
+            new_value_json = self._serialize_value_for_comparison(value)
+
+            if not existing_for_field:
+                # No existing values - first value is auto-selected
+                logger.debug(f"Adding first value for field '{field_name}' (auto-selected)")
+                self.pending_action_field_repo.create(
+                    data=PendingActionFieldCreate(
+                        pending_action_id=pending_action_id,
+                        output_execution_id=output_execution_id,
+                        field_name=field_name,
+                        value=value,
+                        is_selected=True,
+                    )
+                )
+            else:
+                # Check if value matches any existing value
+                value_matches = any(
+                    self._serialize_value_for_comparison(existing.value) == new_value_json
+                    for existing in existing_for_field
+                )
+
+                if value_matches:
+                    # Duplicate value - add but don't select
+                    logger.debug(f"Adding duplicate value for field '{field_name}'")
+                    self.pending_action_field_repo.create(
+                        data=PendingActionFieldCreate(
+                            pending_action_id=pending_action_id,
+                            output_execution_id=output_execution_id,
+                            field_name=field_name,
+                            value=value,
+                            is_selected=False,
+                        )
+                    )
+                else:
+                    # Different value - conflict! Clear all selections
+                    logger.debug(f"Conflict detected for field '{field_name}' - clearing selections")
+                    self.pending_action_field_repo.clear_selection_for_field(
+                        action_id=pending_action_id,
+                        field_name=field_name,
+                    )
+                    self.pending_action_field_repo.create(
+                        data=PendingActionFieldCreate(
+                            pending_action_id=pending_action_id,
+                            output_execution_id=output_execution_id,
+                            field_name=field_name,
+                            value=value,
+                            is_selected=False,
+                        )
+                    )
+
+    def _serialize_value_for_comparison(self, value: Any) -> str:
+        """Serialize a value to JSON string for comparison purposes."""
+        if hasattr(value, 'model_dump'):
+            # Pydantic model
+            return json.dumps(value.model_dump(), sort_keys=True)
+        elif isinstance(value, list) and value and hasattr(value[0], 'model_dump'):
+            # List of Pydantic models
+            return json.dumps([v.model_dump() for v in value], sort_keys=True)
+        else:
+            return json.dumps(value, sort_keys=True)
 
     def _recalculate_action_status(self, pending_action_id: int) -> PendingAction:
         """
@@ -279,8 +354,55 @@ class OrderManagementService:
         - required_fields_present
         - conflict_count
         """
-        # TODO: Implement status recalculation
-        pass
+        # Get current action state
+        action = self.pending_action_repo.get_by_id(pending_action_id)
+        if not action:
+            raise ValueError(f"Pending action {pending_action_id} not found")
+
+        # Get selected fields (the "current" values)
+        selected_fields = self.pending_action_field_repo.get_selected_fields_for_action(pending_action_id)
+        selected_field_names = set(selected_fields.keys())
+
+        # Count values per field to detect unresolved conflicts
+        value_counts = self.pending_action_field_repo.count_by_field_name(pending_action_id)
+
+        # Calculate conflict count: fields with multiple values but no selection
+        conflict_count = 0
+        for field_name, count in value_counts.items():
+            if count > 1 and field_name not in selected_field_names:
+                conflict_count += 1
+
+        # Calculate required fields present
+        required_fields_present = len(selected_field_names.intersection(REQUIRED_ORDER_FIELDS))
+
+        # Determine status based on priority
+        new_status: PendingActionStatus
+        if action.action_type == "ambiguous":
+            new_status = "ambiguous"
+        elif conflict_count > 0:
+            new_status = "conflict"
+        elif required_fields_present < len(REQUIRED_ORDER_FIELDS):
+            new_status = "incomplete"
+        else:
+            new_status = "ready"
+
+        # Update action with new status and counts
+        updated_action = self.pending_action_repo.update(
+            action_id=pending_action_id,
+            updates=PendingActionUpdate(
+                status=new_status,
+                required_fields_present=required_fields_present,
+                conflict_count=conflict_count,
+            ),
+        )
+
+        logger.debug(
+            f"Recalculated action {pending_action_id}: status={new_status}, "
+            f"required_fields={required_fields_present}/{len(REQUIRED_ORDER_FIELDS)}, "
+            f"conflicts={conflict_count}"
+        )
+
+        return updated_action
 
     # ========== Execution ==========
 
