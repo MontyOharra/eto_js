@@ -166,10 +166,51 @@ class OrderManagementService:
         """
         Find existing active pending action or create a new one.
 
-        If found, may update action_type if it changed (e.g., order created in HTC since last check).
+        If found, may update action_type/htc_order_number if they changed
+        (e.g., order created in HTC since last check).
         """
-        # TODO: Implement find or create logic
-        pass
+        # Try to find existing active action
+        existing = self.pending_action_repo.get_active_by_customer_hawb(
+            customer_id=customer_id,
+            hawb=hawb,
+        )
+
+        if existing is not None:
+            # Check if we need to update action_type or htc_order_number
+            needs_update = (
+                existing.action_type != action_type or
+                existing.htc_order_number != htc_order_number
+            )
+
+            if needs_update:
+                logger.debug(
+                    f"Updating pending action {existing.id}: "
+                    f"action_type {existing.action_type} -> {action_type}, "
+                    f"htc_order_number {existing.htc_order_number} -> {htc_order_number}"
+                )
+                return self.pending_action_repo.update(
+                    action_id=existing.id,
+                    updates=PendingActionUpdate(
+                        action_type=action_type,
+                        htc_order_number=htc_order_number,
+                    ),
+                )
+
+            return existing
+
+        # Create new pending action
+        logger.debug(
+            f"Creating new pending action for customer {customer_id}, "
+            f"HAWB '{hawb}', action_type={action_type}"
+        )
+        return self.pending_action_repo.create(
+            data=PendingActionCreate(
+                customer_id=customer_id,
+                hawb=hawb,
+                action_type=action_type,
+                htc_order_number=htc_order_number,
+            ),
+        )
 
     def _transform_output_to_fields(
         self,
