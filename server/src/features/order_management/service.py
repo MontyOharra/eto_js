@@ -63,9 +63,9 @@ class OrderManagementService:
         self.htc_service = htc_integration_service
 
         # Repositories
-        self.pending_action_repo = PendingActionRepository(connection_manager)
-        self.pending_action_field_repo = PendingActionFieldRepository(connection_manager)
-        self.output_execution_repo = EtoSubRunOutputExecutionRepository(connection_manager)
+        self.pending_action_repo = PendingActionRepository(connection_manager=connection_manager)
+        self.pending_action_field_repo = PendingActionFieldRepository(connection_manager=connection_manager)
+        self.output_execution_repo = EtoSubRunOutputExecutionRepository(connection_manager=connection_manager)
 
     # ========== Main Entry Point ==========
 
