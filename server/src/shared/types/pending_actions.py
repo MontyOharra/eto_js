@@ -30,7 +30,6 @@ Action type for pending actions:
 """
 
 PendingActionStatus = Literal[
-    "accumulating",  # Still receiving data from sub-runs
     "incomplete",    # Missing required fields
     "conflict",      # Has unresolved field conflicts
     "ambiguous",     # Multiple HTC orders exist (action_type='ambiguous')
@@ -42,7 +41,7 @@ PendingActionStatus = Literal[
 ]
 """
 Status flow:
-- accumulating → incomplete/conflict/ambiguous/ready (based on field state)
+- incomplete → (fields added) → conflict/ambiguous/ready
 - ready → processing → completed/failed
 - failed → ready (on retry)
 - Any non-terminal → rejected (user action)

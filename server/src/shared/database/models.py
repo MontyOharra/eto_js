@@ -879,7 +879,7 @@ PENDING_ACTION_TYPE = SAEnum(
 
 # Pending action status
 PENDING_ACTION_STATUS = SAEnum(
-    'accumulating', 'incomplete', 'conflict', 'ambiguous', 'ready',
+    'incomplete', 'conflict', 'ambiguous', 'ready',
     'processing', 'completed', 'failed', 'rejected',
     name='pending_action_status',
     native_enum=False,
@@ -935,7 +935,7 @@ class PendingActionModel(BaseModel):
     status: Mapped[PendingActionStatus] = mapped_column(
         PENDING_ACTION_STATUS,
         nullable=False,
-        server_default="accumulating",
+        server_default="incomplete",
     )
 
     # Denormalized counts for quick status evaluation
