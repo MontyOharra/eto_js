@@ -78,6 +78,7 @@ from shared.types.email import Email
 from features.pdf_templates.service import PdfTemplateService
 from features.pdf_files.service import PdfFilesService
 from features.pipeline_execution.service import PipelineExecutionService
+from features.order_management.service import OrderManagementService
 
 logger = get_logger(__name__)
 
@@ -108,6 +109,7 @@ class EtoRunsService:
     pdf_template_service: PdfTemplateService
     pdf_files_service: PdfFilesService
     pipeline_execution_service: PipelineExecutionService
+    order_management_service: OrderManagementService
 
     # ==================== Repositories ====================
 
@@ -126,6 +128,7 @@ class EtoRunsService:
         pdf_template_service: PdfTemplateService,
         pdf_files_service: PdfFilesService,
         pipeline_execution_service: PipelineExecutionService,
+        order_management_service: OrderManagementService,
     ) -> None:
         """
         Initialize ETO Runs Service.
@@ -135,7 +138,7 @@ class EtoRunsService:
             pdf_template_service: Service for template matching
             pdf_files_service: Service for PDF file access
             pipeline_execution_service: Service for pipeline execution
-            output_processing_service: Service for processing output channels into pending orders
+            order_management_service: Service for processing output into pending actions
         """
         logger.debug("Initializing EtoRunsService...")
 
@@ -144,6 +147,7 @@ class EtoRunsService:
         self.pdf_template_service: PdfTemplateService = pdf_template_service
         self.pdf_files_service: PdfFilesService = pdf_files_service
         self.pipeline_execution_service: PipelineExecutionService = pipeline_execution_service
+        self.order_management_service: OrderManagementService = order_management_service
 
         # Initialize repositories
         self.eto_run_repo: EtoRunRepository = EtoRunRepository(connection_manager=connection_manager)
@@ -1181,8 +1185,12 @@ class EtoRunsService:
             )
             logger.debug(f"Sub-run {sub_run_id}: Created output_execution record {output_execution.id} for HAWB {hawb}")
 
-            # Process via OutputProcessingService
-            # self.output_processing_service.process(output_execution.id)
+            # Process via OrderManagementService - creates/updates pending action
+            pending_action = self.order_management_service.process_output_execution(output_execution.id)
+            logger.debug(
+                f"Sub-run {sub_run_id}: Processed output_execution {output_execution.id} -> "
+                f"pending_action {pending_action.id} (status={pending_action.status})"
+            )
 
         logger.monitor(f"Sub-run {sub_run_id}: Output execution completed for {len(hawbs)} HAWB(s)")
 

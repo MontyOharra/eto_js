@@ -157,9 +157,9 @@ class ServiceContainer:
             },
             'order_management': {
                 'class': 'features.order_management.service.OrderManagementService',
-                'args': [cls._main_connection, '_service:htc_integration', '_service:email'],
+                'args': [cls._main_connection, '_service:htc_integration'],
                 'singleton': True,
-                'description': 'Order management service with worker and email notifications'
+                'description': 'Order management service for pending action processing'
             },
             'pipelines': {
                 'class': 'features.pipelines.service.PipelineService',
@@ -175,7 +175,7 @@ class ServiceContainer:
             },
             'eto_runs': {
                 'class': 'features.eto_runs.service.EtoRunsService',
-                'args': [cls._main_connection, '_service:pdf_templates', '_service:pdf_files', '_service:pipeline_execution'],
+                'args': [cls._main_connection, '_service:pdf_templates', '_service:pdf_files', '_service:pipeline_execution', '_service:order_management'],
                 'singleton': True,
                 'description': 'ETO runs service for processing lifecycle management'
             },
