@@ -53,7 +53,7 @@ export function OutputChannel({ data }: OutputChannelProps) {
   // Create synthetic ModuleInstance from OutputChannelInstance
   const moduleInstance: ModuleInstance = {
     module_instance_id: outputChannel.output_channel_instance_id,
-    module_ref: `output_channel_${channelDefinition.name}:1.0.0`,
+    module_id: 0,  // Synthetic - not from database
     config: {},
     inputs: outputChannel.inputs,
     outputs: [], // Output channels have no outputs

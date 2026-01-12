@@ -8,6 +8,7 @@ from pydantic import BaseModel, Field
 from shared.types import ModuleMeta, IOShape, IOSideShape, NodeGroup, NodeTypeRule
 from features.modules.registry import register
 from features.modules.base import BaseModule
+from shared.database.access_connection import AccessConnectionManager
 
 
 class StripTextConfig(BaseModel):
@@ -65,7 +66,7 @@ class StripText(BaseModule):
             )
         )
 
-    def run(self, inputs: Dict[str, Any], cfg: StripTextConfig, context: Any = None) -> Dict[str, Any]:
+    def run(self, inputs: Dict[str, Any], cfg: StripTextConfig, context: Any = None, access_conn_manager: AccessConnectionManager | None = None) -> Dict[str, Any]:
         """
         Strip specific text from the start and/or end of the input string.
 

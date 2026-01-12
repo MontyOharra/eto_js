@@ -8,6 +8,7 @@ from pydantic import BaseModel, Field
 from shared.types import ModuleMeta, IOShape, IOSideShape, NodeGroup, NodeTypeRule
 from features.modules.registry import register
 from features.modules.base import BaseModule
+from shared.database.access_connection import AccessConnectionManager
 
 
 class GeneratorConfig(BaseModel):
@@ -53,7 +54,7 @@ class Generator(BaseModule):
             )
         )
 
-    def run(self, inputs: Dict[str, Any], cfg: GeneratorConfig, context: Any, services: Any = None) -> Dict[str, Any]:
+    def run(self, inputs: Dict[str, Any], cfg: GeneratorConfig, context: Any, access_conn_manager: AccessConnectionManager | None = None) -> Dict[str, Any]:
         """
         Execute value generation
 

@@ -68,7 +68,7 @@ class BooleanAnd(BaseModule):
             )
         )
 
-    def run(self, inputs: Dict[str, Any], cfg: BooleanAndConfig, context: Any) -> Dict[str, Any]:
+    def run(self, inputs: Dict[str, Any], cfg: BooleanAndConfig, context: Any, access_conn_manager: AccessConnectionManager | None = None) -> Dict[str, Any]:
         """
         Execute boolean AND operation
 

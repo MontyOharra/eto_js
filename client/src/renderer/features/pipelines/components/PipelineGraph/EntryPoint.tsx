@@ -30,7 +30,7 @@ export function EntryPoint({ data }: EntryPointProps) {
   // Create synthetic ModuleInstance from EntryPoint
   const moduleInstance: ModuleInstance = {
     module_instance_id: entryPoint.entry_point_id,
-    module_ref: "entry_point:1.0.0", // Synthetic module reference
+    module_id: 0,  // Synthetic - not from database
     config: {},
     inputs: [], // Entry points have no inputs
     outputs: entryPoint.outputs, // Use the actual outputs from EntryPoint

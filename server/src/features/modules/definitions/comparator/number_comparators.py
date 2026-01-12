@@ -7,6 +7,7 @@ from pydantic import BaseModel, Field
 from shared.types import ModuleMeta, IOShape, IOSideShape, NodeGroup, NodeTypeRule
 from features.modules.registry import register
 from features.modules.base import BaseModule
+from shared.database.access_connection import AccessConnectionManager
 
 
 # Number Equals
@@ -48,7 +49,7 @@ class NumberEquals(BaseModule):
             )
         )
 
-    def run(self, inputs: Dict[str, Any], cfg: NumberEqualsConfig, context: Any = None) -> Dict[str, Any]:
+    def run(self, inputs: Dict[str, Any], cfg: NumberEqualsConfig, context: Any = None, access_conn_manager: AccessConnectionManager | None = None) -> Dict[str, Any]:
         # Extract input
         input_node_id = list(inputs.keys())[0]
         value = inputs[input_node_id]
@@ -107,7 +108,7 @@ class NumberGreaterThan(BaseModule):
             )
         )
 
-    def run(self, inputs: Dict[str, Any], cfg: NumberGreaterThanConfig, context: Any = None) -> Dict[str, Any]:
+    def run(self, inputs: Dict[str, Any], cfg: NumberGreaterThanConfig, context: Any = None, access_conn_manager: AccessConnectionManager | None = None) -> Dict[str, Any]:
         import math
 
         # Get the single input value (there should be exactly one)
@@ -196,7 +197,7 @@ class NumberLessThan(BaseModule):
             )
         )
 
-    def run(self, inputs: Dict[str, Any], cfg: NumberLessThanConfig, context: Any = None) -> Dict[str, Any]:
+    def run(self, inputs: Dict[str, Any], cfg: NumberLessThanConfig, context: Any = None, access_conn_manager: AccessConnectionManager | None = None) -> Dict[str, Any]:
         import math
 
         # Extract input

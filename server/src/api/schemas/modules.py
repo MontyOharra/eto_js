@@ -16,6 +16,7 @@ from shared.types.output_channels import OutputChannelCategory, OutputChannelDat
 
 class ModuleResponse(BaseModel):
     """Module catalog entry for API responses."""
+    id: int  # Database PK - frontend sends this as module_id when building pipelines
     identifier: str  # e.g., "text_cleaner"
     version: str
     name: str

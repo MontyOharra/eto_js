@@ -14,7 +14,8 @@ import type { Module, ModulesQueryParams } from './types';
  */
 function convertModuleToTemplate(dto: Module): ModuleTemplate {
   return {
-    id: dto.id,
+    id: dto.identifier,  // String identifier for display/lookup
+    module_id: dto.id,   // Numeric database PK for backend
     version: dto.version,
     title: dto.name,
     description: dto.description || '',

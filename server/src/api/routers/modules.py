@@ -35,6 +35,7 @@ async def list_modules(
 
     return [
         ModuleResponse(
+            id=m.id,
             identifier=m.identifier,
             version=m.version,
             name=m.name,

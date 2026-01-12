@@ -66,7 +66,8 @@ export interface ModuleMeta {
  * This is the frontend representation of backend Module type
  */
 export interface ModuleTemplate {
-  id: string;
+  id: string;  // Identifier (e.g., "text_cleaner") - used for display/lookup
+  module_id: number;  // Database PK - sent to backend when creating module instances
   version: string;
   title: string;
   description: string;

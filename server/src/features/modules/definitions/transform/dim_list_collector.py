@@ -9,6 +9,7 @@ from pydantic import BaseModel
 from shared.types import ModuleMeta, IOShape, IOSideShape, NodeGroup, NodeTypeRule
 from features.modules.registry import register
 from features.modules.base import BaseModule
+from shared.database.access_connection import AccessConnectionManager
 
 logger = logging.getLogger(__name__)
 
@@ -65,7 +66,7 @@ class DimListCollector(BaseModule):
             )
         )
 
-    def run(self, inputs: Dict[str, Any], cfg: DimListCollectorConfig, context: Any) -> Dict[str, Any]:
+    def run(self, inputs: Dict[str, Any], cfg: DimListCollectorConfig, context: Any, access_conn_manager: AccessConnectionManager | None = None) -> Dict[str, Any]:
         """
         Execute dim list collection
 
@@ -73,7 +74,6 @@ class DimListCollector(BaseModule):
             inputs: Dictionary with dim objects
             cfg: Validated configuration (empty for this module)
             context: Execution context with ordered inputs/outputs
-            services: Not used for this module
 
         Returns:
             Dictionary with list[dim] output

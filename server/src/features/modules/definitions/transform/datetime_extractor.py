@@ -12,6 +12,7 @@ from pydantic import BaseModel
 from shared.types import ModuleMeta, IOShape, IOSideShape, NodeGroup, NodeTypeRule
 from features.modules.registry import register
 from features.modules.base import BaseModule
+from shared.database.access_connection import AccessConnectionManager
 
 logger = logging.getLogger(__name__)
 
@@ -85,7 +86,7 @@ class DateTimeExtractor(BaseModule):
             )
         )
 
-    def run(self, inputs: Dict[str, Any], cfg: DateTimeExtractorConfig, context: Any) -> Dict[str, Any]:
+    def run(self, inputs: Dict[str, Any], cfg: DateTimeExtractorConfig, context: Any, access_conn_manager: AccessConnectionManager | None = None) -> Dict[str, Any]:
         """
         Execute datetime extraction
 
@@ -93,7 +94,6 @@ class DateTimeExtractor(BaseModule):
             inputs: Dictionary with text input
             cfg: Validated configuration (empty for this module)
             context: Execution context with ordered inputs/outputs
-            services: Not used for this module
 
         Returns:
             Dictionary with time_start and time_end as datetime objects

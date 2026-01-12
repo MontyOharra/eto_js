@@ -5,10 +5,11 @@
 
 /**
  * Module catalog entry from backend API
- * Matches server/src/api/schemas/modules.py::Module
+ * Matches server/src/api/schemas/modules.py::ModuleResponse
  */
 export interface Module {
-  id: string;
+  id: number;  // Database primary key
+  identifier: string;  // e.g., "text_cleaner"
   version: string;
   name: string;
   description: string | null;

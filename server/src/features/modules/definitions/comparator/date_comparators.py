@@ -8,6 +8,7 @@ from datetime import datetime, date
 from shared.types import ModuleMeta, IOShape, IOSideShape, NodeGroup, NodeTypeRule
 from features.modules.registry import register
 from features.modules.base import BaseModule
+from shared.database.access_connection import AccessConnectionManager
 
 
 # Date Before (DateBefore already has kind = "comparator")
@@ -48,7 +49,7 @@ class DateBefore(BaseModule):
             )
         )
 
-    def run(self, inputs: Dict[str, Any], cfg: DateBeforeConfig, context: Any) -> Dict[str, Any]:
+    def run(self, inputs: Dict[str, Any], cfg: DateBeforeConfig, context: Any, access_conn_manager: AccessConnectionManager | None = None) -> Dict[str, Any]:
         # Extract input
         input_node_id = list(inputs.keys())[0]
         input_date = inputs[input_node_id]
@@ -120,7 +121,7 @@ class DateAfter(BaseModule):
             )
         )
 
-    def run(self, inputs: Dict[str, Any], cfg: DateAfterConfig, context: Any) -> Dict[str, Any]:
+    def run(self, inputs: Dict[str, Any], cfg: DateAfterConfig, context: Any, access_conn_manager: AccessConnectionManager | None = None) -> Dict[str, Any]:
         # Extract input
         input_node_id = list(inputs.keys())[0]
         input_date = inputs[input_node_id]
@@ -194,7 +195,7 @@ class DateInRange(BaseModule):
             )
         )
 
-    def run(self, inputs: Dict[str, Any], cfg: DateInRangeConfig, context: Any) -> Dict[str, Any]:
+    def run(self, inputs: Dict[str, Any], cfg: DateInRangeConfig, context: Any, access_conn_manager: AccessConnectionManager | None = None) -> Dict[str, Any]:
         # Extract input
         input_node_id = list(inputs.keys())[0]
         input_date = inputs[input_node_id]
@@ -280,7 +281,7 @@ class DateIsToday(BaseModule):
             )
         )
 
-    def run(self, inputs: Dict[str, Any], cfg: DateIsTodayConfig, context: Any) -> Dict[str, Any]:
+    def run(self, inputs: Dict[str, Any], cfg: DateIsTodayConfig, context: Any, access_conn_manager: AccessConnectionManager | None = None) -> Dict[str, Any]:
         # Extract input
         input_node_id = list(inputs.keys())[0]
         input_date = inputs[input_node_id]

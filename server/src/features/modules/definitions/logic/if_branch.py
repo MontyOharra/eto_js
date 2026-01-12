@@ -9,6 +9,7 @@ from pydantic import BaseModel
 from shared.types import ModuleMeta, IOShape, IOSideShape, NodeGroup, NodeTypeRule
 from features.modules.registry import register
 from features.modules.base import BaseModule
+from shared.database.access_connection import AccessConnectionManager
 
 logger = logging.getLogger(__name__)
 
@@ -93,7 +94,7 @@ class IfBranch(BaseModule):
             )
         )
 
-    def run(self, inputs: Dict[str, Any], cfg: IfBranchConfig, context: Any) -> Dict[str, Any]:
+    def run(self, inputs: Dict[str, Any], cfg: IfBranchConfig, context: Any, access_conn_manager: AccessConnectionManager | None = None) -> Dict[str, Any]:
         """
         Execute branch routing
 

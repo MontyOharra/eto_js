@@ -28,18 +28,6 @@ class BaseModel(DeclarativeBase):
     """Base class for all table models. Used by create_all() to create tables."""
     pass
 
-
-class ViewBase(DeclarativeBase):
-    """
-    Separate base class for VIEW models.
-
-    Views inherit from this instead of BaseModel so they are NOT included
-    in BaseModel.metadata.create_all() - which would try to create tables.
-    Views are created separately via raw SQL in database_creator.py.
-    """
-    pass
-
-
 # =========================
 # ENUMS for new ETO design
 # =========================

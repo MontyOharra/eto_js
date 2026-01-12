@@ -234,18 +234,18 @@ function ExecutedPipelineGraphInner({
       });
     });
 
-    // Create a map of module_ref to module template for quick lookup
+    // Create a map of module_id to module template for quick lookup
     const moduleTemplateMap = new Map(
-      modules.map((template) => [`${template.id}:${template.version}`, template])
+      modules.map((template) => [template.module_id, template])
     );
 
     // Create module nodes
     pipelineState.modules.forEach((moduleInstance) => {
       // Get module template from the loaded modules
-      const template = moduleTemplateMap.get(moduleInstance.module_ref);
+      const template = moduleTemplateMap.get(moduleInstance.module_id);
 
       // Fallback values if template not found
-      const moduleName = template?.title || moduleInstance.module_ref.split(":")[0];
+      const moduleName = template?.title || `Module ${moduleInstance.module_id}`;
       const moduleColor = template?.color || "#6B7280";
 
       // Get execution data for this module

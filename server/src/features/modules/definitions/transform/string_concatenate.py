@@ -9,6 +9,7 @@ from pydantic import BaseModel, Field
 from shared.types import ModuleMeta, IOShape, IOSideShape, NodeGroup, NodeTypeRule
 from features.modules.registry import register
 from features.modules.base import BaseModule
+from shared.database.access_connection import AccessConnectionManager
 
 logger = logging.getLogger(__name__)
 
@@ -68,7 +69,7 @@ class StringConcatenate(BaseModule):
             )
         )
 
-    def run(self, inputs: Dict[str, Any], cfg: StringConcatenateConfig, context: Any) -> Dict[str, Any]:
+    def run(self, inputs: Dict[str, Any], cfg: StringConcatenateConfig, context: Any, access_conn_manager: AccessConnectionManager | None = None) -> Dict[str, Any]:
         """
         Execute string concatenation
 
@@ -76,7 +77,6 @@ class StringConcatenate(BaseModule):
             inputs: Dictionary with multiple string inputs
             cfg: Validated configuration with separator
             context: Execution context with ordered inputs/outputs
-            services: Not used for this module
 
         Returns:
             Dictionary with concatenated string output

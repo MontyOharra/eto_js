@@ -47,7 +47,7 @@ function findModule(
     // Convert EntryPoint to ModuleInstance structure
     const moduleInstance: ModuleInstance = {
       module_instance_id: entryPoint.entry_point_id,
-      module_ref: "entry_point:1.0.0",
+      module_id: 0,  // Synthetic - not from database
       config: {},
       inputs: [],
       outputs: entryPoint.outputs,
@@ -69,7 +69,7 @@ function findModule(
     // Convert OutputChannelInstance to ModuleInstance structure
     const moduleInstance: ModuleInstance = {
       module_instance_id: outputChannel.output_channel_instance_id,
-      module_ref: `output_channel_${outputChannel.channel_type}:1.0.0`,
+      module_id: 0,  // Synthetic - not from database
       config: {},
       inputs: outputChannel.inputs,
       outputs: [],

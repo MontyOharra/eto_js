@@ -9,6 +9,7 @@ from pydantic import BaseModel
 from shared.types import ModuleMeta, IOShape, IOSideShape, NodeGroup, NodeTypeRule
 from features.modules.registry import register
 from features.modules.base import BaseModule
+from shared.database.access_connection import AccessConnectionManager
 
 logger = logging.getLogger(__name__)
 
@@ -96,7 +97,7 @@ class AddressParser(BaseModule):
             )
         )
 
-    def run(self, inputs: Dict[str, Any], cfg: AddressParserConfig, context: Any) -> Dict[str, Any]:
+    def run(self, inputs: Dict[str, Any], cfg: AddressParserConfig, context: Any, access_conn_manager: AccessConnectionManager | None = None) -> Dict[str, Any]:
         """
         Execute address parsing
 
@@ -104,7 +105,6 @@ class AddressParser(BaseModule):
             inputs: Dictionary with address_string input
             cfg: Validated configuration
             context: Execution context with ordered inputs/outputs
-            services: Not used for this module
 
         Returns:
             Dictionary with parsed address components

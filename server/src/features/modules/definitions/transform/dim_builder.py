@@ -9,6 +9,7 @@ from pydantic import BaseModel
 from shared.types import ModuleMeta, IOShape, IOSideShape, NodeGroup, NodeTypeRule
 from features.modules.registry import register
 from features.modules.base import BaseModule
+from shared.database.access_connection import AccessConnectionManager
 
 logger = logging.getLogger(__name__)
 
@@ -94,7 +95,7 @@ class DimBuilder(BaseModule):
             )
         )
 
-    def run(self, inputs: Dict[str, Any], cfg: DimBuilderConfig, context: Any) -> Dict[str, Any]:
+    def run(self, inputs: Dict[str, Any], cfg: DimBuilderConfig, context: Any, access_conn_manager: AccessConnectionManager | None = None) -> Dict[str, Any]:
         """
         Execute dim object building
 
@@ -102,7 +103,6 @@ class DimBuilder(BaseModule):
             inputs: Dictionary with count, length, width, height, weight inputs
             cfg: Validated configuration (empty for this module)
             context: Execution context with ordered inputs/outputs
-            services: Not used for this module
 
         Returns:
             Dictionary with dim object output

@@ -10,6 +10,7 @@ from pydantic import BaseModel, Field
 from shared.types import ModuleMeta, IOShape, IOSideShape, NodeGroup, NodeTypeRule
 from features.modules.registry import register
 from features.modules.base import BaseModule
+from shared.database.access_connection import AccessConnectionManager
 
 logger = logging.getLogger(__name__)
 
@@ -77,7 +78,7 @@ class TextSplitter(BaseModule):
             )
         )
 
-    def run(self, inputs: Dict[str, Any], cfg: TextSplitterConfig, context: Any) -> Dict[str, Any]:
+    def run(self, inputs: Dict[str, Any], cfg: TextSplitterConfig, context: Any, access_conn_manager: AccessConnectionManager | None = None) -> Dict[str, Any]:
         """
         Execute text splitting
 
@@ -85,7 +86,6 @@ class TextSplitter(BaseModule):
             inputs: Dictionary with input text
             cfg: Validated configuration with delimiter and options
             context: Execution context with ordered inputs/outputs
-            services: Not used for this module
 
         Returns:
             Dictionary with list of strings output

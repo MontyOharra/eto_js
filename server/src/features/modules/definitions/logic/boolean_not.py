@@ -8,6 +8,7 @@ from pydantic import BaseModel
 from shared.types import ModuleMeta, IOShape, IOSideShape, NodeGroup, NodeTypeRule
 from features.modules.registry import register
 from features.modules.base import BaseModule
+from shared.database.access_connection import AccessConnectionManager
 
 
 class BooleanNotConfig(BaseModel):
@@ -61,7 +62,7 @@ class BooleanNot(BaseModule):
             )
         )
 
-    def run(self, inputs: Dict[str, Any], cfg: BooleanNotConfig, context: Any) -> Dict[str, Any]:
+    def run(self, inputs: Dict[str, Any], cfg: BooleanNotConfig, context: Any, access_conn_manager: AccessConnectionManager | None = None) -> Dict[str, Any]:
         """
         Execute boolean NOT operation
 

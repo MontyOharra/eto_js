@@ -8,6 +8,7 @@ from pydantic import BaseModel
 from shared.types import ModuleMeta, IOShape, IOSideShape, NodeGroup, NodeTypeRule
 from features.modules.registry import register
 from features.modules.base import BaseModule
+from shared.database.access_connection import AccessConnectionManager
 
 
 class DataDuplicatorConfig(BaseModel):
@@ -63,7 +64,7 @@ class DataDuplicator(BaseModule):
             )
         )
         
-    def run(self, inputs: Dict[str, Any], cfg: DataDuplicatorConfig, context: Any) -> Dict[str, Any]:
+    def run(self, inputs: Dict[str, Any], cfg: DataDuplicatorConfig, context: Any, access_conn_manager: AccessConnectionManager | None = None) -> Dict[str, Any]:
         """
         Duplicate input value to all output pins
 

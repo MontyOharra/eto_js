@@ -9,11 +9,11 @@ PYTEST = conda run --no-capture-output -p $(CONDA_ENV_DIR) pytest
 # Default target
 .DEFAULT_GOAL := help
 
-.PHONY: help setup dev clean install-deps create-dirs reset-all modules-sync modules-list modules-clear modules-refresh test test-all test-unit test-integration test-cov
+.PHONY: help setup dev clean install-deps create-dirs db-reset db-check db-create test test-all test-unit test-integration test-cov
 
 help: ## Show this help message
 	@echo "Available targets:"
-	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*?## "}; {printf "  %-15s %s\n", $$1, $$2}'
+	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*?## "}; {printf "  %-18s %s\n", $$1, $$2}'
 
 $(CONDA_ENV_DIR): ## Create local conda environment
 	conda create -p $(CONDA_ENV_DIR) python=3.12 -y
@@ -33,20 +33,21 @@ setup: install-deps create-dirs ## Complete development setup (install deps + cr
 	@echo "Development environment setup complete!"
 	@echo "Run 'make dev' to start the development server"
 
-reset: ## Clean up logs and storage data (keep conda env)
-	@rm -rf logs/* storage/*
-	@echo "Cleaned up logs and storage data (conda environment preserved)"
-	@./scripts/database/manage-database.sh reset --confirm
-
-
 clean: ## Clean up conda environment and generated files
 	@rm -rf $(CONDA_ENV_DIR) logs storage
 	@echo "Cleaned up conda environment and directories"
 
-# Module Management Commands
-modules-sync: $(CONDA_ENV_DIR) ## Sync all registered modules to database catalog
-	@echo "Syncing modules to database catalog..."
-	$(PYTHON) -m src.cli.sync_modules sync
+# Database Management Commands
+db-reset: $(CONDA_ENV_DIR) ## Reset database (drop, create, tables) - DESTRUCTIVE
+	@rm -rf logs/* storage/*
+	@echo "Cleaned up logs and storage data"
+	$(PYTHON) -m src.cli db reset --confirm
+
+db-check: $(CONDA_ENV_DIR) ## Check database connection and list tables
+	$(PYTHON) -m src.cli db check
+
+db-create: $(CONDA_ENV_DIR) ## Create database and tables (if not exists)
+	$(PYTHON) -m src.cli db create
 
 dev: $(CONDA_ENV_DIR) ## Start FastAPI development server (setup only if needed)
 	@echo "Starting Transformation Pipeline Server..."

@@ -8,6 +8,7 @@ import re
 from shared.types import ModuleMeta, IOShape, IOSideShape, NodeGroup, NodeTypeRule
 from features.modules.registry import register
 from features.modules.base import BaseModule
+from shared.database.access_connection import AccessConnectionManager
 
 
 # String Equals
@@ -49,7 +50,7 @@ class StringEquals(BaseModule):
             )
         )
 
-    def run(self, inputs: Dict[str, Any], cfg: StringEqualsConfig, context: Any) -> Dict[str, Any]:
+    def run(self, inputs: Dict[str, Any], cfg: StringEqualsConfig, context: Any, access_conn_manager: AccessConnectionManager | None = None) -> Dict[str, Any]:
         # Extract input
         input_node_id = list(inputs.keys())[0]
         value = inputs[input_node_id]
@@ -113,7 +114,7 @@ class StringContains(BaseModule):
             )
         )
 
-    def run(self, inputs: Dict[str, Any], cfg: StringContainsConfig, context: Any) -> Dict[str, Any]:
+    def run(self, inputs: Dict[str, Any], cfg: StringContainsConfig, context: Any, access_conn_manager: AccessConnectionManager | None = None) -> Dict[str, Any]:
         # Extract input
         input_node_id = list(inputs.keys())[0]
         text = inputs[input_node_id]
@@ -177,7 +178,7 @@ class StringStartsWith(BaseModule):
             )
         )
 
-    def run(self, inputs: Dict[str, Any], cfg: StringStartsWithConfig, context: Any) -> Dict[str, Any]:
+    def run(self, inputs: Dict[str, Any], cfg: StringStartsWithConfig, context: Any, access_conn_manager: AccessConnectionManager | None = None) -> Dict[str, Any]:
         # Extract input
         input_node_id = list(inputs.keys())[0]
         text = inputs[input_node_id]
@@ -241,7 +242,7 @@ class StringEndsWith(BaseModule):
             )
         )
 
-    def run(self, inputs: Dict[str, Any], cfg: StringEndsWithConfig, context: Any) -> Dict[str, Any]:
+    def run(self, inputs: Dict[str, Any], cfg: StringEndsWithConfig, context: Any, access_conn_manager: AccessConnectionManager | None = None) -> Dict[str, Any]:
         # Extract input
         input_node_id = list(inputs.keys())[0]
         text = inputs[input_node_id]
@@ -304,7 +305,7 @@ class StringMatchesRegex(BaseModule):
             )
         )
 
-    def run(self, inputs: Dict[str, Any], cfg: StringMatchesRegexConfig, context: Any) -> Dict[str, Any]:
+    def run(self, inputs: Dict[str, Any], cfg: StringMatchesRegexConfig, context: Any, access_conn_manager: AccessConnectionManager | None = None) -> Dict[str, Any]:
         # Extract input
         input_node_id = list(inputs.keys())[0]
         text = inputs[input_node_id]
@@ -367,7 +368,7 @@ class StringIsEmpty(BaseModule):
             )
         )
 
-    def run(self, inputs: Dict[str, Any], cfg: StringIsEmptyConfig, context: Any) -> Dict[str, Any]:
+    def run(self, inputs: Dict[str, Any], cfg: StringIsEmptyConfig, context: Any, access_conn_manager: AccessConnectionManager | None = None) -> Dict[str, Any]:
         # Extract input
         input_node_id = list(inputs.keys())[0]
         text = inputs[input_node_id]

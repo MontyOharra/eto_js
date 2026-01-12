@@ -138,7 +138,7 @@ export function createModuleInstance(
 
   return {
     module_instance_id: instanceId,
-    module_ref: `${template.id}:${template.version}`,
+    module_id: template.module_id,
     config,
     inputs,
     outputs,
@@ -271,6 +271,7 @@ export function updateModuleConfig(
  */
 export const ENTRY_POINT_TEMPLATE: ModuleTemplate = {
   id: "entry_point",
+  module_id: 0,  // Synthetic module - not in database
   version: "1.0.0",
   title: "Entry Point",
   description: "Pipeline entry point - provides initial data to the pipeline",
@@ -488,6 +489,7 @@ export function createOutputChannelTemplate(
 ): ModuleTemplate {
   return {
     id: `output_channel_${channelName}`,
+    module_id: 0,  // Synthetic - not from database
     version: "1.0.0",
     title: channelLabel,
     description: `Output channel for ${channelLabel}`,

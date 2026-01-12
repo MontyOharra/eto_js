@@ -100,12 +100,11 @@ function PipelineGraphInner({
     if (!pipelineState) return undefined;
 
     const enrichedModules = pipelineState.modules.map((moduleInstance) => {
-      // Find template by parsing module_ref (e.g., "text_cleaner:1.0.0")
-      const [templateId] = moduleInstance.module_ref.split(':');
-      const template = modules.find((t) => t.id === templateId);
+      // Find template by module_id (database primary key)
+      const template = modules.find((t) => t.module_id === moduleInstance.module_id);
 
       if (!template) {
-        console.warn(`[PipelineGraph] Template not found for module: ${moduleInstance.module_ref}`);
+        console.warn(`[PipelineGraph] Template not found for module_id: ${moduleInstance.module_id}`);
         return moduleInstance; // Return unchanged if template not found
       }
 
@@ -357,7 +356,7 @@ function PipelineGraphInner({
       if (moduleIndex === -1) return;
 
       const module = pipelineState.modules[moduleIndex];
-      const template = modules.find((t) => t.id === module.module_ref.split(':')[0]);
+      const template = modules.find((t) => t.module_id === module.module_id);
       if (!template) return;
 
       const updatedModule = addPinToModule(module, template, direction, groupIndex);
@@ -538,13 +537,12 @@ function PipelineGraphInner({
 
     // Create module nodes (using enriched state with template metadata)
     enrichedPipelineState.modules.forEach((moduleInstance) => {
-      // Find the template for this module
-      const [templateId] = moduleInstance.module_ref.split(':');
-      const template = modules.find((t) => t.id === templateId);
+      // Find the template for this module by module_id
+      const template = modules.find((t) => t.module_id === moduleInstance.module_id);
 
       // Skip if template not found
       if (!template) {
-        console.warn(`Template not found for module: ${moduleInstance.module_ref}`);
+        console.warn(`Template not found for module_id: ${moduleInstance.module_id}`);
         return;
       }
 

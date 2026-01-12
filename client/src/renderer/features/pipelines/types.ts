@@ -33,7 +33,7 @@ export interface NodePin {
  */
 export interface ModuleInstance {
   module_instance_id: string;
-  module_ref: string;
+  module_id: number;  // Database PK of the module from catalog
   config: Record<string, any>;
   inputs: NodePin[];         // Flat array, grouped by group_index
   outputs: NodePin[];
