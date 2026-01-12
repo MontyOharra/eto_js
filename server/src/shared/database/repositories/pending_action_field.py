@@ -66,6 +66,12 @@ class PendingActionFieldRepository(BaseRepository[PendingActionFieldModel]):
             except (json.JSONDecodeError, TypeError):
                 # Plain string - serialize it
                 return json.dumps(value)
+        elif hasattr(value, 'model_dump'):
+            # Pydantic model - convert to dict first
+            return json.dumps(value.model_dump())
+        elif isinstance(value, list) and value and hasattr(value[0], 'model_dump'):
+            # List of Pydantic models
+            return json.dumps([v.model_dump() for v in value])
         else:
             # Object/list - serialize to JSON
             return json.dumps(value)
