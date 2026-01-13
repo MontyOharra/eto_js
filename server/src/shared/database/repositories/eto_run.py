@@ -431,7 +431,7 @@ class EtoRunRepository(BaseRepository[EtoRunModel]):
                     pdf_file_id=row.pdf_file_id,
                     pdf_original_filename=row.original_filename,
                     pdf_file_size=row.file_size,
-                    pdf_page_count=row.page_count,
+                    pdf_page_count=row.page_count or 0,  # Default to 0 for legacy PDFs without page_count
                     # Source info (email fields - all None if manual upload)
                     email_id=row.email_id,
                     email_sender_email=row.sender_email,
@@ -558,7 +558,7 @@ class EtoRunRepository(BaseRepository[EtoRunModel]):
                 pdf_file_id=row.pdf_file_id,
                 pdf_original_filename=row.original_filename,
                 pdf_file_size=row.file_size,
-                pdf_page_count=row.page_count,
+                pdf_page_count=row.page_count,  # Nullable for detail view
                 # Email info (optional)
                 email_id=row.email_id,
                 email_sender_email=row.sender_email,

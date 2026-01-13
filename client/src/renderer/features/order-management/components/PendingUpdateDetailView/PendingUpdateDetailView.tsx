@@ -8,20 +8,42 @@
  * Similar to PendingOrderDetailView but focused on updates to existing HTC orders.
  */
 
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import type {
-  PendingUpdateDetail,
-  PendingUpdateFieldDetail,
-  ConflictOption,
-  ContributingSubRun,
+  PendingActionDetail,
+  PendingActionFieldItem,
+  ContributingSourceItem,
 } from '../../types';
+import { getStatusColorClasses } from '../../constants';
+
+// Internal field type for this component
+interface PendingUpdateFieldDetail {
+  name: string;
+  label: string;
+  current_value: string | null;
+  proposed_value: string | null;
+  state: 'empty' | 'set' | 'conflict' | 'confirmed';
+  display_order: number;
+  conflict_options: ConflictOption[] | null;
+  source: { history_id: number } | null;
+  sub_run_id: number | null; // For cross-highlighting with source cards
+}
+
+interface ConflictOption {
+  history_id: number;
+  value: string;
+  contributed_at: string;
+}
+
+// Alias for source type
+type ContributingSubRun = ContributingSourceItem;
 
 // =============================================================================
 // Types
 // =============================================================================
 
 interface PendingUpdateDetailViewProps {
-  update: PendingUpdateDetail;
+  update: PendingActionDetail;
   onBack: () => void;
   onApprove: (updateId: number) => void;
   onReject: (updateId: number) => void;
@@ -134,18 +156,12 @@ function formatFieldValue(fieldName: string, value: string | null): string | nul
     }
   }
 
-  // Handle dims field
+  // Handle dims field - show raw JSON object notation
   if (fieldName === 'dims') {
     const parsed = tryParseJson(value);
     if (parsed !== null) {
-      // Check for single dim object
-      if (isDimObject(parsed)) {
-        return formatDim(parsed as Record<string, unknown>);
-      }
-      // Check for list[dim] - array of dim objects
-      if (Array.isArray(parsed) && parsed.length > 0 && isDimObject(parsed[0])) {
-        return '[' + parsed.map((d) => formatDim(d as Record<string, unknown>)).join(', ') + ']';
-      }
+      // Return prettified JSON for object-style display
+      return JSON.stringify(parsed, null, 2);
     }
   }
 
@@ -250,9 +266,11 @@ interface FieldRowProps {
   onConfirm: (fieldName: string, historyId: number) => void;
   isConfirming: boolean;
   canEdit: boolean;
+  isHighlighted: boolean;
+  onHover: (fieldName: string | null) => void;
 }
 
-function FieldRow({ field, localSelection, onConflictSelect, onConfirm, isConfirming, canEdit }: FieldRowProps) {
+function FieldRow({ field, localSelection, onConflictSelect, onConfirm, isConfirming, canEdit, isHighlighted, onHover }: FieldRowProps) {
   const isConflict = field.state === 'conflict';
   const hasMultipleOptions = (field.conflict_options?.length ?? 0) > 1;
   const hasLocalSelection = localSelection?.selectedHistoryId !== null;
@@ -285,11 +303,15 @@ function FieldRow({ field, localSelection, onConflictSelect, onConfirm, isConfir
 
   return (
     <div
-      className={`py-2 px-3 rounded-lg border ${
-        isConflict
-          ? 'bg-yellow-500/5 border-yellow-500/30'
-          : 'bg-gray-800/50 border-gray-700'
+      className={`py-2 px-3 rounded-lg border transition-colors ${
+        isHighlighted
+          ? 'bg-blue-500/20 border-blue-500/50 ring-1 ring-blue-500/50'
+          : isConflict
+            ? 'bg-yellow-500/5 border-yellow-500/30'
+            : 'bg-gray-800/50 border-gray-700'
       }`}
+      onMouseEnter={() => onHover(field.name)}
+      onMouseLeave={() => onHover(null)}
     >
       <div className="flex items-start gap-3">
         {/* Label - fixed width on left */}
@@ -303,8 +325,10 @@ function FieldRow({ field, localSelection, onConflictSelect, onConfirm, isConfir
         {/* Values section - flows naturally */}
         <div className="flex-1 min-w-0 flex flex-wrap items-start gap-x-3 gap-y-1">
           {/* Current Value - up to ~half width, then wraps */}
-          <div className="max-w-[45%] flex items-center gap-2">
-            <span className="text-sm text-gray-300 break-words">
+          <div className="max-w-[45%] flex items-start gap-2">
+            <span className={`text-sm text-gray-300 ${
+              field.name === 'dims' && currentValue ? 'whitespace-pre-wrap font-mono text-xs' : 'break-words'
+            }`}>
               {currentValue ?? <span className="italic text-gray-500">Empty</span>}
             </span>
             {/* Arrow inline after current */}
@@ -343,7 +367,9 @@ function FieldRow({ field, localSelection, onConflictSelect, onConfirm, isConfir
                 )}
               </>
             ) : (
-              <span className="text-sm text-white break-words">
+              <span className={`text-sm text-white ${
+                field.name === 'dims' && formattedNewValue ? 'whitespace-pre-wrap font-mono text-xs' : 'break-words'
+              }`}>
                 {formattedNewValue ?? <span className="italic text-gray-500">N/A</span>}
               </span>
             )}
@@ -361,13 +387,24 @@ function FieldRow({ field, localSelection, onConflictSelect, onConfirm, isConfir
 interface SourceCardProps {
   source: ContributingSubRun;
   onViewSubRun: (subRunId: number) => void;
+  hoveredFieldName: string | null;
+  onHover: (subRunId: number | null) => void;
+  isHovered: boolean;
 }
 
-function SourceCard({ source, onViewSubRun }: SourceCardProps) {
+function SourceCard({ source, onViewSubRun, hoveredFieldName, onHover, isHovered }: SourceCardProps) {
   const isMockSource = source.sub_run_id === null;
 
   return (
-    <div className="rounded-lg border border-gray-600 bg-gray-800 p-3">
+    <div
+      className={`rounded-lg border p-3 transition-colors ${
+        isHovered
+          ? 'border-blue-500/50 bg-blue-500/10 ring-1 ring-blue-500/50'
+          : 'border-gray-600 bg-gray-800'
+      }`}
+      onMouseEnter={() => onHover(source.sub_run_id)}
+      onMouseLeave={() => onHover(null)}
+    >
       <div className="min-w-0">
         <p className="text-sm font-medium text-white break-words">{source.pdf_filename}</p>
         <p className="text-xs text-gray-400 mt-0.5 break-words">
@@ -388,14 +425,21 @@ function SourceCard({ source, onViewSubRun }: SourceCardProps) {
       </div>
 
       <div className="mt-2 flex flex-wrap gap-1">
-        {source.fields_contributed.map((fieldName) => (
-          <span
-            key={fieldName}
-            className="text-xs px-1.5 py-0.5 rounded bg-gray-700 text-gray-300"
-          >
-            {fieldName.replace(/_/g, ' ')}
-          </span>
-        ))}
+        {source.fields_contributed.map((fieldName) => {
+          const isHighlighted = hoveredFieldName === fieldName;
+          return (
+            <span
+              key={fieldName}
+              className={`text-xs px-1.5 py-0.5 rounded transition-colors ${
+                isHighlighted
+                  ? 'bg-blue-500/30 text-blue-300 ring-1 ring-blue-500/50'
+                  : 'bg-gray-700 text-gray-300'
+              }`}
+            >
+              {fieldName.replace(/_/g, ' ')}
+            </span>
+          );
+        })}
       </div>
 
       {!isMockSource && (
@@ -426,6 +470,95 @@ export function PendingUpdateDetailView({
   confirmingFields = new Set(),
 }: PendingUpdateDetailViewProps) {
   const [localSelections, setLocalSelections] = useState<LocalFieldState>({});
+  // Track hovered field name for cross-highlighting field tags in source cards
+  const [hoveredFieldName, setHoveredFieldName] = useState<string | null>(null);
+  // Track hovered source card for cross-highlighting field rows
+  const [hoveredSubRunId, setHoveredSubRunId] = useState<number | null>(null);
+
+  // Transform API fields to internal format, showing ALL fields from metadata
+  // (not just fields with values). This ensures empty/missing fields are visible.
+  const transformedFields = useMemo((): PendingUpdateFieldDetail[] => {
+    const result: PendingUpdateFieldDetail[] = [];
+    const currentHtcValues = update.current_htc_values ?? {};
+
+    // Iterate over ALL fields defined in metadata (not just fields with values)
+    const metadata = update.field_metadata ?? {};
+    for (const [fieldName, fieldMeta] of Object.entries(metadata)) {
+      const label = fieldMeta.label;
+      const displayOrder = fieldMeta.display_order;
+
+      // Get field values if they exist (may be empty array or undefined)
+      const fieldItems = update.fields[fieldName] ?? [];
+
+      const selectedItem = fieldItems.find(item => item.is_selected);
+      const hasMultipleValues = fieldItems.length > 1;
+      const hasNoSelection = !selectedItem && fieldItems.length > 0;
+      const hasNoValues = fieldItems.length === 0;
+
+      // Get current HTC value for comparison
+      const currentValue = currentHtcValues[fieldName];
+      const currentValueStr = currentValue !== undefined
+        ? (typeof currentValue === 'string' ? currentValue : JSON.stringify(currentValue))
+        : null;
+
+      // Determine state
+      let state: 'empty' | 'set' | 'conflict' | 'confirmed' = 'set';
+      if (hasNoValues) {
+        state = 'empty'; // No proposed value for this field
+      } else if (hasNoSelection && hasMultipleValues) {
+        state = 'conflict';
+      } else if (selectedItem && hasMultipleValues) {
+        state = 'confirmed';
+      }
+
+      // Determine the proposed value:
+      // - If there's a selected item, use that
+      // - If there's only one item (no selection needed), use that
+      // - Otherwise null (conflict with no selection yet)
+      let proposedValue: string | null = null;
+      let sourceRef: { history_id: number } | null = null;
+
+      if (selectedItem) {
+        proposedValue = typeof selectedItem.value === 'string' ? selectedItem.value : JSON.stringify(selectedItem.value);
+        sourceRef = { history_id: selectedItem.id };
+      } else if (fieldItems.length === 1) {
+        // Single item - use it directly (no selection needed)
+        const singleItem = fieldItems[0];
+        proposedValue = typeof singleItem.value === 'string' ? singleItem.value : JSON.stringify(singleItem.value);
+        sourceRef = { history_id: singleItem.id };
+      }
+      // else: multiple items with no selection = conflict, value stays null
+
+      // Build conflict options
+      const conflictOptions: ConflictOption[] | null = hasMultipleValues
+        ? fieldItems.map(item => ({
+            history_id: item.id,
+            value: typeof item.value === 'string' ? item.value : JSON.stringify(item.value),
+            contributed_at: update.updated_at,
+          }))
+        : null;
+
+      // Get sub_run_id for cross-highlighting (from selected or single item)
+      const subRunId = selectedItem?.sub_run_id ?? (fieldItems.length === 1 ? fieldItems[0].sub_run_id : null);
+
+      result.push({
+        name: fieldName,
+        label,
+        current_value: currentValueStr,
+        proposed_value: proposedValue,
+        state,
+        display_order: displayOrder,
+        conflict_options: conflictOptions,
+        source: sourceRef,
+        sub_run_id: subRunId,
+      });
+    }
+
+    // Sort by display_order
+    result.sort((a, b) => a.display_order - b.display_order);
+
+    return result;
+  }, [update.fields, update.field_metadata, update.current_htc_values, update.updated_at]);
 
   const handleConflictSelect = (fieldName: string, option: ConflictOption) => {
     setLocalSelections((prev) => ({
@@ -447,113 +580,113 @@ export function PendingUpdateDetailView({
   };
 
   // Filter to only fields with proposed changes
-  const fieldsWithChanges = update.fields.filter((f) => f.state !== 'empty');
-  const conflictCount = update.fields.filter((f) => f.state === 'conflict').length;
+  const fieldsWithChanges = transformedFields.filter((f) => f.state !== 'empty');
+  const conflictCount = transformedFields.filter((f) => f.state === 'conflict').length;
 
-  // Can only edit pending updates
-  const canEdit = update.status === 'pending';
+  // Can edit if status allows changes (not completed/rejected/processing)
+  const canEdit = update.status === 'incomplete' || update.status === 'ready' || update.status === 'conflict';
   const hasConflicts = conflictCount > 0;
 
-  // Get status display info
-  const getStatusDisplay = () => {
-    switch (update.status) {
-      case 'pending':
-        return { label: 'Pending Review', color: 'text-yellow-400', bg: 'bg-yellow-500/20 border-yellow-500/30' };
-      case 'approved':
-        return { label: 'Approved', color: 'text-green-400', bg: 'bg-green-500/20 border-green-500/30' };
-      case 'rejected':
-        return { label: 'Rejected', color: 'text-red-400', bg: 'bg-red-500/20 border-red-500/30' };
-      default:
-        return { label: update.status, color: 'text-gray-400', bg: 'bg-gray-500/20 border-gray-500/30' };
-    }
+  // Get status display label
+  const getStatusLabel = (status: string): string => {
+    const labels: Record<string, string> = {
+      incomplete: 'Incomplete',
+      conflict: 'Conflict',
+      ambiguous: 'Ambiguous',
+      ready: 'Ready',
+      processing: 'Processing',
+      completed: 'Completed',
+      pending: 'Pending Review',
+      approved: 'Approved',
+      failed: 'Failed',
+      rejected: 'Rejected',
+    };
+    return labels[status] ?? status;
   };
-
-  const statusDisplay = getStatusDisplay();
 
   return (
     <div className="h-full flex flex-col overflow-hidden bg-gray-900">
       {/* Header */}
       <div className="flex-shrink-0 px-6 py-4 border-b border-gray-700">
-        {/* Top Row: Back button and main info */}
-        <div className="flex items-start justify-between">
-          {/* Left: Back + Order Info */}
-          <div className="flex items-start gap-4">
-            <button
-              onClick={onBack}
-              className="text-gray-400 hover:text-white transition-colors mt-1"
-              title="Back to list"
-            >
-              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth={2}
-                  d="M15 19l-7-7 7-7"
-                />
-              </svg>
-            </button>
+        {/* Row 1: Back | Action Type | Status */}
+        <div className="flex items-center justify-between">
+          {/* Left: Back Button */}
+          <button
+            onClick={onBack}
+            className="text-gray-400 hover:text-white transition-colors flex items-center gap-2"
+            title="Back to list"
+          >
+            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth={2}
+                d="M15 19l-7-7 7-7"
+              />
+            </svg>
+            Back
+          </button>
+
+          {/* Center: Action Type */}
+          <div className="text-lg font-semibold text-white">
+            Order Update
+          </div>
+
+          {/* Right: Status Badge */}
+          <div className={`px-3 py-1.5 rounded-lg border ${getStatusColorClasses(update.status)}`}>
+            <span className="font-medium">
+              {getStatusLabel(update.status)}
+            </span>
+          </div>
+        </div>
+
+        {/* Row 2: Customer/HAWB/Order# | Buttons */}
+        <div className="mt-4 flex items-center justify-between">
+          {/* Left: Customer, HAWB, HTC Order # - labels above values */}
+          <div className="flex items-start gap-8">
             <div>
-              <h1 className="text-xl font-bold text-white">
-                <span className="font-mono">{update.hawb}</span>
-                <span className="text-gray-400 font-normal mx-2">—</span>
-                <span className="font-normal">{update.customer_name ?? `Customer ${update.customer_id}`}</span>
-              </h1>
-              <p className="text-sm text-gray-400 mt-0.5">
-                HTC Order #{update.htc_order_number}
-              </p>
+              <span className="text-xs text-gray-500 uppercase tracking-wider">Customer</span>
+              <div className="text-xl text-white">
+                {update.customer_name ?? `ID: ${update.customer_id}`}
+              </div>
+            </div>
+            <div>
+              <span className="text-xs text-gray-500 uppercase tracking-wider">HAWB</span>
+              <div className="text-xl font-bold text-white font-mono">{update.hawb}</div>
+            </div>
+            <div>
+              <span className="text-xs text-gray-500 uppercase tracking-wider">HTC Order #</span>
+              <div className="text-xl text-white font-mono">{update.htc_order_number ?? '-'}</div>
             </div>
           </div>
 
-          {/* Center: Review Update text */}
-          <div className="text-center">
-            <span className="text-lg font-medium text-gray-300">Review Update</span>
-            <div className="text-xs text-gray-500 mt-0.5">
-              {fieldsWithChanges.length} field{fieldsWithChanges.length !== 1 ? 's' : ''} to update
-              {conflictCount > 0 && (
-                <span className="text-yellow-400"> · {conflictCount} conflict{conflictCount !== 1 ? 's' : ''}</span>
-              )}
-            </div>
-          </div>
+          {/* Right: Buttons and extra info */}
+          <div className="flex items-center gap-3">
+            {/* Changes info */}
+            <span className="text-xs text-gray-400">
+              {fieldsWithChanges.length} field{fieldsWithChanges.length !== 1 ? 's' : ''}
+              {conflictCount > 0 && ` · ${conflictCount} conflict${conflictCount > 1 ? 's' : ''}`}
+            </span>
 
-          {/* Right: Status Badge + Action Buttons */}
-          <div className="flex flex-col items-end gap-2">
-            <div className={`px-3 py-1.5 rounded-lg border ${statusDisplay.bg}`}>
-              <span className={`text-sm font-medium ${statusDisplay.color}`}>
-                {statusDisplay.label}
-              </span>
-            </div>
+            {/* Approve/Reject Buttons - only when editable */}
             {canEdit && (
-              <div className="flex items-center gap-2">
+              <>
                 <button
                   onClick={() => onReject(update.id)}
                   disabled={isRejecting || isApproving}
-                  className="px-3 py-1.5 bg-red-500/20 hover:bg-red-500/30 text-red-400 rounded-lg text-sm font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                  className="px-4 py-1.5 rounded-lg bg-red-600 text-white hover:bg-red-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors text-sm"
                 >
-                  {isRejecting ? (
-                    <span className="flex items-center gap-2">
-                      <span className="inline-block w-3 h-3 border-2 border-red-400/50 border-t-red-400 rounded-full animate-spin" />
-                      Rejecting
-                    </span>
-                  ) : (
-                    'Reject'
-                  )}
+                  {isRejecting ? 'Rejecting...' : 'Reject'}
                 </button>
                 <button
                   onClick={() => onApprove(update.id)}
                   disabled={isApproving || isRejecting || hasConflicts}
                   title={hasConflicts ? 'Resolve all conflicts before approving' : undefined}
-                  className="px-3 py-1.5 bg-green-600 hover:bg-green-700 text-white rounded-lg text-sm font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                  className="px-4 py-1.5 rounded-lg bg-green-600 text-white hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors text-sm"
                 >
-                  {isApproving ? (
-                    <span className="flex items-center gap-2">
-                      <span className="inline-block w-3 h-3 border-2 border-white/50 border-t-white rounded-full animate-spin" />
-                      Approving
-                    </span>
-                  ) : (
-                    'Approve'
-                  )}
+                  {isApproving ? 'Approving...' : 'Approve'}
                 </button>
-              </div>
+              </>
             )}
           </div>
         </div>
@@ -562,7 +695,7 @@ export function PendingUpdateDetailView({
       {/* Two Column Layout */}
       <div className="flex-1 min-h-0 flex overflow-hidden">
         {/* Left Column - Field Changes */}
-        <div className="flex-1 overflow-auto p-6 border-r border-gray-700">
+        <div className="flex-1 min-w-0 overflow-auto p-6 border-r border-gray-700">
           {/* Column Headers Row */}
           <div className="flex items-center py-2 px-3 mb-3 border-b border-gray-700">
             <div className="w-36 flex-shrink-0">
@@ -588,6 +721,8 @@ export function PendingUpdateDetailView({
                   onConfirm={handleFieldConfirm}
                   isConfirming={confirmingFields.has(field.name)}
                   canEdit={canEdit}
+                  isHighlighted={hoveredFieldName === field.name || (hoveredSubRunId !== null && field.sub_run_id === hoveredSubRunId)}
+                  onHover={setHoveredFieldName}
                 />
               ))
             )}
@@ -597,15 +732,22 @@ export function PendingUpdateDetailView({
         {/* Right Column - Data Sources */}
         <div className="w-[400px] flex-shrink-0 overflow-auto p-6 bg-gray-800/30 flex flex-col">
           <h3 className="text-xs font-medium text-gray-500 uppercase tracking-wider mb-3">
-            Sources ({update.contributing_sub_runs.length} PDFs)
+            Sources ({update.contributing_sources.length} PDFs)
           </h3>
 
           <div className="space-y-3 flex-1">
-            {update.contributing_sub_runs.length === 0 ? (
+            {update.contributing_sources.length === 0 ? (
               <p className="text-gray-500 text-sm italic">No sources yet</p>
             ) : (
-              update.contributing_sub_runs.map((source, index) => (
-                <SourceCard key={source.sub_run_id ?? `mock-${index}`} source={source} onViewSubRun={onViewSubRun} />
+              update.contributing_sources.map((source, index) => (
+                <SourceCard
+                  key={source.sub_run_id ?? `mock-${index}`}
+                  source={source}
+                  onViewSubRun={onViewSubRun}
+                  hoveredFieldName={hoveredFieldName}
+                  onHover={setHoveredSubRunId}
+                  isHovered={hoveredSubRunId === source.sub_run_id && source.sub_run_id !== null}
+                />
               ))
             )}
           </div>

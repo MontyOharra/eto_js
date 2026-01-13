@@ -37,18 +37,15 @@ type DetailView =
 type TypeFilter = 'all' | 'create' | 'update';
 type StatusFilter = 'all' | string;
 
-// Status options for each type
-const CREATE_STATUSES = [
+// Status options - unified for all pending actions
+const STATUS_OPTIONS = [
   { value: 'incomplete', label: 'Incomplete' },
+  { value: 'conflict', label: 'Conflict' },
+  { value: 'ambiguous', label: 'Ambiguous' },
   { value: 'ready', label: 'Ready' },
   { value: 'processing', label: 'Processing' },
-  { value: 'created', label: 'Created' },
+  { value: 'completed', label: 'Completed' },
   { value: 'failed', label: 'Failed' },
-];
-
-const UPDATE_STATUSES = [
-  { value: 'pending', label: 'Pending' },
-  { value: 'approved', label: 'Approved' },
   { value: 'rejected', label: 'Rejected' },
 ];
 
@@ -107,7 +104,7 @@ function OrdersPage() {
 
   // Build query params for the API
   const unifiedQueryParams = {
-    type: typeFilter !== 'all' ? (typeFilter as ActionType) : undefined,
+    action_type: typeFilter !== 'all' ? (typeFilter as ActionType) : undefined,
     status: statusFilter !== 'all' ? statusFilter : undefined,
     customer_id: customerFilter ?? undefined,
     search: debouncedSearchQuery || undefined,
@@ -159,7 +156,7 @@ function OrdersPage() {
 
   const handleRowClick = (type: ActionType, id: number) => {
     // Mark as read when clicking into detail
-    markRead.mutate({ type, id, is_read: true });
+    markRead.mutate({ id, is_read: true });
 
     if (type === 'create') {
       setDetailView({ type: 'order-detail', orderId: id });
@@ -168,8 +165,8 @@ function OrdersPage() {
     }
   };
 
-  const handleToggleRead = (type: ActionType, id: number, isRead: boolean) => {
-    markRead.mutate({ type, id, is_read: isRead });
+  const handleToggleRead = (_type: ActionType, id: number, isRead: boolean) => {
+    markRead.mutate({ id, is_read: isRead });
   };
 
   const handleApproveUpdate = (updateId: number) => {
@@ -346,15 +343,9 @@ function OrdersPage() {
   // Render Main View
   // ============================================================================
 
-  // Get available status options based on type filter
+  // Get available status options
   const getStatusOptions = () => {
-    if (typeFilter === 'create') {
-      return CREATE_STATUSES;
-    } else if (typeFilter === 'update') {
-      return UPDATE_STATUSES;
-    }
-    // All types - combine both (will show all statuses)
-    return [...CREATE_STATUSES, ...UPDATE_STATUSES];
+    return STATUS_OPTIONS;
   };
 
   const hasActiveFilters =

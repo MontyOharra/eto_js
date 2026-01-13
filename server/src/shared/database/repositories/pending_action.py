@@ -20,6 +20,8 @@ from shared.types.pending_actions import (
     PendingActionDetailView,
     PendingActionFieldView,
     PendingActionStatus,
+    REQUIRED_ORDER_FIELDS,
+    OPTIONAL_ORDER_FIELDS,
 )
 
 logger = logging.getLogger(__name__)
@@ -55,6 +57,7 @@ class PendingActionRepository(BaseRepository[PendingActionModel]):
             action_type=model.action_type,
             status=model.status,
             required_fields_present=model.required_fields_present,
+            optional_fields_present=model.optional_fields_present,
             conflict_count=model.conflict_count,
             error_message=model.error_message,
             error_at=model.error_at,
@@ -211,6 +214,7 @@ class PendingActionRepository(BaseRepository[PendingActionModel]):
         status: PendingActionStatus | None = None,
         action_type: str | None = None,
         is_read: bool | None = None,
+        customer_id: int | None = None,
         search_query: str | None = None,
         limit: int | None = None,
         offset: int | None = None,
@@ -226,6 +230,7 @@ class PendingActionRepository(BaseRepository[PendingActionModel]):
             status: Filter by status (optional)
             action_type: Filter by action type (optional)
             is_read: Filter by read status (optional)
+            customer_id: Filter by customer ID (optional)
             search_query: Search in HAWB (optional)
             limit: Maximum number of results (optional)
             offset: Number of results to skip (optional)
@@ -247,6 +252,9 @@ class PendingActionRepository(BaseRepository[PendingActionModel]):
 
             if is_read is not None:
                 query = query.filter(self.model_class.is_read == is_read)
+
+            if customer_id is not None:
+                query = query.filter(self.model_class.customer_id == customer_id)
 
             if search_query:
                 search_pattern = f"%{search_query}%"
@@ -288,6 +296,9 @@ class PendingActionRepository(BaseRepository[PendingActionModel]):
                     action_type=model.action_type,
                     status=model.status,
                     required_fields_present=model.required_fields_present,
+                    required_fields_total=len(REQUIRED_ORDER_FIELDS),
+                    optional_fields_present=model.optional_fields_present,
+                    optional_fields_total=len(OPTIONAL_ORDER_FIELDS),
                     conflict_count=model.conflict_count,
                     is_read=model.is_read,
                     created_at=model.created_at,
@@ -350,6 +361,9 @@ class PendingActionRepository(BaseRepository[PendingActionModel]):
                 action_type=model.action_type,
                 status=model.status,
                 required_fields_present=model.required_fields_present,
+                required_fields_total=len(REQUIRED_ORDER_FIELDS),
+                optional_fields_present=model.optional_fields_present,
+                optional_fields_total=len(OPTIONAL_ORDER_FIELDS),
                 conflict_count=model.conflict_count,
                 error_message=model.error_message,
                 error_at=model.error_at,

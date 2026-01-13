@@ -1,9 +1,9 @@
 /**
  * useOrderEvents Hook
- * Connects to Server-Sent Events (SSE) endpoint for real-time order management updates
+ * Connects to Server-Sent Events (SSE) endpoint for real-time pending action updates
  *
  * Automatically connects when component mounts and reconnects if connection drops.
- * Handles all event types: pending order and pending update create/update/delete events.
+ * Handles pending action create/update/delete events.
  */
 
 import { useEffect, useRef, useCallback } from 'react';
@@ -15,13 +15,12 @@ interface OrderEventData {
   // Common fields
   id?: number;
   status?: string;
+  action_type?: string;
   hawb?: string;
   customer_id?: number;
   htc_order_number?: number;
-  // Action-specific fields
-  action?: string;
+  // Optional context
   fields_changed?: string[];
-  fields_updated?: string[];
   error_message?: string;
 }
 
@@ -47,7 +46,7 @@ interface UseOrderEventsOptions {
 }
 
 /**
- * Hook for connecting to order management SSE events with automatic query invalidation.
+ * Hook for connecting to pending action SSE events with automatic query invalidation.
  *
  * Automatically invalidates TanStack Query caches when events are received,
  * causing affected queries to refetch with updated data.
@@ -71,61 +70,38 @@ export function useOrderEvents(options: UseOrderEventsOptions = {}) {
     // Call custom handler if provided
     onEvent?.(event);
 
-    // Handle different event types
+    const actionId = event.data.id;
+
+    // Handle different event types - using simplified unified event types
     switch (event.type) {
-      case 'pending_order_created':
-        // New pending order - invalidate lists
-        queryClient.invalidateQueries({ queryKey: orderManagementQueryKeys.pendingOrders() });
+      case 'pending_action_created':
+        // New pending action - invalidate the unified actions list
         queryClient.invalidateQueries({ queryKey: orderManagementQueryKeys.unifiedActions() });
         break;
 
-      case 'pending_order_updated':
-        // Pending order changed - invalidate lists and detail
-        queryClient.invalidateQueries({ queryKey: orderManagementQueryKeys.pendingOrders() });
+      case 'pending_action_updated':
+        // Pending action changed - invalidate list and detail if we have the ID
         queryClient.invalidateQueries({ queryKey: orderManagementQueryKeys.unifiedActions() });
-        if (event.data.id) {
+        if (actionId) {
+          // Invalidate both possible detail query keys (order and update use same endpoint)
           queryClient.invalidateQueries({
-            queryKey: orderManagementQueryKeys.pendingOrderDetail(event.data.id)
+            queryKey: orderManagementQueryKeys.pendingOrderDetail(actionId)
+          });
+          queryClient.invalidateQueries({
+            queryKey: orderManagementQueryKeys.pendingUpdateDetail(actionId)
           });
         }
         break;
 
-      case 'pending_order_deleted':
-        // Pending order deleted - invalidate lists and remove detail from cache
-        queryClient.invalidateQueries({ queryKey: orderManagementQueryKeys.pendingOrders() });
+      case 'pending_action_deleted':
+        // Pending action deleted - invalidate list and remove detail from cache
         queryClient.invalidateQueries({ queryKey: orderManagementQueryKeys.unifiedActions() });
-        if (event.data.id) {
+        if (actionId) {
           queryClient.removeQueries({
-            queryKey: orderManagementQueryKeys.pendingOrderDetail(event.data.id)
+            queryKey: orderManagementQueryKeys.pendingOrderDetail(actionId)
           });
-        }
-        break;
-
-      case 'pending_update_created':
-        // New pending update - invalidate lists
-        queryClient.invalidateQueries({ queryKey: orderManagementQueryKeys.pendingUpdates() });
-        queryClient.invalidateQueries({ queryKey: orderManagementQueryKeys.unifiedActions() });
-        break;
-
-      case 'pending_update_updated':
-        // Pending update changed - invalidate lists and detail
-        queryClient.invalidateQueries({ queryKey: orderManagementQueryKeys.pendingUpdates() });
-        queryClient.invalidateQueries({ queryKey: orderManagementQueryKeys.unifiedActions() });
-        if (event.data.id) {
-          queryClient.invalidateQueries({
-            queryKey: orderManagementQueryKeys.pendingUpdateDetail(event.data.id)
-          });
-        }
-        break;
-
-      case 'pending_update_resolved':
-        // Pending update approved/rejected - invalidate lists and detail
-        queryClient.invalidateQueries({ queryKey: orderManagementQueryKeys.pendingUpdates() });
-        queryClient.invalidateQueries({ queryKey: orderManagementQueryKeys.unifiedActions() });
-        queryClient.invalidateQueries({ queryKey: orderManagementQueryKeys.orderHistory() });
-        if (event.data.id) {
-          queryClient.invalidateQueries({
-            queryKey: orderManagementQueryKeys.pendingUpdateDetail(event.data.id)
+          queryClient.removeQueries({
+            queryKey: orderManagementQueryKeys.pendingUpdateDetail(actionId)
           });
         }
         break;
@@ -143,14 +119,14 @@ export function useOrderEvents(options: UseOrderEventsOptions = {}) {
       return;
     }
 
-    // Create EventSource connection
+    // Create EventSource connection to the pending-actions events endpoint
     const eventSource = new EventSource(
-      `${API_CONFIG.BASE_URL}/api/order-management/events`,
+      `${API_CONFIG.BASE_URL}/api/pending-actions/events`,
       { withCredentials: false }
     );
 
     eventSource.onopen = () => {
-      console.log('[Order SSE] Connected to order events stream');
+      console.log('[Order SSE] Connected to pending actions events stream');
       isConnectedRef.current = true;
       onConnected?.();
     };
@@ -219,7 +195,7 @@ export function useOrderEvents(options: UseOrderEventsOptions = {}) {
     const poll = () => {
       // Only log in development to avoid console spam
       if (process.env.NODE_ENV === 'development') {
-        console.log('[Order SSE Fallback] Polling - invalidating order queries');
+        console.log('[Order SSE Fallback] Polling - invalidating pending action queries');
       }
       queryClient.invalidateQueries({ queryKey: orderManagementQueryKeys.unifiedActions() });
     };

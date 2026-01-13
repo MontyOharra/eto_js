@@ -34,7 +34,7 @@ class BaseModel(DeclarativeBase):
 
 # Source type for ETO runs
 ETO_SOURCE_TYPE = SAEnum(
-    'email', 'manual',
+    'email', 'manual', 'mock',
     name='eto_source_type',
     native_enum=False,
     validate_strings=True
@@ -940,6 +940,7 @@ class PendingActionModel(BaseModel):
 
     # Denormalized counts for quick status evaluation
     required_fields_present: Mapped[int] = mapped_column(Integer, nullable=False, server_default="0")
+    optional_fields_present: Mapped[int] = mapped_column(Integer, nullable=False, server_default="0")
     conflict_count: Mapped[int] = mapped_column(Integer, nullable=False, server_default="0")
 
     # Error tracking (for failed execution)

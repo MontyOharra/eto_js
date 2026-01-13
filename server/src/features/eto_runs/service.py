@@ -1876,9 +1876,9 @@ class EtoRunsService:
         matched_pages = sub_run.matched_pages  # Already JSON string
 
         # Clean up pending order contributions BEFORE deleting the sub-run
-        # This ensures history records are properly cleaned up while sub_run_id still exists
-        # cleanup_result = self.output_processing_service.cleanup_sub_run_contributions(sub_run_id)
-        # logger.debug(f"Pending order cleanup result: {cleanup_result}")
+        # This removes all field values contributed by this sub-run's output executions
+        cleanup_result = self.order_management_service.cleanup_sub_run_contributions(sub_run_id)
+        logger.debug(f"Pending order cleanup result: {cleanup_result}")
 
         # Use Unit of Work for atomic transaction
         with self.connection_manager.unit_of_work() as uow:
@@ -1960,8 +1960,9 @@ class EtoRunsService:
         matched_pages = sub_run.matched_pages  # Already JSON string
 
         # Clean up pending order contributions BEFORE deleting the sub-run
-        # cleanup_result = self.output_processing_service.cleanup_sub_run_contributions(sub_run_id)
-        # logger.debug(f"Pending order cleanup result: {cleanup_result}")
+        # This removes all field values contributed by this sub-run's output executions
+        cleanup_result = self.order_management_service.cleanup_sub_run_contributions(sub_run_id)
+        logger.debug(f"Pending order cleanup result: {cleanup_result}")
 
         # Use Unit of Work for atomic transaction
         with self.connection_manager.unit_of_work() as uow:

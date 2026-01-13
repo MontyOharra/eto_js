@@ -14,6 +14,7 @@ if TYPE_CHECKING:
     from features.pipeline_execution.service import PipelineExecutionService
     from features.htc_integration.service import HtcIntegrationService
     from features.eto_runs.service import EtoRunsService
+    from features.order_management.service import OrderManagementService
     from features.auth.service import AuthService
     from shared.database.connection import DatabaseConnectionManager
     from shared.database.access_connection import AccessConnectionManager
@@ -399,6 +400,11 @@ class ServiceContainer:
     def get_auth_service(cls) -> 'AuthService':
         """Get the authentication service"""
         return cls.get('auth')
+
+    @classmethod
+    def get_order_management_service(cls) -> 'OrderManagementService':
+        """Get the order management service"""
+        return cls.get('order_management')
 
     @classmethod
     def get_main_connection(cls) -> 'DatabaseConnectionManager':

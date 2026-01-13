@@ -12,7 +12,7 @@ from pydantic import BaseModel, ConfigDict
 # Status Types
 # =========================
 
-EtoSourceType = Literal["email", "manual"]
+EtoSourceType = Literal["email", "manual", "mock"]
 EtoMasterStatus = Literal["not_started", "processing", "success", "failure", "skipped"]
 EtoRunProcessingStep = Literal["template_matching", "sub_runs"]
 EtoStepStatus = Literal["processing", "success", "failure"]

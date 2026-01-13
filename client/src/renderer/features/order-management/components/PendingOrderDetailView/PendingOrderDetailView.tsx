@@ -8,18 +8,40 @@
 
 import { useState, useMemo } from 'react';
 import type {
-  PendingOrderDetail,
-  FieldDetail,
-  ConflictOption,
-  ContributingSubRun,
+  PendingActionDetail,
+  PendingActionFieldItem,
+  ContributingSourceItem,
 } from '../../types';
+import { getStatusColorClasses } from '../../constants';
+
+// Derived types for internal component use
+interface FieldDetail {
+  name: string;
+  label: string;
+  value: string | null;
+  state: 'set' | 'conflict' | 'confirmed';
+  required: boolean;
+  display_order: number;
+  conflict_options: ConflictOption[] | null;
+  source: { history_id: number } | null;
+  sub_run_id: number | null; // For cross-highlighting with source cards
+}
+
+interface ConflictOption {
+  history_id: number;
+  value: string;
+  contributed_at: string;
+}
+
+// Alias for source type used in component
+type ContributingSubRun = ContributingSourceItem;
 
 // =============================================================================
 // Types
 // =============================================================================
 
 interface PendingOrderDetailViewProps {
-  order: PendingOrderDetail;
+  order: PendingActionDetail;
   onBack: () => void;
   onConfirmField: (fieldName: string, historyId: number) => void;
   onViewSubRun: (subRunId: number) => void;
@@ -133,18 +155,12 @@ function formatFieldValue(fieldName: string, value: string | null): string | nul
     }
   }
 
-  // Handle dims field
+  // Handle dims field - show raw JSON object notation
   if (fieldName === 'dims') {
     const parsed = tryParseJson(value);
     if (parsed !== null) {
-      // Check for single dim object
-      if (isDimObject(parsed)) {
-        return formatDim(parsed as Record<string, unknown>);
-      }
-      // Check for list[dim] - array of dim objects
-      if (Array.isArray(parsed) && parsed.length > 0 && isDimObject(parsed[0])) {
-        return '[' + parsed.map((d) => formatDim(d as Record<string, unknown>)).join(', ') + ']';
-      }
+      // Return prettified JSON for object-style display
+      return JSON.stringify(parsed, null, 2);
     }
   }
 
@@ -249,9 +265,11 @@ interface FieldRowProps {
   onConfirm: (fieldName: string, historyId: number) => void;
   isConfirming: boolean;
   canEdit: boolean;
+  isHighlighted: boolean;
+  onHover: (fieldName: string | null) => void;
 }
 
-function FieldRow({ field, localSelection, onConflictSelect, onConfirm, isConfirming, canEdit }: FieldRowProps) {
+function FieldRow({ field, localSelection, onConflictSelect, onConfirm, isConfirming, canEdit, isHighlighted, onHover }: FieldRowProps) {
   const isConflict = field.state === 'conflict';
   const hasMultipleOptions = (field.conflict_options?.length ?? 0) > 1;
   const hasLocalSelection = localSelection?.selectedHistoryId !== null;
@@ -287,13 +305,17 @@ function FieldRow({ field, localSelection, onConflictSelect, onConfirm, isConfir
 
   return (
     <div
-      className={`flex items-center gap-3 py-2 px-3 rounded ${
-        isConflict
-          ? 'bg-yellow-500/10'
-          : !hasValue
-            ? 'bg-gray-800/50'
-            : 'bg-gray-800'
+      className={`flex items-center gap-3 py-2 px-3 rounded transition-colors ${
+        isHighlighted
+          ? 'bg-blue-500/20 ring-1 ring-blue-500/50'
+          : isConflict
+            ? 'bg-yellow-500/10'
+            : !hasValue
+              ? 'bg-gray-800/50'
+              : 'bg-gray-800'
       }`}
+      onMouseEnter={() => onHover(field.name)}
+      onMouseLeave={() => onHover(null)}
     >
       {/* Status Icon */}
       {getStateIcon()}
@@ -333,7 +355,9 @@ function FieldRow({ field, localSelection, onConflictSelect, onConfirm, isConfir
         </>
       ) : (
         <span
-          className={`text-sm truncate flex-1 ${hasValue ? 'text-white' : 'text-gray-600 italic'}`}
+          className={`text-sm flex-1 min-w-0 ${hasValue ? 'text-white' : 'text-gray-600 italic'} ${
+            field.name === 'dims' && hasValue ? 'whitespace-pre-wrap font-mono text-xs' : 'break-words'
+          }`}
         >
           {formatFieldValue(field.name, field.value) ?? 'Missing'}
         </span>
@@ -349,13 +373,24 @@ function FieldRow({ field, localSelection, onConflictSelect, onConfirm, isConfir
 interface SourceCardProps {
   source: ContributingSubRun;
   onViewSubRun: (subRunId: number) => void;
+  hoveredFieldName: string | null;
+  onHover: (subRunId: number | null) => void;
+  isHovered: boolean;
 }
 
-function SourceCard({ source, onViewSubRun }: SourceCardProps) {
+function SourceCard({ source, onViewSubRun, hoveredFieldName, onHover, isHovered }: SourceCardProps) {
   const isMockSource = source.sub_run_id === null;
 
   return (
-    <div className="rounded-lg border border-gray-600 bg-gray-800 p-3">
+    <div
+      className={`rounded-lg border p-3 transition-colors ${
+        isHovered
+          ? 'border-blue-500/50 bg-blue-500/10 ring-1 ring-blue-500/50'
+          : 'border-gray-600 bg-gray-800'
+      }`}
+      onMouseEnter={() => onHover(source.sub_run_id)}
+      onMouseLeave={() => onHover(null)}
+    >
       <div className="min-w-0">
         <p className="text-sm font-medium text-white break-words">{source.pdf_filename}</p>
         <p className="text-xs text-gray-400 mt-0.5 break-words">
@@ -376,14 +411,21 @@ function SourceCard({ source, onViewSubRun }: SourceCardProps) {
       </div>
 
       <div className="mt-2 flex flex-wrap gap-1">
-        {source.fields_contributed.map((fieldName) => (
-          <span
-            key={fieldName}
-            className="text-xs px-1.5 py-0.5 rounded bg-gray-700 text-gray-300"
-          >
-            {fieldName.replace(/_/g, ' ')}
-          </span>
-        ))}
+        {source.fields_contributed.map((fieldName) => {
+          const isHighlighted = hoveredFieldName === fieldName;
+          return (
+            <span
+              key={fieldName}
+              className={`text-xs px-1.5 py-0.5 rounded transition-colors ${
+                isHighlighted
+                  ? 'bg-blue-500/30 text-blue-300 ring-1 ring-blue-500/50'
+                  : 'bg-gray-700 text-gray-300'
+              }`}
+            >
+              {fieldName.replace(/_/g, ' ')}
+            </span>
+          );
+        })}
       </div>
 
       {!isMockSource && (
@@ -415,6 +457,90 @@ export function PendingOrderDetailView({
 }: PendingOrderDetailViewProps) {
   // Track local conflict selections (before submitting to API)
   const [localSelections, setLocalSelections] = useState<LocalFieldState>({});
+  // Track hovered field name for cross-highlighting field tags in source cards
+  const [hoveredFieldName, setHoveredFieldName] = useState<string | null>(null);
+  // Track hovered source card for cross-highlighting field rows
+  const [hoveredSubRunId, setHoveredSubRunId] = useState<number | null>(null);
+
+  // Transform API fields to component format, showing ALL fields from metadata
+  // (not just fields with values). This ensures empty/missing fields are visible.
+  const transformedFields = useMemo((): FieldDetail[] => {
+    const result: FieldDetail[] = [];
+
+    // Iterate over ALL fields defined in metadata (not just fields with values)
+    const metadata = order.field_metadata ?? {};
+    for (const [fieldName, fieldMeta] of Object.entries(metadata)) {
+      const label = fieldMeta.label;
+      const required = fieldMeta.required;
+      const displayOrder = fieldMeta.display_order;
+
+      // Get field values if they exist (may be empty array or undefined)
+      const fieldItems = order.fields[fieldName] ?? [];
+
+      // Find the selected item (the current value)
+      const selectedItem = fieldItems.find(item => item.is_selected);
+      const hasMultipleValues = fieldItems.length > 1;
+      const hasNoSelection = !selectedItem && fieldItems.length > 0;
+      const hasNoValues = fieldItems.length === 0;
+
+      // Determine field state
+      let state: 'set' | 'conflict' | 'confirmed' = 'set';
+      if (hasNoValues) {
+        state = 'set'; // Empty field, no value yet
+      } else if (hasNoSelection && hasMultipleValues) {
+        state = 'conflict';
+      } else if (selectedItem && hasMultipleValues) {
+        state = 'confirmed';
+      }
+
+      // Build conflict options from all field items
+      const conflictOptions: ConflictOption[] | null = hasMultipleValues
+        ? fieldItems.map(item => ({
+            history_id: item.id,
+            value: typeof item.value === 'string' ? item.value : JSON.stringify(item.value),
+            contributed_at: order.updated_at,
+          }))
+        : null;
+
+      // Determine the display value:
+      // - If there's a selected item, use that
+      // - If there's only one item (no selection needed), use that
+      // - Otherwise null (conflict with no selection yet)
+      let displayValue: string | null = null;
+      let sourceRef: { history_id: number } | null = null;
+
+      if (selectedItem) {
+        displayValue = typeof selectedItem.value === 'string' ? selectedItem.value : JSON.stringify(selectedItem.value);
+        sourceRef = { history_id: selectedItem.id };
+      } else if (fieldItems.length === 1) {
+        // Single item - use it directly (no selection needed)
+        const singleItem = fieldItems[0];
+        displayValue = typeof singleItem.value === 'string' ? singleItem.value : JSON.stringify(singleItem.value);
+        sourceRef = { history_id: singleItem.id };
+      }
+      // else: multiple items with no selection = conflict, value stays null
+
+      // Get sub_run_id for cross-highlighting (from selected or single item)
+      const subRunId = selectedItem?.sub_run_id ?? (fieldItems.length === 1 ? fieldItems[0].sub_run_id : null);
+
+      result.push({
+        name: fieldName,
+        label,
+        value: displayValue,
+        state,
+        required,
+        display_order: displayOrder,
+        conflict_options: conflictOptions,
+        source: sourceRef,
+        sub_run_id: subRunId,
+      });
+    }
+
+    // Sort by display_order
+    result.sort((a, b) => a.display_order - b.display_order);
+
+    return result;
+  }, [order.fields, order.field_metadata, order.updated_at]);
 
   const handleConflictSelect = (fieldName: string, option: ConflictOption) => {
     setLocalSelections((prev) => ({
@@ -438,8 +564,8 @@ export function PendingOrderDetailView({
   };
 
   // Split fields into required and optional
-  const requiredFields = useMemo(() => order.fields.filter((f) => f.required), [order.fields]);
-  const optionalFields = useMemo(() => order.fields.filter((f) => !f.required), [order.fields]);
+  const requiredFields = useMemo(() => transformedFields.filter((f) => f.required), [transformedFields]);
+  const optionalFields = useMemo(() => transformedFields.filter((f) => !f.required), [transformedFields]);
 
   // Calculate field counts
   const getEffectiveValue = (f: FieldDetail) => {
@@ -451,119 +577,114 @@ export function PendingOrderDetailView({
   const presentOptionalCount = optionalFields.filter(getEffectiveValue).length;
 
   // Count conflicts
-  const conflictCount = order.fields.filter((f) => f.state === 'conflict').length;
+  const conflictCount = transformedFields.filter((f) => f.state === 'conflict').length;
 
   // Can edit only if order is incomplete or ready
-  const canEdit = order.status === 'incomplete' || order.status === 'ready';
+  const canEdit = order.status === 'incomplete' || order.status === 'ready' || order.status === 'conflict';
 
-  // Get status display info
-  const getStatusDisplay = () => {
-    switch (order.status) {
-      case 'incomplete':
-        return { label: 'Incomplete', color: 'text-yellow-400', bg: 'bg-yellow-500/20 border-yellow-500/30' };
-      case 'ready':
-        return { label: 'Ready', color: 'text-green-400', bg: 'bg-green-500/20 border-green-500/30' };
-      case 'processing':
-        return { label: 'Processing', color: 'text-blue-400', bg: 'bg-blue-500/20 border-blue-500/30' };
-      case 'created':
-        return { label: 'Created', color: 'text-green-400', bg: 'bg-green-500/20 border-green-500/30' };
-      case 'failed':
-        return { label: 'Failed', color: 'text-red-400', bg: 'bg-red-500/20 border-red-500/30' };
-      case 'rejected':
-        return { label: 'Rejected', color: 'text-gray-400', bg: 'bg-gray-500/20 border-gray-500/30' };
-      default:
-        return { label: order.status, color: 'text-gray-400', bg: 'bg-gray-500/20 border-gray-500/30' };
-    }
+  // Get status display label
+  const getStatusLabel = (status: string): string => {
+    const labels: Record<string, string> = {
+      incomplete: 'Incomplete',
+      conflict: 'Conflict',
+      ambiguous: 'Ambiguous',
+      ready: 'Ready',
+      processing: 'Processing',
+      completed: 'Completed',
+      created: 'Created',
+      failed: 'Failed',
+      rejected: 'Rejected',
+    };
+    return labels[status] ?? status;
   };
 
   // Can approve/reject only if order is ready
   const canApproveReject = order.status === 'ready';
 
-  const statusDisplay = getStatusDisplay();
-
   return (
     <div className="h-full flex flex-col overflow-hidden bg-gray-900">
-      {/* Header - Option C Layout */}
+      {/* Header */}
       <div className="flex-shrink-0 px-6 py-4 border-b border-gray-700">
-        {/* Back Button Row */}
-        <button
-          onClick={onBack}
-          className="text-gray-400 hover:text-white transition-colors flex items-center gap-2"
-          title="Back to list"
-        >
-          <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              strokeWidth={2}
-              d="M15 19l-7-7 7-7"
-            />
-          </svg>
-          Back
-        </button>
+        {/* Row 1: Back | Action Type | Status */}
+        <div className="flex items-center justify-between">
+          {/* Left: Back Button */}
+          <button
+            onClick={onBack}
+            className="text-gray-400 hover:text-white transition-colors flex items-center gap-2"
+            title="Back to list"
+          >
+            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth={2}
+                d="M15 19l-7-7 7-7"
+              />
+            </svg>
+            Back
+          </button>
 
-        {/* Order Info Row - Left: Info columns, Right: Status + Actions */}
+          {/* Center: Action Type */}
+          <div className="text-lg font-semibold text-white">
+            New Order
+          </div>
+
+          {/* Right: Status Badge */}
+          <div className={`px-3 py-1.5 rounded-lg border ${getStatusColorClasses(order.status)}`}>
+            <span className="font-medium">
+              {getStatusLabel(order.status)}
+            </span>
+          </div>
+        </div>
+
+        {/* Row 2: Customer/HAWB/Order# | Buttons */}
         <div className="mt-4 flex items-center justify-between">
-          {/* Left: Customer, HAWB, HTC Order # columns */}
+          {/* Left: Customer, HAWB, HTC Order # - labels above values */}
           <div className="flex items-start gap-8">
-            {/* Customer */}
             <div>
               <span className="text-xs text-gray-500 uppercase tracking-wider">Customer</span>
               <div className="text-xl text-white">
-                {order.customer_name ?? `Customer ID: ${order.customer_id}`}
+                {order.customer_name ?? `ID: ${order.customer_id}`}
               </div>
             </div>
-
-            {/* HAWB */}
             <div>
               <span className="text-xs text-gray-500 uppercase tracking-wider">HAWB</span>
               <div className="text-xl font-bold text-white font-mono">{order.hawb}</div>
             </div>
-
-            {/* HTC Order # */}
             <div>
               <span className="text-xs text-gray-500 uppercase tracking-wider">HTC Order #</span>
-              <div className="text-xl text-white font-mono">
-                {order.htc_order_number ?? '-'}
-              </div>
+              <div className="text-xl text-white font-mono">{order.htc_order_number ?? '-'}</div>
             </div>
           </div>
 
-          {/* Right: Status-specific area */}
-          <div className="flex items-center gap-4">
-            {/* Status Badge - hidden when ready (buttons are sufficient) */}
-            {order.status !== 'ready' && (
-              <div className={`px-4 py-3 rounded-lg border ${statusDisplay.bg} text-right`}>
-                <div className={`font-medium ${statusDisplay.color}`}>
-                  {statusDisplay.label}
-                </div>
-                {order.status === 'incomplete' && (
-                  <div className="text-xs text-gray-400 mt-1">
-                    {presentRequiredCount}/{requiredFields.length} required fields
-                    {conflictCount > 0 && ` · ${conflictCount} conflict${conflictCount > 1 ? 's' : ''}`}
-                  </div>
-                )}
-              </div>
+          {/* Right: Buttons and extra info */}
+          <div className="flex items-center gap-3">
+            {/* Progress info for incomplete status */}
+            {order.status === 'incomplete' && (
+              <span className="text-xs text-gray-400">
+                {presentRequiredCount}/{requiredFields.length} required
+                {conflictCount > 0 && ` · ${conflictCount} conflict${conflictCount > 1 ? 's' : ''}`}
+              </span>
             )}
 
             {/* Approve/Reject Buttons - only when ready */}
             {canApproveReject && (
-              <div className="flex gap-2">
+              <>
                 <button
                   onClick={onReject}
                   disabled={isRejecting || isApproving}
-                  className="px-4 py-2 rounded-lg bg-red-600 text-white hover:bg-red-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                  className="px-4 py-1.5 rounded-lg bg-red-600 text-white hover:bg-red-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors text-sm"
                 >
                   {isRejecting ? 'Rejecting...' : 'Reject'}
                 </button>
                 <button
                   onClick={onApprove}
                   disabled={isApproving || isRejecting}
-                  className="px-4 py-2 rounded-lg bg-green-600 text-white hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                  className="px-4 py-1.5 rounded-lg bg-green-600 text-white hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors text-sm"
                 >
                   {isApproving ? 'Creating...' : 'Approve'}
                 </button>
-              </div>
+              </>
             )}
           </div>
         </div>
@@ -572,7 +693,7 @@ export function PendingOrderDetailView({
       {/* Two Column Layout */}
       <div className="flex-1 min-h-0 flex overflow-hidden">
         {/* Left Column - Order Fields */}
-        <div className="flex-1 overflow-auto p-6 border-r border-gray-700">
+        <div className="flex-1 min-w-0 overflow-auto p-6 border-r border-gray-700">
           {/* Required Fields */}
           <div className="space-y-2">
             <h3 className="text-xs font-medium text-gray-500 uppercase tracking-wider mb-3">
@@ -587,6 +708,8 @@ export function PendingOrderDetailView({
                 onConfirm={handleFieldConfirm}
                 isConfirming={confirmingFields.has(field.name)}
                 canEdit={canEdit}
+                isHighlighted={hoveredFieldName === field.name || (hoveredSubRunId !== null && field.sub_run_id === hoveredSubRunId)}
+                onHover={setHoveredFieldName}
               />
             ))}
           </div>
@@ -605,6 +728,8 @@ export function PendingOrderDetailView({
                 onConfirm={handleFieldConfirm}
                 isConfirming={confirmingFields.has(field.name)}
                 canEdit={canEdit}
+                isHighlighted={hoveredFieldName === field.name || (hoveredSubRunId !== null && field.sub_run_id === hoveredSubRunId)}
+                onHover={setHoveredFieldName}
               />
             ))}
           </div>
@@ -613,15 +738,22 @@ export function PendingOrderDetailView({
         {/* Right Column - Data Sources */}
         <div className="w-[400px] flex-shrink-0 overflow-auto p-6 bg-gray-800/30 flex flex-col">
           <h3 className="text-xs font-medium text-gray-500 uppercase tracking-wider mb-3">
-            Sources ({order.contributing_sub_runs.length} PDFs)
+            Sources ({order.contributing_sources.length} PDFs)
           </h3>
 
           <div className="space-y-3 flex-1">
-            {order.contributing_sub_runs.length === 0 ? (
+            {order.contributing_sources.length === 0 ? (
               <p className="text-gray-500 text-sm italic">No sources yet</p>
             ) : (
-              order.contributing_sub_runs.map((source, index) => (
-                <SourceCard key={source.sub_run_id ?? `mock-${index}`} source={source} onViewSubRun={onViewSubRun} />
+              order.contributing_sources.map((source, index) => (
+                <SourceCard
+                  key={source.sub_run_id ?? `mock-${index}`}
+                  source={source}
+                  onViewSubRun={onViewSubRun}
+                  hoveredFieldName={hoveredFieldName}
+                  onHover={setHoveredSubRunId}
+                  isHovered={hoveredSubRunId === source.sub_run_id && source.sub_run_id !== null}
+                />
               ))
             )}
           </div>

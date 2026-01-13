@@ -6,12 +6,23 @@ from output executions and manual input, execution against HTC, and user interac
 """
 import json
 import logging
+from dataclasses import asdict
 from typing import Any
+
+from datetime import datetime, timezone
 
 from shared.database import DatabaseConnectionManager
 from shared.database.repositories.pending_action import PendingActionRepository
 from shared.database.repositories.pending_action_field import PendingActionFieldRepository
 from shared.database.repositories.eto_sub_run_output_execution import EtoSubRunOutputExecutionRepository
+from shared.database.repositories.eto_run import EtoRunRepository
+from shared.database.repositories.eto_sub_run import EtoSubRunRepository
+from shared.database.repositories.pdf_file import PdfFileRepository
+
+from shared.types.eto_runs import EtoRunCreate, EtoRunUpdate
+from shared.types.eto_sub_runs import EtoSubRunCreate, EtoSubRunUpdate
+from shared.types.eto_sub_run_output_executions import EtoSubRunOutputExecutionCreate
+from shared.types.pdf_files import PdfFileCreate, PdfObjects, TextWord, GraphicRect, GraphicLine, GraphicCurve, Image, Table
 
 from shared.types.pending_actions import (
     PendingAction,
@@ -20,13 +31,19 @@ from shared.types.pending_actions import (
     PendingActionFieldCreate,
     PendingActionType,
     PendingActionStatus,
+    PendingActionListView,
+    PendingActionDetailView,
+    PendingActionFieldView,
+    ContributingSource,
     CleanupResult,
     ExecuteResult,
     ORDER_FIELDS,
     REQUIRED_ORDER_FIELDS,
+    OPTIONAL_ORDER_FIELDS,
 )
 
 from features.htc_integration import HtcIntegrationService
+from shared.events.order_events_old import order_event_manager
 
 from .transformers import FIELD_TRANSFORMERS
 
@@ -67,6 +84,11 @@ class OrderManagementService:
         self.pending_action_field_repo = PendingActionFieldRepository(connection_manager=connection_manager)
         self.output_execution_repo = EtoSubRunOutputExecutionRepository(connection_manager=connection_manager)
 
+        # Additional repositories for mock data creation
+        self.eto_run_repo = EtoRunRepository(connection_manager=connection_manager)
+        self.eto_sub_run_repo = EtoSubRunRepository(connection_manager=connection_manager)
+        self.pdf_file_repo = PdfFileRepository(connection_manager=connection_manager)
+
     # ========== Main Entry Point ==========
 
     def process_output_execution(self, output_execution_id: int) -> PendingAction:
@@ -92,7 +114,14 @@ class OrderManagementService:
             hawb=output_execution.hawb,
         )
 
-        # 3. Find or create the pending action record
+        # 3. Check if pending action already exists (for event type determination)
+        existing_action = self.pending_action_repo.get_active_by_customer_hawb(
+            customer_id=output_execution.customer_id,
+            hawb=output_execution.hawb,
+        )
+        is_new_action = existing_action is None
+
+        # 4. Find or create the pending action record
         pending_action = self._get_or_create_pending_action(
             customer_id=output_execution.customer_id,
             hawb=output_execution.hawb,
@@ -100,20 +129,36 @@ class OrderManagementService:
             htc_order_number=htc_order_number,
         )
 
-        # 4. Transform output channels -> order fields
+        # 5. Transform output channels -> order fields
         order_fields = self._transform_output_to_fields(
             output_channel_data=output_execution.output_channel_data,
         )
 
-        # 5. Add field values to pending action (handles conflict detection)
+        # 5b. Resolve address IDs for location fields
+        order_fields = self._resolve_address_ids(order_fields)
+
+        # 6. Add field values to pending action (handles conflict detection)
         self._add_fields_to_action(
             pending_action_id=pending_action.id,
             output_execution_id=output_execution_id,
             fields=order_fields,
         )
 
-        # 6. Recalculate action status based on current field state
+        # 7. Recalculate action status based on current field state
         updated_action = self._recalculate_action_status(pending_action.id)
+
+        # 8. Broadcast event for real-time UI updates
+        event_type = "pending_action_created" if is_new_action else "pending_action_updated"
+        order_event_manager.broadcast_sync(
+            event_type,
+            {
+                "id": updated_action.id,
+                "status": updated_action.status,
+                "action_type": updated_action.action_type,
+                "hawb": updated_action.hawb,
+                "customer_id": updated_action.customer_id,
+            }
+        )
 
         return updated_action
 
@@ -251,6 +296,69 @@ class OrderManagementService:
 
         return result
 
+    def _resolve_address_ids(self, order_fields: dict[str, Any]) -> dict[str, Any]:
+        """
+        Resolve address IDs for location fields by looking up addresses in HTC.
+
+        For pickup_location and delivery_location fields, if address_id is None
+        but address is present, attempts to find a matching address in the HTC database.
+
+        Args:
+            order_fields: Dict of transformed order fields
+
+        Returns:
+            Updated order_fields with resolved address IDs
+        """
+        location_fields = ["pickup_location", "delivery_location"]
+
+        for field_name in location_fields:
+            if field_name not in order_fields:
+                continue
+
+            location = order_fields[field_name]
+
+            # Handle both dict and LocationValue objects
+            if hasattr(location, "address_id"):
+                # LocationValue object
+                if location.address_id is not None:
+                    continue  # Already has an address_id
+
+                address = location.address
+                if not address:
+                    continue
+
+                # Try to find address in HTC
+                address_id = self.htc_service.find_address_id(address)
+                if address_id is not None:
+                    logger.debug(f"Resolved {field_name} address_id: {address_id}")
+                    # Create new LocationValue with resolved ID
+                    from shared.types.pending_actions import LocationValue
+                    order_fields[field_name] = LocationValue(
+                        address_id=int(address_id),
+                        name=location.name,
+                        address=location.address,
+                    )
+                else:
+                    logger.debug(f"Could not resolve address for {field_name}: {address}")
+
+            elif isinstance(location, dict):
+                # Already a dict (e.g., from model_dump)
+                if location.get("address_id") is not None:
+                    continue
+
+                address = location.get("address")
+                if not address:
+                    continue
+
+                address_id = self.htc_service.find_address_id(address)
+                if address_id is not None:
+                    logger.debug(f"Resolved {field_name} address_id: {address_id}")
+                    location["address_id"] = int(address_id)
+                else:
+                    logger.debug(f"Could not resolve address for {field_name}: {address}")
+
+        return order_fields
+
     def _add_fields_to_action(
         self,
         pending_action_id: int,
@@ -262,7 +370,7 @@ class OrderManagementService:
 
         For each field:
         - If no existing values: create with is_selected=True
-        - If value matches existing: create with is_selected=False (duplicate)
+        - If value matches existing: skip (duplicate - no point storing same value twice)
         - If value differs: clear all selections, create with is_selected=False (conflict)
         """
         # Get all existing fields for this action
@@ -301,17 +409,8 @@ class OrderManagementService:
                 )
 
                 if value_matches:
-                    # Duplicate value - add but don't select
-                    logger.debug(f"Adding duplicate value for field '{field_name}'")
-                    self.pending_action_field_repo.create(
-                        data=PendingActionFieldCreate(
-                            pending_action_id=pending_action_id,
-                            output_execution_id=output_execution_id,
-                            field_name=field_name,
-                            value=value,
-                            is_selected=False,
-                        )
-                    )
+                    # Duplicate value - skip entirely (no point storing identical values)
+                    logger.debug(f"Skipping duplicate value for field '{field_name}'")
                 else:
                     # Different value - conflict! Clear all selections
                     logger.debug(f"Conflict detected for field '{field_name}' - clearing selections")
@@ -339,6 +438,104 @@ class OrderManagementService:
             return json.dumps([v.model_dump() for v in value], sort_keys=True)
         else:
             return json.dumps(value, sort_keys=True)
+
+    def _filter_unchanged_fields(
+        self,
+        fields: dict[str, list[PendingActionFieldView]],
+        current_htc_values: dict[str, Any],
+    ) -> dict[str, list[PendingActionFieldView]]:
+        """
+        Filter out fields where the proposed value matches the current HTC value.
+
+        For updates, we only want to show fields that actually differ from HTC.
+
+        Rules:
+        - If field has multiple values (conflict), always show it (user must resolve)
+        - If field has single value or selected value, compare to HTC value
+        - For location fields: compare by address_id only
+          - If proposed address_id is null → always include (needs resolution)
+          - If address_ids match → exclude (same address)
+        - For other fields: JSON-normalized comparison
+        """
+        filtered: dict[str, list[PendingActionFieldView]] = {}
+        location_fields = {"pickup_location", "delivery_location"}
+
+        for field_name, field_values in fields.items():
+            htc_value = current_htc_values.get(field_name)
+
+            # If HTC has no value for this field, it's a new value - include it
+            if htc_value is None:
+                filtered[field_name] = field_values
+                continue
+
+            # If multiple values exist (conflict), always show for user resolution
+            if len(field_values) > 1:
+                # Check if there's a selected value
+                selected = [fv for fv in field_values if fv.is_selected]
+                if not selected:
+                    # No selection yet - conflict, show all
+                    filtered[field_name] = field_values
+                    continue
+                # Has selection - compare selected value to HTC
+                proposed_value = selected[0].value
+            else:
+                # Single value
+                proposed_value = field_values[0].value
+
+            # Location fields: compare by address_id only
+            if field_name in location_fields:
+                proposed_id = None
+                htc_id = None
+
+                # Extract proposed address_id
+                if isinstance(proposed_value, dict):
+                    proposed_id = proposed_value.get("address_id")
+                elif hasattr(proposed_value, "address_id"):
+                    proposed_id = proposed_value.address_id
+
+                # Extract HTC address_id
+                if isinstance(htc_value, dict):
+                    htc_id = htc_value.get("address_id")
+                elif hasattr(htc_value, "address_id"):
+                    htc_id = htc_value.address_id
+
+                # If proposed address_id is null, it's always an update (needs resolution)
+                if proposed_id is None:
+                    filtered[field_name] = field_values
+                    continue
+
+                # If address_ids match, exclude (same address)
+                if proposed_id == htc_id:
+                    continue  # Same address - not an update
+
+                # Different address_ids - include
+                filtered[field_name] = field_values
+                continue
+
+            # String fields: normalize whitespace before comparison
+            if isinstance(proposed_value, str) and isinstance(htc_value, str):
+                proposed_normalized = proposed_value.strip()
+                htc_normalized = htc_value.strip()
+
+                if proposed_normalized != htc_normalized:
+                    filtered[field_name] = field_values
+                # else: values match - exclude this field
+                continue
+
+            # Other fields: JSON-normalized comparison
+            try:
+                proposed_normalized = json.dumps(proposed_value, sort_keys=True)
+                htc_normalized = json.dumps(htc_value, sort_keys=True)
+
+                if proposed_normalized != htc_normalized:
+                    # Values differ - include this field
+                    filtered[field_name] = field_values
+                # else: values match - exclude this field
+            except (TypeError, ValueError):
+                # Can't serialize for comparison - include to be safe
+                filtered[field_name] = field_values
+
+        return filtered
 
     def _recalculate_action_status(self, pending_action_id: int) -> PendingAction:
         """
@@ -372,8 +569,9 @@ class OrderManagementService:
             if count > 1 and field_name not in selected_field_names:
                 conflict_count += 1
 
-        # Calculate required fields present
+        # Calculate required and optional fields present
         required_fields_present = len(selected_field_names.intersection(REQUIRED_ORDER_FIELDS))
+        optional_fields_present = len(selected_field_names.intersection(OPTIONAL_ORDER_FIELDS))
 
         # Determine status based on priority
         new_status: PendingActionStatus
@@ -386,19 +584,22 @@ class OrderManagementService:
         else:
             new_status = "ready"
 
-        # Update action with new status and counts
+        # Update action with new status, counts, and last_processed_at
         updated_action = self.pending_action_repo.update(
             action_id=pending_action_id,
             updates=PendingActionUpdate(
                 status=new_status,
                 required_fields_present=required_fields_present,
+                optional_fields_present=optional_fields_present,
                 conflict_count=conflict_count,
+                last_processed_at=datetime.now(timezone.utc),
             ),
         )
 
         logger.debug(
             f"Recalculated action {pending_action_id}: status={new_status}, "
-            f"required_fields={required_fields_present}/{len(REQUIRED_ORDER_FIELDS)}, "
+            f"required={required_fields_present}/{len(REQUIRED_ORDER_FIELDS)}, "
+            f"optional={optional_fields_present}/{len(OPTIONAL_ORDER_FIELDS)}, "
             f"conflicts={conflict_count}"
         )
 
@@ -426,6 +627,316 @@ class OrderManagementService:
         """
         # TODO: Implement retry logic
         raise NotImplementedError()
+
+    # ========== Read Operations ==========
+
+    def list_pending_actions(
+        self,
+        status: PendingActionStatus | None = None,
+        action_type: PendingActionType | None = None,
+        is_read: bool | None = None,
+        customer_id: int | None = None,
+        search_query: str | None = None,
+        limit: int = 50,
+        offset: int = 0,
+        order_by: str = "updated_at",
+        desc: bool = True,
+    ) -> tuple[list[PendingActionListView], int]:
+        """
+        List pending actions with filtering, pagination, and customer name enrichment.
+
+        Args:
+            status: Filter by status (optional)
+            action_type: Filter by action type - "create", "update", "ambiguous" (optional)
+            is_read: Filter by read status (optional)
+            customer_id: Filter by customer ID (optional)
+            search_query: Search in HAWB (optional)
+            limit: Maximum number of results (default 50)
+            offset: Number of results to skip (default 0)
+            order_by: Field to order by (default: updated_at)
+            desc: Sort descending if True (default: True)
+
+        Returns:
+            Tuple of (list of PendingActionListView with customer names, total count)
+        """
+        # Get paginated results from repository
+        items, total = self.pending_action_repo.get_all_with_counts(
+            status=status,
+            action_type=action_type,
+            is_read=is_read,
+            customer_id=customer_id,
+            search_query=search_query,
+            limit=limit,
+            offset=offset,
+            order_by=order_by,
+            desc=desc,
+        )
+
+        # Enrich items with customer names
+        enriched_items = [
+            PendingActionListView(
+                id=item.id,
+                customer_id=item.customer_id,
+                customer_name=self.htc_service.get_customer_name(item.customer_id),
+                hawb=item.hawb,
+                htc_order_number=item.htc_order_number,
+                action_type=item.action_type,
+                status=item.status,
+                required_fields_present=item.required_fields_present,
+                required_fields_total=item.required_fields_total,
+                optional_fields_present=item.optional_fields_present,
+                optional_fields_total=item.optional_fields_total,
+                conflict_count=item.conflict_count,
+                is_read=item.is_read,
+                created_at=item.created_at,
+                updated_at=item.updated_at,
+                last_processed_at=item.last_processed_at,
+            )
+            for item in items
+        ]
+
+        return enriched_items, total
+
+    def set_read_status(self, pending_action_id: int, is_read: bool) -> None:
+        """
+        Set the read/unread status of a pending action.
+
+        This is an idempotent operation - setting to the same value has no effect.
+
+        Args:
+            pending_action_id: ID of the pending action
+            is_read: True to mark as read, False to mark as unread
+        """
+        self.pending_action_repo.update(
+            action_id=pending_action_id,
+            updates=PendingActionUpdate(is_read=is_read),
+        )
+        logger.debug(f"Set pending action {pending_action_id} is_read={is_read}")
+
+    def get_pending_action_detail(self, action_id: int) -> PendingActionDetailView | None:
+        """
+        Get detailed view of a pending action including fields and contributing sources.
+
+        For updates, also fetches current HTC values for comparison display.
+
+        Args:
+            action_id: ID of the pending action
+
+        Returns:
+            PendingActionDetailView with all field values and contributing sources,
+            or None if action not found
+        """
+        # 1. Get the pending action
+        action = self.pending_action_repo.get_by_id(action_id)
+        if action is None:
+            return None
+
+        # 2. Get fields with source chain data (single JOIN query)
+        fields_with_sources = self.pending_action_field_repo.get_fields_with_sources_for_action(action_id)
+
+        # 3. Build field views grouped by field_name
+        fields: dict[str, list[PendingActionFieldView]] = {}
+        for row in fields_with_sources:
+            field_view = PendingActionFieldView(
+                id=row["id"],
+                field_name=row["field_name"],
+                value=row["value"],
+                is_selected=row["is_selected"],
+                is_approved_for_update=row["is_approved_for_update"],
+                sub_run_id=row["sub_run_id"],
+            )
+            if row["field_name"] not in fields:
+                fields[row["field_name"]] = []
+            fields[row["field_name"]].append(field_view)
+
+        # 4. Build contributing sources (grouped by sub_run_id)
+        sources_by_sub_run: dict[int, dict] = {}
+        for row in fields_with_sources:
+            sub_run_id = row["sub_run_id"]
+            if sub_run_id is None:
+                # User-provided value, skip for contributing sources
+                continue
+
+            if sub_run_id not in sources_by_sub_run:
+                # Determine source identifier
+                source_type = row["source_type"] or "manual"
+                if source_type == "email" and row["source_email"]:
+                    source_identifier = row["source_email"]
+                else:
+                    source_identifier = "Manual Upload"
+
+                sources_by_sub_run[sub_run_id] = {
+                    "sub_run_id": sub_run_id,
+                    "pdf_filename": row["pdf_filename"] or "Unknown",
+                    "template_name": row["template_name"],
+                    "source_type": source_type,
+                    "source_identifier": source_identifier,
+                    "fields_contributed": set(),
+                    "contributed_at": row["contributed_at"],
+                }
+
+            sources_by_sub_run[sub_run_id]["fields_contributed"].add(row["field_name"])
+
+        # Convert to ContributingSource objects
+        contributing_sources = [
+            ContributingSource(
+                sub_run_id=src["sub_run_id"],
+                pdf_filename=src["pdf_filename"],
+                template_name=src["template_name"],
+                source_type=src["source_type"],
+                source_identifier=src["source_identifier"],
+                fields_contributed=sorted(src["fields_contributed"]),
+                contributed_at=src["contributed_at"],
+            )
+            for src in sources_by_sub_run.values()
+        ]
+        # Sort by contributed_at descending (most recent first)
+        contributing_sources.sort(key=lambda s: s.contributed_at, reverse=True)
+
+        # 5. Get current HTC values for updates
+        current_htc_values: dict[str, Any] | None = None
+        if action.action_type == "update" and action.htc_order_number is not None:
+            htc_fields = self.htc_service.get_order_fields(
+                order_number=action.htc_order_number
+            )
+            if htc_fields is not None:
+                # Convert dataclass to dict, then transform to ORDER_FIELDS structure
+                from features.order_management.transformers import transform_htc_values_to_order_fields
+                raw_htc_values = asdict(htc_fields)
+                current_htc_values = transform_htc_values_to_order_fields(raw_htc_values)
+
+                # Filter out fields where proposed value matches HTC value
+                fields = self._filter_unchanged_fields(fields, current_htc_values)
+
+        # 6. Build and return the detail view
+        return PendingActionDetailView(
+            id=action.id,
+            customer_id=action.customer_id,
+            customer_name=self.htc_service.get_customer_name(action.customer_id),
+            hawb=action.hawb,
+            htc_order_number=action.htc_order_number,
+            action_type=action.action_type,
+            status=action.status,
+            required_fields_present=action.required_fields_present,
+            required_fields_total=len(REQUIRED_ORDER_FIELDS),
+            optional_fields_present=action.optional_fields_present,
+            optional_fields_total=len(OPTIONAL_ORDER_FIELDS),
+            conflict_count=action.conflict_count,
+            error_message=action.error_message,
+            error_at=action.error_at,
+            is_read=action.is_read,
+            created_at=action.created_at,
+            updated_at=action.updated_at,
+            last_processed_at=action.last_processed_at,
+            fields=fields,
+            contributing_sources=contributing_sources,
+            current_htc_values=current_htc_values,
+        )
+
+    # ========== Mock Data Creation ==========
+
+    def create_mock_output_execution(
+        self,
+        customer_id: int,
+        hawb: str,
+        output_channel_data: dict[str, Any],
+        pdf_filename: str = "mock_document.pdf",
+    ) -> PendingAction:
+        """
+        Create a mock output execution and process it through the normal flow.
+
+        Creates minimal stub records (pdf_file, eto_run, sub_run, output_execution)
+        with source_type='mock', then calls process_output_execution to trigger
+        the normal accumulation flow.
+
+        This allows testing the pending action system in isolation from ETO.
+
+        Args:
+            customer_id: Customer ID for the order
+            hawb: HAWB for the order
+            output_channel_data: Dict of output channel values (e.g., {"pickup_time_start": "2024-01-15 09:00"})
+            pdf_filename: Optional filename for the mock PDF (default: "mock_document.pdf")
+
+        Returns:
+            The created or updated PendingAction
+        """
+        logger.info(
+            f"Creating mock output execution: customer_id={customer_id}, "
+            f"hawb={hawb}, channels={list(output_channel_data.keys())}"
+        )
+
+        # 1. Create a minimal mock PDF file record
+        empty_objects = PdfObjects(
+            text_words=[],
+            graphic_rects=[],
+            graphic_lines=[],
+            graphic_curves=[],
+            images=[],
+            tables=[],
+        )
+        pdf_file = self.pdf_file_repo.create(
+            pdf_data=PdfFileCreate(
+                original_filename=pdf_filename,
+                file_hash=f"mock_{datetime.now().timestamp()}",
+                file_size_bytes=0,
+                file_path=f"mock/{pdf_filename}",
+                stored_at=datetime.now(),
+                extracted_objects=empty_objects,
+                page_count=1,
+            )
+        )
+        logger.debug(f"Created mock PDF file: id={pdf_file.id}")
+
+        # 2. Create a mock ETO run with source_type='mock'
+        eto_run = self.eto_run_repo.create(
+            data=EtoRunCreate(
+                pdf_file_id=pdf_file.id,
+                source_type="mock",
+                source_email_id=None,
+            )
+        )
+        # Set status to 'success' so the ETO worker doesn't try to process it
+        self.eto_run_repo.update(
+            run_id=eto_run.id,
+            updates=EtoRunUpdate(status="success"),
+        )
+        logger.debug(f"Created mock ETO run: id={eto_run.id} (status=success)")
+
+        # 3. Create a mock sub-run (single page, no template)
+        sub_run = self.eto_sub_run_repo.create(
+            data=EtoSubRunCreate(
+                eto_run_id=eto_run.id,
+                matched_pages="[1]",
+                template_version_id=None,
+            )
+        )
+        # Set status to 'success' so the ETO worker doesn't try to process it
+        self.eto_sub_run_repo.update(
+            sub_run_id=sub_run.id,
+            updates=EtoSubRunUpdate(status="success"),
+        )
+        logger.debug(f"Created mock sub-run: id={sub_run.id} (status=success)")
+
+        # 4. Create the output execution with the provided channel data
+        output_execution = self.output_execution_repo.create(
+            data=EtoSubRunOutputExecutionCreate(
+                sub_run_id=sub_run.id,
+                customer_id=customer_id,
+                hawb=hawb,
+                output_channel_data=output_channel_data,
+            )
+        )
+        logger.debug(f"Created mock output execution: id={output_execution.id}")
+
+        # 5. Process through the normal flow
+        pending_action = self.process_output_execution(output_execution.id)
+
+        logger.info(
+            f"Mock output execution processed: pending_action_id={pending_action.id}, "
+            f"status={pending_action.status}, action_type={pending_action.action_type}"
+        )
+
+        return pending_action
 
     # ========== User Interactions ==========
 
@@ -493,6 +1004,60 @@ class OrderManagementService:
 
     # ========== Cleanup ==========
 
+    def cleanup_sub_run_contributions(self, sub_run_id: int) -> CleanupResult:
+        """
+        Remove all field contributions from a sub-run being reprocessed.
+
+        Called by EtoRunsService BEFORE reprocessing a sub-run.
+
+        Steps:
+        1. Find all output executions for this sub_run_id
+        2. For each output execution, clean up its field contributions
+        3. Return aggregated cleanup results
+
+        Args:
+            sub_run_id: ID of the sub-run being reprocessed
+
+        Returns:
+            CleanupResult with counts of deleted fields and actions
+        """
+        logger.info(f"Cleaning up contributions from sub-run {sub_run_id}")
+
+        # Find all output executions for this sub-run
+        output_executions = self.output_execution_repo.get_by_sub_run_id(sub_run_id)
+
+        if not output_executions:
+            logger.debug(f"No output executions found for sub-run {sub_run_id}")
+            return CleanupResult(
+                fields_deleted=0,
+                actions_deleted=0,
+                actions_recalculated=0,
+            )
+
+        # Aggregate cleanup results
+        total_fields_deleted = 0
+        total_actions_deleted = 0
+        total_actions_recalculated = 0
+
+        for output_execution in output_executions:
+            result = self.cleanup_output_execution_contributions(output_execution.id)
+            total_fields_deleted += result.fields_deleted
+            total_actions_deleted += result.actions_deleted
+            total_actions_recalculated += result.actions_recalculated
+
+        logger.info(
+            f"Sub-run {sub_run_id} cleanup complete: "
+            f"fields_deleted={total_fields_deleted}, "
+            f"actions_deleted={total_actions_deleted}, "
+            f"actions_recalculated={total_actions_recalculated}"
+        )
+
+        return CleanupResult(
+            fields_deleted=total_fields_deleted,
+            actions_deleted=total_actions_deleted,
+            actions_recalculated=total_actions_recalculated,
+        )
+
     def cleanup_output_execution_contributions(self, output_execution_id: int) -> CleanupResult:
         """
         Remove all field contributions from an output execution being reprocessed or deleted.
@@ -506,6 +1071,67 @@ class OrderManagementService:
            a. Check if any extracted fields remain (output_execution_id IS NOT NULL)
            b. If NO extracted fields remain: delete the entire pending_action
            c. If extracted fields remain: recalculate status
+
+        Args:
+            output_execution_id: ID of the output execution being cleaned up
+
+        Returns:
+            CleanupResult with counts of deleted fields and actions
         """
-        # TODO: Implement cleanup
-        raise NotImplementedError()
+        logger.debug(f"Cleaning up contributions from output execution {output_execution_id}")
+
+        # Step 1: Find all affected pending actions
+        fields = self.pending_action_field_repo.get_fields_by_output_execution(output_execution_id)
+
+        if not fields:
+            logger.debug(f"No fields found for output execution {output_execution_id}")
+            return CleanupResult(fields_deleted=0, actions_deleted=0, actions_recalculated=0)
+
+        # Get unique pending_action_ids
+        affected_action_ids = set(f.pending_action_id for f in fields)
+        logger.debug(f"Found {len(fields)} fields affecting {len(affected_action_ids)} actions")
+
+        # Step 2: Delete all fields for this output execution
+        fields_deleted = self.pending_action_field_repo.delete_by_output_execution(output_execution_id)
+
+        # Step 3: Process each affected action
+        actions_deleted = 0
+        actions_recalculated = 0
+
+        for action_id in affected_action_ids:
+            # Check if any extracted fields remain
+            has_fields = self.pending_action_field_repo.has_extracted_fields_for_action(action_id)
+
+            if not has_fields:
+                # No extracted fields remain - delete the action
+                logger.debug(f"Deleting pending action {action_id} (no fields remaining)")
+                self.pending_action_repo.delete(action_id)
+                actions_deleted += 1
+
+                # Broadcast deletion event
+                order_event_manager.broadcast_sync("pending_action_deleted", {
+                    "id": action_id,
+                })
+            else:
+                # Fields remain - recalculate status
+                logger.debug(f"Recalculating status for pending action {action_id}")
+                updated_action = self._recalculate_action_status(action_id)
+                actions_recalculated += 1
+
+                # Broadcast update event
+                order_event_manager.broadcast_sync("pending_action_updated", {
+                    "id": updated_action.id,
+                    "status": updated_action.status,
+                    "action_type": updated_action.action_type,
+                })
+
+        logger.debug(
+            f"Output execution {output_execution_id} cleanup: "
+            f"fields={fields_deleted}, actions_deleted={actions_deleted}, recalculated={actions_recalculated}"
+        )
+
+        return CleanupResult(
+            fields_deleted=fields_deleted,
+            actions_deleted=actions_deleted,
+            actions_recalculated=actions_recalculated,
+        )

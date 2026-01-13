@@ -10,6 +10,7 @@ from .admin import router as admin_router
 from .eto_runs import router as eto_runs_router
 from .system_settings import router as system_settings_router
 from .auth import router as auth_router
+from .pending_actions import router as pending_actions_router
 
 __all__ = [
     'email_accounts_router',
@@ -22,4 +23,5 @@ __all__ = [
     'eto_runs_router',
     'system_settings_router',
     'auth_router',
+    'pending_actions_router',
 ]

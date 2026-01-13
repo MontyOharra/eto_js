@@ -52,12 +52,13 @@ Status flow:
 # Order Field Definitions
 # =========================
 
-OrderFieldDataType = Literal["string", "location", "dims"]
+OrderFieldDataType = Literal["string", "location", "dims", "datetime_range"]
 """
 Data types for order fields:
 - string: Simple string value (1:1 mapping from output channel)
 - location: Complex JSON with address_id, name, address (resolved from company_name + address channels)
 - dims: JSON array of dimension objects with calculated dim_weight
+- datetime_range: Date + time range from two datetime inputs (validates dates match)
 """
 
 
@@ -73,33 +74,42 @@ class OrderFieldDef:
     data_type: OrderFieldDataType
     required: bool               # Required for order creation?
     source_channels: tuple[str, ...]  # Output channels that feed this field
+    display_order: int           # Order in which to display the field (lower = first)
 
 
 # Order field definitions - maps output channels to order fields
+# display_order groups: Pickup (1-19), Delivery (20-39), Other (40+)
 ORDER_FIELDS: dict[str, OrderFieldDef] = {
-    # Simple string fields (1:1 mapping)
-    "mawb": OrderFieldDef("mawb", "MAWB", "string", False, ("mawb",)),
-    "pickup_time_start": OrderFieldDef("pickup_time_start", "Pickup Start", "string", True, ("pickup_time_start",)),
-    "pickup_time_end": OrderFieldDef("pickup_time_end", "Pickup End", "string", True, ("pickup_time_end",)),
-    "delivery_time_start": OrderFieldDef("delivery_time_start", "Delivery Start", "string", True, ("delivery_time_start",)),
-    "delivery_time_end": OrderFieldDef("delivery_time_end", "Delivery End", "string", True, ("delivery_time_end",)),
-    "pickup_notes": OrderFieldDef("pickup_notes", "Pickup Notes", "string", False, ("pickup_notes",)),
-    "delivery_notes": OrderFieldDef("delivery_notes", "Delivery Notes", "string", False, ("delivery_notes",)),
-    "order_notes": OrderFieldDef("order_notes", "Order Notes", "string", False, ("order_notes",)),
-
-    # Complex fields (multiple channels → one field)
+    # Pickup fields
     "pickup_location": OrderFieldDef(
         "pickup_location", "Pickup Location", "location", True,
-        ("pickup_company_name", "pickup_address")
+        ("pickup_address_id", "pickup_company_name", "pickup_address"), 1
     ),
+    "pickup_datetime": OrderFieldDef(
+        "pickup_datetime", "Pickup Time", "datetime_range", True,
+        ("pickup_time_start", "pickup_time_end"), 2
+    ),
+    "pickup_notes": OrderFieldDef("pickup_notes", "Pickup Notes", "string", False, ("pickup_notes",), 3),
+
+    # Delivery fields
     "delivery_location": OrderFieldDef(
         "delivery_location", "Delivery Location", "location", True,
-        ("delivery_company_name", "delivery_address")
+        ("delivery_address_id", "delivery_company_name", "delivery_address"), 20
     ),
-    "dims": OrderFieldDef("dims", "Dimensions", "dims", False, ("dims",)),
+    "delivery_datetime": OrderFieldDef(
+        "delivery_datetime", "Delivery Time", "datetime_range", True,
+        ("delivery_time_start", "delivery_time_end"), 21
+    ),
+    "delivery_notes": OrderFieldDef("delivery_notes", "Delivery Notes", "string", False, ("delivery_notes",), 22),
+
+    # Other fields
+    "mawb": OrderFieldDef("mawb", "MAWB", "string", False, ("mawb",), 40),
+    "order_notes": OrderFieldDef("order_notes", "Order Notes", "string", False, ("order_notes",), 41),
+    "dims": OrderFieldDef("dims", "Dimensions", "dims", False, ("dims",), 42),
 }
 
 REQUIRED_ORDER_FIELDS: list[str] = [f.name for f in ORDER_FIELDS.values() if f.required]
+OPTIONAL_ORDER_FIELDS: list[str] = [f.name for f in ORDER_FIELDS.values() if not f.required]
 VALID_ORDER_FIELD_NAMES: list[str] = list(ORDER_FIELDS.keys())
 
 
@@ -141,6 +151,31 @@ class DimObject(BaseModel):
 
 
 # =========================
+# Datetime Range Field Structure
+# =========================
+
+class DatetimeRangeValue(BaseModel):
+    """
+    Date + time range for pickup/delivery windows.
+
+    Created from two datetime inputs (e.g., pickup_time_start, pickup_time_end).
+    Validates that both datetimes are on the same date.
+
+    Stored as JSON in pending_action_fields.value for datetime_range fields.
+    """
+    model_config = ConfigDict(frozen=True)
+
+    date: str          # Date portion: "2024-01-15"
+    time_start: str    # Start time: "09:00"
+    time_end: str      # End time: "17:00"
+
+
+class DatetimeRangeError(Exception):
+    """Raised when datetime range validation fails (e.g., different dates)."""
+    pass
+
+
+# =========================
 # Pending Action Types
 # =========================
 
@@ -171,6 +206,7 @@ class PendingActionUpdate(BaseModel):
     htc_order_number: float | None = None
     status: PendingActionStatus | None = None
     required_fields_present: int | None = None
+    optional_fields_present: int | None = None
     conflict_count: int | None = None
     error_message: str | None = None
     error_at: datetime | None = None
@@ -192,6 +228,7 @@ class PendingAction(BaseModel):
     action_type: PendingActionType
     status: PendingActionStatus
     required_fields_present: int
+    optional_fields_present: int
     conflict_count: int
     error_message: str | None
     error_at: datetime | None
@@ -259,6 +296,8 @@ class PendingActionFieldView(BaseModel):
     Field value with source information for UI display.
 
     Used in detail views to show all values for a field with their sources.
+    Links directly to sub_run_id for frontend cross-highlighting between
+    field rows and contributing source cards.
     """
     model_config = ConfigDict(frozen=True)
 
@@ -267,8 +306,7 @@ class PendingActionFieldView(BaseModel):
     value: Any
     is_selected: bool
     is_approved_for_update: bool
-    output_execution_id: int | None
-    is_user_provided: bool  # Computed: output_execution_id is None
+    sub_run_id: int | None  # Resolved from output_execution, None for user-provided
 
 
 class PendingActionListView(BaseModel):
@@ -287,11 +325,32 @@ class PendingActionListView(BaseModel):
     action_type: PendingActionType
     status: PendingActionStatus
     required_fields_present: int
+    required_fields_total: int  # len(REQUIRED_ORDER_FIELDS) - for display like "2/8"
+    optional_fields_present: int
+    optional_fields_total: int  # len(OPTIONAL_ORDER_FIELDS) - for display like "1/4"
     conflict_count: int
     is_read: bool
     created_at: datetime
     updated_at: datetime
     last_processed_at: datetime | None
+
+
+class ContributingSource(BaseModel):
+    """
+    A source (sub-run) that contributed field values to a pending action.
+
+    Used in detail views to show where data came from and enable
+    cross-highlighting between field rows and source cards.
+    """
+    model_config = ConfigDict(frozen=True)
+
+    sub_run_id: int
+    pdf_filename: str
+    template_name: str | None  # None if no template matched
+    source_type: str  # "email" or "manual"
+    source_identifier: str  # Email address or "Manual Upload"
+    fields_contributed: list[str]  # Field names this source contributed
+    contributed_at: datetime
 
 
 class PendingActionDetailView(BaseModel):
@@ -311,6 +370,9 @@ class PendingActionDetailView(BaseModel):
     action_type: PendingActionType
     status: PendingActionStatus
     required_fields_present: int
+    required_fields_total: int  # len(REQUIRED_ORDER_FIELDS) - for display like "2/8"
+    optional_fields_present: int
+    optional_fields_total: int  # len(OPTIONAL_ORDER_FIELDS) - for display like "1/4"
     conflict_count: int
     error_message: str | None
     error_at: datetime | None
@@ -322,6 +384,13 @@ class PendingActionDetailView(BaseModel):
     # All field values grouped by field_name
     # Each field may have multiple values (for conflict resolution display)
     fields: dict[str, list[PendingActionFieldView]]
+
+    # Contributing sources for cross-highlighting with fields
+    contributing_sources: list[ContributingSource]
+
+    # Current HTC values for updates (None for creates)
+    # Used to show "Current → Proposed" comparison in update detail view
+    current_htc_values: dict[str, Any] | None
 
 
 # =========================

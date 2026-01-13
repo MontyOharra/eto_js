@@ -10,6 +10,7 @@ import type {
   GetPendingOrdersParams,
   GetPendingOrdersResponse,
   GetPendingOrderDetailResponse,
+  GetPendingActionDetailResponse,
   ConfirmFieldRequest,
   ConfirmFieldResponse,
   GetPendingUpdatesParams,
@@ -93,14 +94,14 @@ export function usePendingOrders(params?: GetPendingOrdersParams) {
 }
 
 /**
- * Fetch detail for a single pending order
+ * Fetch detail for a single pending order (create action)
  */
 export function usePendingOrderDetail(id: number | null) {
   return useQuery({
     queryKey: orderManagementQueryKeys.pendingOrderDetail(id!),
-    queryFn: async (): Promise<GetPendingOrderDetailResponse> => {
-      const response = await apiClient.get<GetPendingOrderDetailResponse>(
-        `${baseUrl}/pending-orders/${id}`
+    queryFn: async (): Promise<GetPendingActionDetailResponse> => {
+      const response = await apiClient.get<GetPendingActionDetailResponse>(
+        `/api/pending-actions/${id}`
       );
       return response.data;
     },
@@ -248,9 +249,9 @@ export function usePendingUpdates(params?: GetPendingUpdatesParams) {
 export function usePendingUpdateDetail(id: number | null) {
   return useQuery({
     queryKey: orderManagementQueryKeys.pendingUpdateDetail(id!),
-    queryFn: async (): Promise<GetPendingUpdateDetailResponse> => {
-      const response = await apiClient.get<GetPendingUpdateDetailResponse>(
-        `${baseUrl}/pending-updates/${id}`
+    queryFn: async (): Promise<GetPendingActionDetailResponse> => {
+      const response = await apiClient.get<GetPendingActionDetailResponse>(
+        `/api/pending-actions/${id}`
       );
       return response.data;
     },
@@ -419,19 +420,49 @@ export function useOrderHistory(hawb: string | null) {
 }
 
 // ============================================================================
-// Unified Actions Hooks
+// Pending Actions Hooks (replaces old unified-actions)
 // ============================================================================
 
 /**
- * Fetch unified list of pending orders and updates
+ * Fetch list of pending actions (unified orders and updates)
  */
-export function useUnifiedActions(params?: GetUnifiedActionsParams) {
+export function usePendingActions(params?: GetUnifiedActionsParams) {
   return useQuery({
     queryKey: orderManagementQueryKeys.unifiedActionsList(params),
     queryFn: async (): Promise<GetUnifiedActionsResponse> => {
+      // Map the params to match the new API parameter names
+      const apiParams: Record<string, unknown> = {};
+      if (params?.action_type && params.action_type !== 'all') {
+        apiParams.action_type = params.action_type;
+      }
+      if (params?.status) {
+        apiParams.status = params.status;
+      }
+      if (params?.is_read !== undefined) {
+        apiParams.is_read = params.is_read;
+      }
+      if (params?.customer_id !== undefined) {
+        apiParams.customer_id = params.customer_id;
+      }
+      if (params?.search) {
+        apiParams.search = params.search;
+      }
+      if (params?.limit !== undefined) {
+        apiParams.limit = params.limit;
+      }
+      if (params?.offset !== undefined) {
+        apiParams.offset = params.offset;
+      }
+      if (params?.sort_by) {
+        apiParams.sort_by = params.sort_by;
+      }
+      if (params?.sort_order) {
+        apiParams.sort_order = params.sort_order;
+      }
+
       const response = await apiClient.get<GetUnifiedActionsResponse>(
-        `${baseUrl}/unified-actions`,
-        { params }
+        '/api/pending-actions',
+        { params: apiParams }
       );
       return response.data;
     },
@@ -441,6 +472,9 @@ export function useUnifiedActions(params?: GetUnifiedActionsParams) {
   });
 }
 
+// Backward compatibility alias
+export const useUnifiedActions = usePendingActions;
+
 /**
  * Mark an item as read or unread
  */
@@ -449,27 +483,17 @@ export function useMarkRead() {
 
   return useMutation({
     mutationFn: async (request: MarkReadRequest): Promise<MarkReadResponse> => {
-      const response = await apiClient.post<MarkReadResponse>(
-        `${baseUrl}/mark-read`,
-        request
+      const response = await apiClient.patch<MarkReadResponse>(
+        `/api/pending-actions/${request.id}/read-status`,
+        { is_read: request.is_read }
       );
       return response.data;
     },
-    onSuccess: (_data, variables) => {
+    onSuccess: () => {
       // Invalidate unified actions list
       queryClient.invalidateQueries({
         queryKey: orderManagementQueryKeys.unifiedActions(),
       });
-      // Also invalidate the specific type's list
-      if (variables.type === 'create') {
-        queryClient.invalidateQueries({
-          queryKey: orderManagementQueryKeys.pendingOrders(),
-        });
-      } else {
-        queryClient.invalidateQueries({
-          queryKey: orderManagementQueryKeys.pendingUpdates(),
-        });
-      }
     },
   });
 }

@@ -413,3 +413,105 @@ class PendingActionFieldRepository(BaseRepository[PendingActionFieldModel]):
             ) is not None
 
             return exists
+
+    def get_fields_with_sources_for_action(self, action_id: int) -> list[dict]:
+        """
+        Get all fields for a pending action with their source chain data via JOINs.
+
+        Returns field data with resolved sub_run_id and source information for
+        building the detail view response.
+
+        Args:
+            action_id: Pending action ID
+
+        Returns:
+            List of dicts with field data and source chain:
+            - id, field_name, value, is_selected, is_approved_for_update
+            - sub_run_id, pdf_filename, template_name, source_type, source_email, contributed_at
+        """
+        from shared.database.models import (
+            EtoSubRunOutputExecutionModel,
+            EtoSubRunModel,
+            EtoRunModel,
+            PdfFileModel,
+            EmailModel,
+            PdfTemplateVersionModel,
+            PdfTemplateModel,
+        )
+
+        with self._get_session() as session:
+            # Build the JOIN query
+            query = (
+                session.query(
+                    self.model_class.id,
+                    self.model_class.field_name,
+                    self.model_class.value,
+                    self.model_class.is_selected,
+                    self.model_class.is_approved_for_update,
+                    self.model_class.output_execution_id,
+                    EtoSubRunOutputExecutionModel.sub_run_id,
+                    EtoSubRunOutputExecutionModel.created_at.label("contributed_at"),
+                    PdfFileModel.original_filename.label("pdf_filename"),
+                    PdfTemplateModel.name.label("template_name"),
+                    EtoRunModel.source_type,
+                    EmailModel.sender_email.label("source_email"),
+                )
+                .outerjoin(
+                    EtoSubRunOutputExecutionModel,
+                    self.model_class.output_execution_id == EtoSubRunOutputExecutionModel.id
+                )
+                .outerjoin(
+                    EtoSubRunModel,
+                    EtoSubRunOutputExecutionModel.sub_run_id == EtoSubRunModel.id
+                )
+                .outerjoin(
+                    EtoRunModel,
+                    EtoSubRunModel.eto_run_id == EtoRunModel.id
+                )
+                .outerjoin(
+                    PdfFileModel,
+                    EtoRunModel.pdf_file_id == PdfFileModel.id
+                )
+                .outerjoin(
+                    EmailModel,
+                    EtoRunModel.source_email_id == EmailModel.id
+                )
+                .outerjoin(
+                    PdfTemplateVersionModel,
+                    EtoSubRunModel.template_version_id == PdfTemplateVersionModel.id
+                )
+                .outerjoin(
+                    PdfTemplateModel,
+                    PdfTemplateVersionModel.pdf_template_id == PdfTemplateModel.id
+                )
+                .filter(self.model_class.pending_action_id == action_id)
+                .order_by(self.model_class.field_name, self.model_class.id)
+            )
+
+            results = query.all()
+
+            # Convert to list of dicts, parsing JSON values
+            output = []
+            for row in results:
+                # Parse JSON value
+                try:
+                    value = json.loads(row.value)
+                except (json.JSONDecodeError, TypeError):
+                    value = row.value
+
+                output.append({
+                    "id": row.id,
+                    "field_name": row.field_name,
+                    "value": value,
+                    "is_selected": row.is_selected,
+                    "is_approved_for_update": row.is_approved_for_update,
+                    "output_execution_id": row.output_execution_id,
+                    "sub_run_id": row.sub_run_id,
+                    "contributed_at": row.contributed_at,
+                    "pdf_filename": row.pdf_filename,
+                    "template_name": row.template_name,
+                    "source_type": row.source_type,
+                    "source_email": row.source_email,
+                })
+
+            return output

@@ -14,7 +14,8 @@ import type {
   PendingUpdateStatus,
   OrderHistory,
   ActionType,
-  UnifiedActionListItem,
+  PendingActionListResponse,
+  PendingActionDetail,
   UnifiedActionListResponse,
   MarkReadRequest,
   MarkReadResponse,
@@ -233,36 +234,49 @@ export interface GetOrderHistoryParams {
 export type GetOrderHistoryResponse = OrderHistory;
 
 // =============================================================================
-// Unified Actions API
+// Pending Actions API (replaces old unified-actions)
 // =============================================================================
 
 /**
- * Query params for GET /order-management/unified-actions
+ * Query params for GET /api/pending-actions
  */
-export interface GetUnifiedActionsParams {
-  /** Filter by action type */
-  type?: ActionType | 'all';
-
-  /** Filter by status (varies by type) */
+export interface GetPendingActionsParams {
+  /** Filter by status */
   status?: string;
 
-  /** Filter by customer ID */
-  customer_id?: number;
-
-  /** Search by HAWB (partial match) or HTC order number (exact match) */
-  search?: string;
+  /** Filter by action type */
+  action_type?: ActionType | 'all';
 
   /** Filter by read/unread state */
   is_read?: boolean;
 
+  /** Filter by customer ID */
+  customer_id?: number;
+
+  /** Search by HAWB */
+  search?: string;
+
   /** Pagination */
   limit?: number;
   offset?: number;
+
+  /** Sorting */
+  sort_by?: 'updated_at' | 'created_at' | 'last_processed_at' | 'hawb' | 'status';
+  sort_order?: 'asc' | 'desc';
 }
 
 /**
- * Response for GET /order-management/unified-actions
+ * Response for GET /api/pending-actions
  */
+export { PendingActionListResponse as GetPendingActionsResponse };
+
+/**
+ * Response for GET /api/pending-actions/{id}
+ */
+export { PendingActionDetail as GetPendingActionDetailResponse };
+
+// Backward compatibility aliases
+export type GetUnifiedActionsParams = GetPendingActionsParams;
 export { UnifiedActionListResponse as GetUnifiedActionsResponse };
 
 /**

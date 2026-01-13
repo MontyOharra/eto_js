@@ -176,6 +176,13 @@ async def initialize_services() -> None:
         except Exception as e:
             logger.warning(f"Failed to initialize ETO runs service: {e}")
 
+        # 8. Initialize order management service
+        try:
+            ServiceContainer.get_order_management_service()
+            logger.info("Order management service initialized")
+        except Exception as e:
+            logger.warning(f"Failed to initialize order management service: {e}")
+
         # 9. Initialize auth service (for user authentication)
         try:
             auth_service = ServiceContainer.get_auth_service()
@@ -438,6 +445,7 @@ def register_routers(app: FastAPI) -> None:
             eto_runs_router,
             system_settings_router,
             auth_router,
+            pending_actions_router,
         )
 
         # Register all routers
@@ -470,6 +478,9 @@ def register_routers(app: FastAPI) -> None:
 
         app.include_router(auth_router, prefix="/api")
         logger.info("Registered auth router at /api/auth")
+
+        app.include_router(pending_actions_router, prefix="/api")
+        logger.info("Registered pending actions router at /api/pending-actions")
 
     except ImportError as e:
         logger.error(f"Could not import routers: {e}", exc_info=True)
