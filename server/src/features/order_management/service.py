@@ -607,6 +607,95 @@ class OrderManagementService:
 
     # ========== Execution ==========
 
+    def approve_action(self, pending_action_id: int) -> ExecuteResult:
+        """
+        Approve a pending action for execution.
+
+        For now, this sets the status to 'completed' and logs what would be sent to HTC.
+        Future: Will actually execute against HTC via execute_action().
+
+        Args:
+            pending_action_id: ID of the pending action to approve
+
+        Returns:
+            ExecuteResult with success status and details
+        """
+        logger.info(f"Approving pending action {pending_action_id}")
+
+        # Get the action
+        action = self.pending_action_repo.get_by_id(pending_action_id)
+        if action is None:
+            logger.warning(f"Cannot approve: pending action {pending_action_id} not found")
+            return ExecuteResult(
+                pending_action_id=pending_action_id,
+                success=False,
+                action_type="create",  # default
+                htc_order_number=None,
+                error_message=f"Pending action {pending_action_id} not found",
+            )
+
+        # Check status is valid for approval
+        if action.status not in ("ready", "incomplete", "conflict"):
+            logger.warning(
+                f"Cannot approve: pending action {pending_action_id} status is "
+                f"'{action.status}', expected 'ready', 'incomplete', or 'conflict'"
+            )
+            return ExecuteResult(
+                pending_action_id=pending_action_id,
+                success=False,
+                action_type=action.action_type,
+                htc_order_number=action.htc_order_number,
+                error_message=f"Cannot approve action with status '{action.status}'",
+            )
+
+        # Get selected fields to show what would be sent
+        selected_fields = self.pending_action_field_repo.get_selected_fields_for_action(pending_action_id)
+
+        # Log what would happen
+        logger.info(f"=== MOCK APPROVAL: Pending Action {pending_action_id} ===")
+        logger.info(f"Action Type: {action.action_type}")
+        logger.info(f"Customer ID: {action.customer_id}")
+        logger.info(f"HAWB: {action.hawb}")
+        if action.htc_order_number:
+            logger.info(f"HTC Order Number: {action.htc_order_number}")
+        logger.info(f"Selected fields that would be sent to HTC:")
+        for field_name, field in selected_fields.items():
+            # For updates, check is_approved_for_update
+            if action.action_type == "update":
+                if field.is_approved_for_update:
+                    logger.info(f"  - {field_name}: {field.value}")
+                else:
+                    logger.info(f"  - {field_name}: {field.value} (NOT approved for update, would be skipped)")
+            else:
+                logger.info(f"  - {field_name}: {field.value}")
+        logger.info(f"=== END MOCK APPROVAL ===")
+
+        # Update status to completed
+        self.pending_action_repo.update(
+            pending_action_id,
+            PendingActionUpdate(
+                status="completed",
+                last_processed_at=datetime.now(timezone.utc),
+            ),
+        )
+
+        # Broadcast SSE event
+        order_event_manager.broadcast_sync("pending_action_updated", {
+            "id": pending_action_id,
+            "status": "completed",
+            "action_type": action.action_type,
+        })
+
+        logger.info(f"Pending action {pending_action_id} approved (mock - status set to completed)")
+
+        return ExecuteResult(
+            pending_action_id=pending_action_id,
+            success=True,
+            action_type=action.action_type,
+            htc_order_number=action.htc_order_number,
+            error_message=None,
+        )
+
     def execute_action(self, pending_action_id: int) -> ExecuteResult:
         """
         Execute pending action against HTC (create or update order).
@@ -993,14 +1082,55 @@ class OrderManagementService:
         self,
         pending_action_id: int,
         reason: str | None = None,
-    ) -> None:
+    ) -> bool:
         """
         User rejects the pending action (will not be executed).
 
         Sets status to 'rejected'. Action cannot be retried after rejection.
+
+        Args:
+            pending_action_id: ID of the pending action to reject
+            reason: Optional reason for rejection
+
+        Returns:
+            True if successfully rejected, False if action not found or invalid status
         """
-        # TODO: Implement rejection
-        raise NotImplementedError()
+        logger.info(f"Rejecting pending action {pending_action_id}: {reason}")
+
+        # Get the action
+        action = self.pending_action_repo.get_by_id(pending_action_id)
+        if action is None:
+            logger.warning(f"Cannot reject: pending action {pending_action_id} not found")
+            return False
+
+        # Check status is valid for rejection (not already terminal)
+        terminal_statuses = ("completed", "rejected", "failed")
+        if action.status in terminal_statuses:
+            logger.warning(
+                f"Cannot reject: pending action {pending_action_id} status is "
+                f"'{action.status}', already in terminal state"
+            )
+            return False
+
+        # Update status to rejected
+        self.pending_action_repo.update(
+            pending_action_id,
+            PendingActionUpdate(
+                status="rejected",
+                error_message=reason,
+                last_processed_at=datetime.now(timezone.utc),
+            ),
+        )
+
+        # Broadcast SSE event
+        order_event_manager.broadcast_sync("pending_action_updated", {
+            "id": pending_action_id,
+            "status": "rejected",
+            "action_type": action.action_type,
+        })
+
+        logger.info(f"Pending action {pending_action_id} rejected")
+        return True
 
     # ========== Cleanup ==========
 

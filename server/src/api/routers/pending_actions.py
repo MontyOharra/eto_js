@@ -22,6 +22,10 @@ from api.schemas.pending_actions import (
     SetReadStatusResponse,
     CreateMockOutputRequest,
     CreateMockOutputResponse,
+    ApproveActionRequest,
+    ApproveActionResponse,
+    RejectActionRequest,
+    RejectActionResponse,
 )
 from shared.types.pending_actions import PendingActionStatus, PendingActionType, ORDER_FIELDS
 from shared.services.service_container import ServiceContainer
@@ -351,4 +355,64 @@ async def set_read_status(
     return SetReadStatusResponse(
         id=action_id,
         is_read=request.is_read,
+    )
+
+
+@router.post("/{action_id}/approve", response_model=ApproveActionResponse)
+async def approve_action(
+    action_id: int,
+    request: ApproveActionRequest,
+    service: OrderManagementService = Depends(lambda: ServiceContainer.get_order_management_service())
+) -> ApproveActionResponse:
+    """
+    Approve a pending action for execution.
+
+    For now, this sets the status to 'completed' and logs what would be sent to HTC.
+    In the future, this will actually execute the action against HTC.
+
+    Only actions with status 'ready', 'incomplete', or 'conflict' can be approved.
+    """
+    logger.debug(f"Approve pending action {action_id}")
+
+    result = service.approve_action(action_id)
+
+    return ApproveActionResponse(
+        pending_action_id=result.pending_action_id,
+        success=result.success,
+        action_type=result.action_type,
+        htc_order_number=result.htc_order_number,
+        new_status="completed" if result.success else "ready",
+        message=result.error_message if not result.success else "Action approved successfully (mock)",
+    )
+
+
+@router.post("/{action_id}/reject", response_model=RejectActionResponse)
+async def reject_action(
+    action_id: int,
+    request: RejectActionRequest,
+    service: OrderManagementService = Depends(lambda: ServiceContainer.get_order_management_service())
+) -> RejectActionResponse:
+    """
+    Reject a pending action.
+
+    Sets the status to 'rejected'. The action cannot be retried after rejection.
+    """
+    logger.debug(f"Reject pending action {action_id}: reason={request.reason}")
+
+    success = service.reject_action(
+        pending_action_id=action_id,
+        reason=request.reason,
+    )
+
+    if not success:
+        raise HTTPException(
+            status_code=400,
+            detail="Cannot reject action. It may not exist or is already in a terminal state."
+        )
+
+    return RejectActionResponse(
+        pending_action_id=action_id,
+        success=True,
+        new_status="rejected",
+        message="Action rejected successfully",
     )

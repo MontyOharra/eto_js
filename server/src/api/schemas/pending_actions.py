@@ -166,3 +166,35 @@ class CreateMockOutputResponse(BaseModel):
     action_type: PendingActionType
     status: PendingActionStatus
     message: str
+
+
+# =============================================================================
+# Approve/Reject Actions
+# =============================================================================
+
+class ApproveActionRequest(BaseModel):
+    """Request for POST /pending-actions/{id}/approve."""
+    pass  # No additional data needed for now
+
+
+class ApproveActionResponse(BaseModel):
+    """Response for POST /pending-actions/{id}/approve."""
+    pending_action_id: int
+    success: bool
+    action_type: PendingActionType
+    htc_order_number: float | None
+    new_status: PendingActionStatus
+    message: str | None
+
+
+class RejectActionRequest(BaseModel):
+    """Request for POST /pending-actions/{id}/reject."""
+    reason: str | None = None
+
+
+class RejectActionResponse(BaseModel):
+    """Response for POST /pending-actions/{id}/reject."""
+    pending_action_id: int
+    success: bool
+    new_status: PendingActionStatus
+    message: str | None

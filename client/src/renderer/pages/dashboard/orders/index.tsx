@@ -7,12 +7,10 @@ import {
   OrderHistoryTimeline,
   usePendingOrderDetail,
   useConfirmField,
-  useApprovePendingOrder,
-  useRejectPendingOrder,
+  useApprovePendingAction,
+  useRejectPendingAction,
   usePendingUpdateDetail,
   useOrderHistory,
-  useApprovePendingUpdate,
-  useRejectPendingUpdate,
   useConfirmUpdateField,
   useUnifiedActions,
   useMarkRead,
@@ -132,14 +130,10 @@ function OrdersPage() {
     detailView?.type === 'update-detail' ? detailView.updateId : null;
   const { data: updateDetail } = usePendingUpdateDetail(selectedUpdateId);
 
-  // Mutations - Pending Orders
+  // Mutations
   const confirmField = useConfirmField();
-  const approvePendingOrder = useApprovePendingOrder();
-  const rejectPendingOrder = useRejectPendingOrder();
-
-  // Mutations - Pending Updates
-  const approveUpdate = useApprovePendingUpdate();
-  const rejectUpdate = useRejectPendingUpdate();
+  const approveAction = useApprovePendingAction();
+  const rejectAction = useRejectPendingAction();
   const confirmUpdateField = useConfirmUpdateField();
   const markRead = useMarkRead();
 
@@ -169,14 +163,12 @@ function OrdersPage() {
     markRead.mutate({ id, is_read: isRead });
   };
 
-  const handleApproveUpdate = (updateId: number) => {
-    // Get the current user's username for audit trail
-    const approverUsername = session?.user?.username || 'ETO_SYSTEM';
-    approveUpdate.mutate({ updateId, approverUsername });
+  const handleApproveAction = (actionId: number) => {
+    approveAction.mutate({ actionId });
   };
 
-  const handleRejectUpdate = (updateId: number) => {
-    rejectUpdate.mutate({ updateId });
+  const handleRejectAction = (actionId: number, reason?: string) => {
+    rejectAction.mutate({ actionId, reason });
   };
 
   // Track which update fields are currently being confirmed
@@ -211,9 +203,8 @@ function OrdersPage() {
 
   const handleApprovePendingOrder = () => {
     if (!selectedOrderId) return;
-    const approverUsername = session?.user?.username || 'ETO_SYSTEM';
-    approvePendingOrder.mutate(
-      { pendingOrderId: selectedOrderId, approverUsername },
+    approveAction.mutate(
+      { actionId: selectedOrderId },
       {
         onSuccess: () => {
           // Go back to list after successful creation
@@ -225,8 +216,8 @@ function OrdersPage() {
 
   const handleRejectPendingOrder = () => {
     if (!selectedOrderId) return;
-    rejectPendingOrder.mutate(
-      { pendingOrderId: selectedOrderId },
+    rejectAction.mutate(
+      { actionId: selectedOrderId },
       {
         onSuccess: () => {
           // Go back to list after successful rejection
@@ -287,8 +278,8 @@ function OrdersPage() {
           confirmingFields={confirmingFields}
           onApprove={handleApprovePendingOrder}
           onReject={handleRejectPendingOrder}
-          isApproving={approvePendingOrder.isPending}
-          isRejecting={rejectPendingOrder.isPending}
+          isApproving={approveAction.isPending}
+          isRejecting={rejectAction.isPending}
         />
         <EtoSubRunDetailViewer
           isOpen={viewingSubRunId !== null}
@@ -322,12 +313,12 @@ function OrdersPage() {
         <PendingUpdateDetailView
           update={updateDetail}
           onBack={handleBackToList}
-          onApprove={handleApproveUpdate}
-          onReject={handleRejectUpdate}
+          onApprove={(updateId: number) => handleApproveAction(updateId)}
+          onReject={(updateId: number) => handleRejectAction(updateId)}
           onConfirmField={handleConfirmUpdateField}
           onViewSubRun={handleViewSubRun}
-          isApproving={approveUpdate.isPending}
-          isRejecting={rejectUpdate.isPending}
+          isApproving={approveAction.isPending}
+          isRejecting={rejectAction.isPending}
           confirmingFields={confirmingUpdateFields}
         />
         <EtoSubRunDetailViewer

@@ -147,6 +147,89 @@ export function useConfirmField() {
 }
 
 /**
+ * Approve a pending action (unified - works for both creates and updates)
+ * Uses the new /pending-actions/{id}/approve endpoint
+ */
+export function useApprovePendingAction() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async ({
+      actionId,
+    }: {
+      actionId: number;
+    }): Promise<{
+      pending_action_id: number;
+      success: boolean;
+      action_type: string;
+      htc_order_number: number | null;
+      new_status: string;
+      message: string | null;
+    }> => {
+      const response = await apiClient.post(
+        `/api/pending-actions/${actionId}/approve`,
+        {}
+      );
+      return response.data;
+    },
+    onSuccess: (_data, variables) => {
+      // Invalidate all related queries
+      queryClient.invalidateQueries({
+        queryKey: orderManagementQueryKeys.pendingActionDetail(variables.actionId),
+      });
+      queryClient.invalidateQueries({
+        queryKey: orderManagementQueryKeys.pendingActions(),
+      });
+      queryClient.invalidateQueries({
+        queryKey: orderManagementQueryKeys.unifiedActions(),
+      });
+    },
+  });
+}
+
+/**
+ * Reject a pending action (unified - works for both creates and updates)
+ * Uses the new /pending-actions/{id}/reject endpoint
+ */
+export function useRejectPendingAction() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async ({
+      actionId,
+      reason,
+    }: {
+      actionId: number;
+      reason?: string;
+    }): Promise<{
+      pending_action_id: number;
+      success: boolean;
+      new_status: string;
+      message: string | null;
+    }> => {
+      const response = await apiClient.post(
+        `/api/pending-actions/${actionId}/reject`,
+        { reason }
+      );
+      return response.data;
+    },
+    onSuccess: (_data, variables) => {
+      // Invalidate all related queries
+      queryClient.invalidateQueries({
+        queryKey: orderManagementQueryKeys.pendingActionDetail(variables.actionId),
+      });
+      queryClient.invalidateQueries({
+        queryKey: orderManagementQueryKeys.pendingActions(),
+      });
+      queryClient.invalidateQueries({
+        queryKey: orderManagementQueryKeys.unifiedActions(),
+      });
+    },
+  });
+}
+
+/**
+ * @deprecated Use useApprovePendingAction instead
  * Approve a pending order and create it in HTC
  */
 export function useApprovePendingOrder() {
@@ -184,6 +267,7 @@ export function useApprovePendingOrder() {
 }
 
 /**
+ * @deprecated Use useRejectPendingAction instead
  * Reject a pending order
  */
 export function useRejectPendingOrder() {
