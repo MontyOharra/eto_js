@@ -884,6 +884,7 @@ class OrderManagementService:
                 required_fields_total=item.required_fields_total,
                 optional_fields_present=item.optional_fields_present,
                 optional_fields_total=item.optional_fields_total,
+                field_names=item.field_names,
                 conflict_count=item.conflict_count,
                 is_read=item.is_read,
                 created_at=item.created_at,
