@@ -1309,10 +1309,15 @@ class OrderManagementService:
 
         Called by EtoRunsService when an output execution is reprocessed or deleted.
 
+        IMPORTANT: Actions in terminal states (completed, rejected, failed) are preserved
+        as historical records. Their field contributions are NOT deleted, and the actions
+        themselves are not modified or deleted.
+
         Steps:
         1. Find all pending_action_ids affected by this output_execution
-        2. Delete all pending_action_fields WHERE output_execution_id = ?
-        3. For each affected pending_action:
+        2. Identify which actions are in terminal states (skip these)
+        3. Delete pending_action_fields for non-terminal actions only
+        4. For each non-terminal affected pending_action:
            a. Check if any extracted fields remain (output_execution_id IS NOT NULL)
            b. If NO extracted fields remain: delete the entire pending_action
            c. If extracted fields remain: recalculate status
@@ -1323,6 +1328,8 @@ class OrderManagementService:
         Returns:
             CleanupResult with counts of deleted fields and actions
         """
+        terminal_statuses = ("completed", "rejected", "failed")
+
         logger.debug(f"Cleaning up contributions from output execution {output_execution_id}")
 
         # Step 1: Find all affected pending actions
@@ -1336,14 +1343,39 @@ class OrderManagementService:
         affected_action_ids = set(f.pending_action_id for f in fields)
         logger.debug(f"Found {len(fields)} fields affecting {len(affected_action_ids)} actions")
 
-        # Step 2: Delete all fields for this output execution
-        fields_deleted = self.pending_action_field_repo.delete_by_output_execution(output_execution_id)
+        # Step 2: Identify terminal actions (these are preserved as historical records)
+        terminal_action_ids: set[int] = set()
+        non_terminal_action_ids: set[int] = set()
 
-        # Step 3: Process each affected action
+        for action_id in affected_action_ids:
+            action = self.pending_action_repo.get_by_id(action_id)
+            if action and action.status in terminal_statuses:
+                terminal_action_ids.add(action_id)
+                logger.debug(
+                    f"Preserving terminal action {action_id} (status={action.status}) - "
+                    f"contributions will not be deleted"
+                )
+            else:
+                non_terminal_action_ids.add(action_id)
+
+        if terminal_action_ids:
+            logger.info(
+                f"Skipping cleanup for {len(terminal_action_ids)} terminal action(s): "
+                f"{terminal_action_ids}"
+            )
+
+        # Step 3: Delete fields only for non-terminal actions
+        fields_deleted = 0
+        if non_terminal_action_ids:
+            fields_deleted = self.pending_action_field_repo.delete_by_output_execution_excluding_actions(
+                output_execution_id, terminal_action_ids
+            )
+
+        # Step 4: Process each non-terminal affected action
         actions_deleted = 0
         actions_recalculated = 0
 
-        for action_id in affected_action_ids:
+        for action_id in non_terminal_action_ids:
             # Check if any extracted fields remain
             has_fields = self.pending_action_field_repo.has_extracted_fields(action_id)
 
@@ -1372,7 +1404,8 @@ class OrderManagementService:
 
         logger.debug(
             f"Output execution {output_execution_id} cleanup: "
-            f"fields={fields_deleted}, actions_deleted={actions_deleted}, recalculated={actions_recalculated}"
+            f"fields={fields_deleted}, actions_deleted={actions_deleted}, "
+            f"recalculated={actions_recalculated}, preserved={len(terminal_action_ids)}"
         )
 
         return CleanupResult(

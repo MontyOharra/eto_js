@@ -266,6 +266,45 @@ class PendingActionFieldRepository(BaseRepository[PendingActionFieldModel]):
             logger.debug(f"Deleted {count} fields for output execution {output_execution_id}")
             return count
 
+    def delete_by_output_execution_excluding_actions(
+        self,
+        output_execution_id: int,
+        exclude_action_ids: set[int],
+    ) -> int:
+        """
+        Delete fields contributed by an output execution, excluding specific actions.
+
+        Used during cleanup to preserve fields for terminal actions (completed,
+        rejected, failed) while cleaning up fields for other actions.
+
+        Args:
+            output_execution_id: Output execution ID
+            exclude_action_ids: Set of action IDs whose fields should NOT be deleted
+
+        Returns:
+            Number of fields deleted
+        """
+        with self._get_session() as session:
+            query = (
+                session.query(self.model_class)
+                .filter(self.model_class.output_execution_id == output_execution_id)
+            )
+
+            # Exclude fields belonging to terminal actions
+            if exclude_action_ids:
+                query = query.filter(
+                    ~self.model_class.pending_action_id.in_(exclude_action_ids)
+                )
+
+            count = query.delete(synchronize_session=False)
+            session.flush()
+
+            logger.debug(
+                f"Deleted {count} fields for output execution {output_execution_id} "
+                f"(excluded {len(exclude_action_ids)} terminal actions)"
+            )
+            return count
+
     def delete_by_action_id(self, action_id: int) -> int:
         """
         Delete all fields for a pending action.
