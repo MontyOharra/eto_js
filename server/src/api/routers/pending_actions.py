@@ -29,7 +29,7 @@ from api.schemas.pending_actions import (
 )
 from shared.types.pending_actions import PendingActionStatus, PendingActionType, ORDER_FIELDS
 from shared.services.service_container import ServiceContainer
-from server.src.shared.events.order_events import order_event_manager
+from src.shared.events.order_events import order_event_manager
 from features.order_management.service import OrderManagementService
 
 logger = logging.getLogger(__name__)

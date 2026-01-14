@@ -59,13 +59,10 @@ class PendingActionFieldRepository(BaseRepository[PendingActionFieldModel]):
     def _serialize_value(self, value: Any) -> str:
         """Serialize a value to JSON string for storage."""
         if isinstance(value, str):
-            # Already a string - check if it's valid JSON
-            try:
-                json.loads(value)
-                return value  # Already valid JSON string
-            except (json.JSONDecodeError, TypeError):
-                # Plain string - serialize it
-                return json.dumps(value)
+            # Always serialize strings with json.dumps to ensure proper quoting.
+            # This handles strings like "93204034" which would otherwise be
+            # stored as a bare number and parsed back as an integer.
+            return json.dumps(value)
         elif hasattr(value, 'model_dump'):
             # Pydantic model - convert to dict first
             return json.dumps(value.model_dump())

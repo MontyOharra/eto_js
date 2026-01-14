@@ -137,6 +137,14 @@ class OrderManagementService:
         # 5b. Resolve address IDs for location fields
         order_fields = self._resolve_address_ids(order_fields)
 
+        # 5c. For updates, filter out fields that match current HTC values
+        # We only want to store fields that actually differ from HTC
+        if action_type == "update" and htc_order_number is not None:
+            order_fields = self._filter_unchanged_fields_for_storage(
+                order_fields, htc_order_number
+            )
+            logger.debug(f"After HTC filter, remaining fields: {list(order_fields.keys())}")
+
         # 6. Add field values to pending action (handles conflict detection)
         self._add_fields_to_action(
             pending_action_id=pending_action.id,
@@ -359,6 +367,99 @@ class OrderManagementService:
 
         return order_fields
 
+    def _filter_unchanged_fields_for_storage(
+        self,
+        order_fields: dict[str, Any],
+        htc_order_number: float,
+    ) -> dict[str, Any]:
+        """
+        Filter out fields that match current HTC values before storage.
+
+        For updates, we only want to store fields that actually differ from HTC.
+        This ensures that 'contributions' only show actual changes.
+
+        Args:
+            order_fields: Transformed order fields to potentially store
+            htc_order_number: HTC order number to fetch current values
+
+        Returns:
+            Filtered dict containing only fields that differ from HTC
+        """
+        # Fetch current HTC values
+        htc_fields = self.htc_service.get_order_fields(order_number=htc_order_number)
+        if htc_fields is None:
+            logger.warning(f"Could not fetch HTC fields for order {htc_order_number}, storing all fields")
+            return order_fields
+
+        # Transform HTC values to match our field structure
+        from features.order_management.transformers import transform_htc_values_to_order_fields
+        from dataclasses import asdict
+        current_htc_values = transform_htc_values_to_order_fields(asdict(htc_fields))
+
+        filtered: dict[str, Any] = {}
+        location_fields = {"pickup_location", "delivery_location"}
+
+        for field_name, proposed_value in order_fields.items():
+            htc_value = current_htc_values.get(field_name)
+
+            # If HTC has no value for this field, it's a new value - include it
+            if htc_value is None:
+                logger.debug(f"Field '{field_name}': HTC has no value, including")
+                filtered[field_name] = proposed_value
+                continue
+
+            # Location fields: compare by address_id only
+            if field_name in location_fields:
+                proposed_id = None
+                htc_id = None
+
+                # Extract proposed address_id
+                if isinstance(proposed_value, dict):
+                    proposed_id = proposed_value.get("address_id")
+                elif hasattr(proposed_value, "address_id"):
+                    proposed_id = proposed_value.address_id
+
+                # Extract HTC address_id
+                if isinstance(htc_value, dict):
+                    htc_id = htc_value.get("address_id")
+
+                # If proposed address_id is null, include (needs resolution)
+                if proposed_id is None:
+                    logger.debug(f"Field '{field_name}': proposed address_id is None, including")
+                    filtered[field_name] = proposed_value
+                    continue
+
+                # If address_ids match, exclude
+                if proposed_id == htc_id:
+                    logger.debug(f"Field '{field_name}': address_ids match ({proposed_id}), excluding")
+                    continue
+
+                # Different address_ids - include
+                logger.debug(f"Field '{field_name}': address_ids differ ({proposed_id} vs {htc_id}), including")
+                filtered[field_name] = proposed_value
+                continue
+
+            # Normalize for comparison
+            proposed_normalized = self._normalize_value_for_comparison(proposed_value)
+            htc_normalized = self._normalize_value_for_comparison(htc_value)
+
+            if proposed_normalized != htc_normalized:
+                logger.debug(f"Field '{field_name}': values differ, including")
+                filtered[field_name] = proposed_value
+            else:
+                logger.debug(f"Field '{field_name}': values match, excluding")
+
+        return filtered
+
+    def _normalize_value_for_comparison(self, value: Any) -> str:
+        """Normalize a value to a string for comparison."""
+        if isinstance(value, str):
+            return value.strip()
+        elif hasattr(value, 'model_dump'):
+            return json.dumps(value.model_dump(), sort_keys=True)
+        else:
+            return json.dumps(value, sort_keys=True)
+
     def _add_fields_to_action(
         self,
         pending_action_id: int,
@@ -519,7 +620,6 @@ class OrderManagementService:
 
                 if proposed_normalized != htc_normalized:
                     filtered[field_name] = field_values
-                # else: values match - exclude this field
                 continue
 
             # Other fields: JSON-normalized comparison
@@ -528,9 +628,7 @@ class OrderManagementService:
                 htc_normalized = json.dumps(htc_value, sort_keys=True)
 
                 if proposed_normalized != htc_normalized:
-                    # Values differ - include this field
                     filtered[field_name] = field_values
-                # else: values match - exclude this field
             except (TypeError, ValueError):
                 # Can't serialize for comparison - include to be safe
                 filtered[field_name] = field_values
@@ -574,12 +672,13 @@ class OrderManagementService:
         optional_fields_present = len(selected_field_names.intersection(OPTIONAL_ORDER_FIELDS))
 
         # Determine status based on priority
+        # Note: "incomplete" only applies to creates - updates don't have required fields
         new_status: PendingActionStatus
         if action.action_type == "ambiguous":
             new_status = "ambiguous"
         elif conflict_count > 0:
             new_status = "conflict"
-        elif required_fields_present < len(REQUIRED_ORDER_FIELDS):
+        elif action.action_type == "create" and required_fields_present < len(REQUIRED_ORDER_FIELDS):
             new_status = "incomplete"
         else:
             new_status = "ready"
