@@ -276,12 +276,23 @@ function OrderNumberCell({ row }: CellContext<UnifiedActionListItem, unknown>) {
   return <span className={`text-sm text-gray-500 ${textOpacity}`}>-</span>;
 }
 
+/**
+ * Format field names for display - converts snake_case to Title Case
+ */
+function formatFieldName(fieldName: string): string {
+  return fieldName
+    .split('_')
+    .map(word => word.charAt(0).toUpperCase() + word.slice(1))
+    .join(' ');
+}
+
 function StatusInfoCell({ row }: CellContext<UnifiedActionListItem, unknown>) {
   const data = row.original;
   const isRead = data.is_read;
   const textOpacity = isRead ? 'opacity-60' : 'opacity-100';
 
   const requiredComplete = data.required_fields_present >= data.required_fields_total;
+  const isUpdate = data.action_type === 'update';
 
   return (
     <div className={`flex flex-wrap items-center gap-2 ${textOpacity}`}>
@@ -309,22 +320,32 @@ function StatusInfoCell({ row }: CellContext<UnifiedActionListItem, unknown>) {
         </span>
       )}
 
-      {/* Required fields progress */}
-      <span
-        className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium border ${
-          requiredComplete
-            ? 'bg-blue-500/20 text-blue-400 border-blue-500/30'
-            : 'bg-orange-500/20 text-orange-400 border-orange-500/30'
-        }`}
-      >
-        {data.required_fields_present}/{data.required_fields_total} Required
-      </span>
-
-      {/* Optional fields progress */}
-      {data.optional_fields_present > 0 && (
-        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium border bg-gray-500/20 text-gray-400 border-gray-500/30">
-          {data.optional_fields_present}/{data.optional_fields_total} Optional
+      {/* For updates: show comma-separated field names */}
+      {isUpdate && data.field_names.length > 0 && (
+        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium border bg-blue-500/20 text-blue-400 border-blue-500/30">
+          {data.field_names.map(formatFieldName).join(', ')}
         </span>
+      )}
+
+      {/* For creates: show required/optional field counts */}
+      {!isUpdate && (
+        <>
+          <span
+            className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium border ${
+              requiredComplete
+                ? 'bg-blue-500/20 text-blue-400 border-blue-500/30'
+                : 'bg-orange-500/20 text-orange-400 border-orange-500/30'
+            }`}
+          >
+            {data.required_fields_present}/{data.required_fields_total} Required
+          </span>
+
+          {data.optional_fields_present > 0 && (
+            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium border bg-gray-500/20 text-gray-400 border-gray-500/30">
+              {data.optional_fields_present}/{data.optional_fields_total} Optional
+            </span>
+          )}
+        </>
       )}
     </div>
   );

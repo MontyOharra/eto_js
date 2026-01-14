@@ -374,6 +374,7 @@ export interface PendingActionListItem {
   required_fields_total: number;
   optional_fields_present: number;
   optional_fields_total: number;
+  field_names: string[];  // List of field names being updated
   conflict_count: number;
   is_read: boolean;
   created_at: string;

@@ -328,6 +328,7 @@ class PendingActionListView(BaseModel):
     required_fields_total: int  # len(REQUIRED_ORDER_FIELDS) - for display like "2/8"
     optional_fields_present: int
     optional_fields_total: int  # len(OPTIONAL_ORDER_FIELDS) - for display like "1/4"
+    field_names: list[str]  # List of field names being updated (useful for updates display)
     conflict_count: int
     is_read: bool
     created_at: datetime

@@ -6,10 +6,10 @@ Repository for pending_actions table with CRUD operations and specialized querie
 import logging
 from datetime import datetime
 
-from sqlalchemy import and_
+from sqlalchemy import and_, func, select
 
 from shared.database.repositories.base import BaseRepository
-from shared.database.models import PendingActionModel
+from shared.database.models import PendingActionModel, PendingActionFieldModel
 from shared.exceptions.service import ObjectNotFoundError
 from shared.types.pending_actions import (
     PendingAction,
@@ -283,6 +283,27 @@ class PendingActionRepository(BaseRepository[PendingActionModel]):
             # Execute and convert
             models = query.all()
 
+            # Get field names for all actions in result set (single query)
+            action_ids = [model.id for model in models]
+            field_names_by_action: dict[int, list[str]] = {aid: [] for aid in action_ids}
+
+            if action_ids:
+                field_rows = (
+                    session.query(
+                        PendingActionFieldModel.pending_action_id,
+                        PendingActionFieldModel.field_name,
+                    )
+                    .filter(PendingActionFieldModel.pending_action_id.in_(action_ids))
+                    .distinct()
+                    .order_by(
+                        PendingActionFieldModel.pending_action_id,
+                        PendingActionFieldModel.field_name,
+                    )
+                    .all()
+                )
+                for row in field_rows:
+                    field_names_by_action[row.pending_action_id].append(row.field_name)
+
             result = [
                 PendingActionListView(
                     id=model.id,
@@ -296,6 +317,7 @@ class PendingActionRepository(BaseRepository[PendingActionModel]):
                     required_fields_total=len(REQUIRED_ORDER_FIELDS),
                     optional_fields_present=model.optional_fields_present,
                     optional_fields_total=len(OPTIONAL_ORDER_FIELDS),
+                    field_names=field_names_by_action.get(model.id, []),
                     conflict_count=model.conflict_count,
                     is_read=model.is_read,
                     created_at=model.created_at,

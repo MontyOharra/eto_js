@@ -32,6 +32,7 @@ class PendingActionListItem(BaseModel):
     required_fields_total: int
     optional_fields_present: int
     optional_fields_total: int
+    field_names: list[str]  # List of field names (for updates, shown as comma-separated)
     conflict_count: int
     is_read: bool
     created_at: datetime
