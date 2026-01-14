@@ -26,6 +26,8 @@ from api.schemas.pending_actions import (
     ApproveActionResponse,
     RejectActionRequest,
     RejectActionResponse,
+    SelectFieldValueRequest,
+    SelectFieldValueResponse,
 )
 from shared.types.pending_actions import PendingActionStatus, PendingActionType, ORDER_FIELDS
 from shared.services.service_container import ServiceContainer
@@ -426,3 +428,44 @@ async def reject_action(
         new_status="rejected",
         message="Action rejected successfully",
     )
+
+
+@router.post("/{action_id}/select-field", response_model=SelectFieldValueResponse)
+async def select_field_value(
+    action_id: int,
+    request: SelectFieldValueRequest,
+    service: OrderManagementService = Depends(lambda: ServiceContainer.get_order_management_service())
+) -> SelectFieldValueResponse:
+    """
+    Select a specific field value for a pending action.
+
+    Used for:
+    - Resolving conflicts by selecting one of multiple conflicting values
+    - Changing a previously selected value to a different option
+
+    The selected value will have is_selected=TRUE, and all other values
+    for the same field will have is_selected=FALSE.
+    """
+    logger.info(f"Select field value: action={action_id}, field_id={request.field_id}")
+
+    try:
+        # Get the field to return its name in response
+        field = service.pending_action_field_repo.get_by_id(request.field_id)
+        if field is None:
+            raise HTTPException(status_code=404, detail=f"Field {request.field_id} not found")
+
+        updated_action = service.select_field_value(
+            pending_action_id=action_id,
+            field_id=request.field_id,
+        )
+
+        return SelectFieldValueResponse(
+            pending_action_id=action_id,
+            field_id=request.field_id,
+            field_name=field.field_name,
+            new_status=updated_action.status,
+            success=True,
+            message=f"Selected value for field '{field.field_name}'",
+        )
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))

@@ -1144,20 +1144,66 @@ class OrderManagementService:
 
     # ========== User Interactions ==========
 
-    def resolve_conflict(
+    def select_field_value(
         self,
         pending_action_id: int,
-        field_name: str,
-        selected_field_id: int,
-    ) -> None:
+        field_id: int,
+    ) -> PendingAction:
         """
-        User selects which value to use for a conflicting field.
+        Select a specific field value for a pending action.
 
-        Sets is_selected=TRUE for the chosen value, FALSE for all others.
-        Recalculates action status after resolution.
+        Used for:
+        - Resolving conflicts (selecting one of multiple conflicting values)
+        - Changing a previously selected value
+
+        Sets is_selected=TRUE for the chosen value, FALSE for all other values
+        of the same field. Recalculates action status after selection.
+
+        Args:
+            pending_action_id: ID of the pending action
+            field_id: ID of the pending_action_field record to select
+
+        Returns:
+            Updated PendingAction with recalculated status
+
+        Raises:
+            ValueError: If the field doesn't exist or doesn't belong to this action
         """
-        # TODO: Implement conflict resolution
-        raise NotImplementedError()
+        logger.info(f"Selecting field value {field_id} for action {pending_action_id}")
+
+        # Get the field record to find its field_name
+        field = self.pending_action_field_repo.get_by_id(field_id)
+        if field is None:
+            raise ValueError(f"Field {field_id} not found")
+
+        if field.pending_action_id != pending_action_id:
+            raise ValueError(
+                f"Field {field_id} does not belong to action {pending_action_id}"
+            )
+
+        # Set selection (selects this one, deselects others with same field_name)
+        self.pending_action_field_repo.set_selection_for_field(
+            action_id=pending_action_id,
+            field_name=field.field_name,
+            selected_field_id=field_id,
+        )
+
+        # Recalculate action status (conflict may be resolved now)
+        updated_action = self._recalculate_action_status(pending_action_id)
+
+        # Broadcast update event
+        order_event_manager.broadcast_sync("pending_action_updated", {
+            "id": updated_action.id,
+            "status": updated_action.status,
+            "action_type": updated_action.action_type,
+        })
+
+        logger.info(
+            f"Selected field {field_id} ({field.field_name}) for action {pending_action_id}, "
+            f"new status: {updated_action.status}"
+        )
+
+        return updated_action
 
     def set_user_value(
         self,

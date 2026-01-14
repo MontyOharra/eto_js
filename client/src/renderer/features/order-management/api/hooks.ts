@@ -119,6 +119,7 @@ export function usePendingOrderDetail(id: number | null) {
 }
 
 /**
+ * @deprecated Use useSelectFieldValue instead
  * Confirm a field selection to resolve a conflict
  */
 export function useConfirmField() {
@@ -148,6 +149,49 @@ export function useConfirmField() {
       // Also invalidate the list in case status changed
       queryClient.invalidateQueries({
         queryKey: orderManagementQueryKeys.pendingOrders(),
+      });
+    },
+  });
+}
+
+/**
+ * Select a field value (resolve conflict or change selection)
+ * Uses the new unified /pending-actions/{id}/select-field endpoint
+ */
+export function useSelectFieldValue() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async ({
+      actionId,
+      fieldId,
+    }: {
+      actionId: number;
+      fieldId: number;
+    }): Promise<{
+      pending_action_id: number;
+      field_id: number;
+      field_name: string;
+      new_status: string;
+      success: boolean;
+      message: string | null;
+    }> => {
+      const response = await apiClient.post(
+        `/api/pending-actions/${actionId}/select-field`,
+        { field_id: fieldId }
+      );
+      return response.data;
+    },
+    onSuccess: (_data, variables) => {
+      // Invalidate all related queries
+      queryClient.invalidateQueries({
+        queryKey: orderManagementQueryKeys.pendingActionDetail(variables.actionId),
+      });
+      queryClient.invalidateQueries({
+        queryKey: orderManagementQueryKeys.pendingOrderDetail(variables.actionId),
+      });
+      queryClient.invalidateQueries({
+        queryKey: orderManagementQueryKeys.pendingActions(),
       });
     },
   });

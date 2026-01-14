@@ -6,7 +6,7 @@ import {
   PendingUpdateDetailView,
   OrderHistoryTimeline,
   usePendingOrderDetail,
-  useConfirmField,
+  useSelectFieldValue,
   useApprovePendingAction,
   useRejectPendingAction,
   usePendingUpdateDetail,
@@ -131,7 +131,7 @@ function OrdersPage() {
   const { data: updateDetail } = usePendingUpdateDetail(selectedUpdateId);
 
   // Mutations
-  const confirmField = useConfirmField();
+  const selectFieldValue = useSelectFieldValue();
   const approveAction = useApprovePendingAction();
   const rejectAction = useRejectPendingAction();
   const confirmUpdateField = useConfirmUpdateField();
@@ -238,17 +238,17 @@ function OrdersPage() {
   // Track which fields are currently being confirmed
   const [confirmingFields, setConfirmingFields] = useState<Set<string>>(new Set());
 
-  const handleConfirmField = (fieldName: string, historyId: number) => {
+  // Note: historyId is actually the field_id (pending_action_fields.id)
+  const handleConfirmField = (fieldName: string, fieldId: number) => {
     if (!selectedOrderId) return;
 
     // Add field to confirming set
     setConfirmingFields((prev) => new Set(prev).add(fieldName));
 
-    confirmField.mutate(
+    selectFieldValue.mutate(
       {
-        pendingOrderId: selectedOrderId,
-        fieldName,
-        historyId,
+        actionId: selectedOrderId,
+        fieldId,
       },
       {
         onSettled: () => {

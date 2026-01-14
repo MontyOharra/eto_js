@@ -199,3 +199,18 @@ class RejectActionResponse(BaseModel):
     success: bool
     new_status: PendingActionStatus
     message: str | None
+
+
+class SelectFieldValueRequest(BaseModel):
+    """Request for POST /pending-actions/{id}/select-field."""
+    field_id: int = Field(..., description="ID of the pending_action_field record to select")
+
+
+class SelectFieldValueResponse(BaseModel):
+    """Response for POST /pending-actions/{id}/select-field."""
+    pending_action_id: int
+    field_id: int
+    field_name: str
+    new_status: PendingActionStatus
+    success: bool
+    message: str | None
