@@ -456,7 +456,11 @@ class OrderManagementService:
         if isinstance(value, str):
             return value.strip()
         elif hasattr(value, 'model_dump'):
+            # Single Pydantic model
             return json.dumps(value.model_dump(), sort_keys=True)
+        elif isinstance(value, list) and value and hasattr(value[0], 'model_dump'):
+            # List of Pydantic models (e.g., list[DimObject])
+            return json.dumps([v.model_dump() for v in value], sort_keys=True)
         else:
             return json.dumps(value, sort_keys=True)
 
