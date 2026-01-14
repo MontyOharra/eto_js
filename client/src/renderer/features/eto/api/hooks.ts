@@ -18,6 +18,7 @@ import {
   UpdateEtoRunRequest,
   SubRunOperationResponse,
   RunOperationResponse,
+  ReprocessWarningsResponse,
 } from './types';
 import { EtoSubRunFullDetail } from '../types';
 
@@ -231,6 +232,24 @@ export function useUpdateEtoRun() {
 // ============================================================================
 // Sub-Run Level Operations
 // ============================================================================
+
+/**
+ * Check for warnings before reprocessing a sub-run.
+ * Returns info about any terminal actions (completed/rejected/failed) that would be affected.
+ */
+export function useReprocessWarnings(subRunId: number | null) {
+  return useQuery({
+    queryKey: ['eto-runs', 'sub-runs', subRunId, 'reprocess-warnings'],
+    queryFn: async (): Promise<ReprocessWarningsResponse> => {
+      const response = await apiClient.get<ReprocessWarningsResponse>(
+        `${baseUrl}/sub-runs/${subRunId}/reprocess-warnings`
+      );
+      return response.data;
+    },
+    enabled: subRunId !== null,
+    staleTime: 30 * 1000,
+  });
+}
 
 /**
  * Reprocess a single sub-run

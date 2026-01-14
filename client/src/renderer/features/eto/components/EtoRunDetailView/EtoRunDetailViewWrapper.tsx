@@ -21,6 +21,9 @@ import {
   useUpdateEtoRun,
   EtoRunDetail,
 } from '../../index';
+import { apiClient } from '../../../../shared/api/client';
+import { API_CONFIG } from '../../../../shared/api/config';
+import type { ReprocessWarningsResponse } from '../../api/types';
 
 interface EtoRunDetailViewWrapperProps {
   runId: number;
@@ -121,8 +124,34 @@ export function EtoRunDetailViewWrapper({ runId, onBack }: EtoRunDetailViewWrapp
     setSelectedSubRunId(subRunId);
   };
 
-  const handleReprocessSubRun = (subRunId: number) => {
-    reprocessSubRun.mutate(subRunId);
+  const handleReprocessSubRun = async (subRunId: number) => {
+    try {
+      // Check for warnings before reprocessing
+      const response = await apiClient.get<ReprocessWarningsResponse>(
+        `${API_CONFIG.ENDPOINTS.ETO_RUNS}/sub-runs/${subRunId}/reprocess-warnings`
+      );
+      const warnings = response.data;
+
+      if (warnings.has_warnings && warnings.warning_message) {
+        // Show confirmation dialog with warning
+        const confirmed = confirm(
+          `Warning: ${warnings.warning_message}\n\nAre you sure you want to reprocess this sub-run?`
+        );
+        if (!confirmed) {
+          return;
+        }
+      }
+
+      // Proceed with reprocessing
+      reprocessSubRun.mutate(subRunId);
+    } catch (error) {
+      console.error('Failed to check reprocess warnings:', error);
+      // If warning check fails, still allow reprocessing with generic confirmation
+      const confirmed = confirm('Are you sure you want to reprocess this sub-run?');
+      if (confirmed) {
+        reprocessSubRun.mutate(subRunId);
+      }
+    }
   };
 
   const handleSkipSubRun = (subRunId: number) => {

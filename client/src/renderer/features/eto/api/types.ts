@@ -113,6 +113,22 @@ export interface SubRunOperationResponse {
   eto_run_id: number;
 }
 
+// GET /eto-runs/sub-runs/{sub_run_id}/reprocess-warnings
+
+export interface AffectedTerminalAction {
+  id: number;
+  hawb: string;
+  status: string;
+  action_type: string;
+}
+
+export interface ReprocessWarningsResponse {
+  sub_run_id: number;
+  has_warnings: boolean;
+  terminal_actions: AffectedTerminalAction[];
+  warning_message: string | null;
+}
+
 // =============================================================================
 // Run-Level Aggregated Operations
 // =============================================================================

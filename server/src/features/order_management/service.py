@@ -1380,3 +1380,51 @@ class OrderManagementService:
             actions_deleted=actions_deleted,
             actions_recalculated=actions_recalculated,
         )
+
+    def get_terminal_actions_for_sub_run(self, sub_run_id: int) -> list[dict]:
+        """
+        Check if a sub-run contributed to any pending actions in terminal states.
+
+        Terminal states are: completed, rejected, failed
+
+        Used to warn users before reprocessing a sub-run that contributed to
+        actions that have already been approved/rejected.
+
+        Args:
+            sub_run_id: ID of the sub-run to check
+
+        Returns:
+            List of dicts with info about affected terminal actions:
+            [{"id": 1, "hawb": "ABC123", "status": "completed", "action_type": "create"}, ...]
+        """
+        terminal_statuses = ("completed", "rejected", "failed")
+
+        # Find all output executions for this sub-run
+        output_executions = self.output_execution_repo.get_by_sub_run_id(sub_run_id)
+
+        if not output_executions:
+            return []
+
+        # Collect all affected pending action IDs
+        affected_action_ids: set[int] = set()
+        for output_execution in output_executions:
+            fields = self.pending_action_field_repo.get_fields_by_output_execution(output_execution.id)
+            for field in fields:
+                affected_action_ids.add(field.pending_action_id)
+
+        if not affected_action_ids:
+            return []
+
+        # Check which of these actions are in terminal states
+        terminal_actions = []
+        for action_id in affected_action_ids:
+            action = self.pending_action_repo.get_by_id(action_id)
+            if action and action.status in terminal_statuses:
+                terminal_actions.append({
+                    "id": action.id,
+                    "hawb": action.hawb,
+                    "status": action.status,
+                    "action_type": action.action_type,
+                })
+
+        return terminal_actions

@@ -350,6 +350,34 @@ class SubRunOperationResponse(BaseModel):
     eto_run_id: int = Field(..., description="Parent ETO run ID")
 
 
+class AffectedTerminalAction(BaseModel):
+    """Info about a terminal action that would be affected by reprocessing."""
+    id: int
+    hawb: str
+    status: str
+    action_type: str
+
+
+class ReprocessWarningsResponse(BaseModel):
+    """
+    Response for checking warnings before reprocessing a sub-run.
+
+    If terminal_actions is non-empty, the user should be warned that
+    reprocessing will delete contribution data from actions that have
+    already been approved/rejected.
+    """
+    sub_run_id: int
+    has_warnings: bool = Field(..., description="True if there are warnings to show")
+    terminal_actions: list[AffectedTerminalAction] = Field(
+        default_factory=list,
+        description="List of terminal actions that would be affected"
+    )
+    warning_message: str | None = Field(
+        None,
+        description="Human-readable warning message if has_warnings is True"
+    )
+
+
 class RunOperationResponse(BaseModel):
     """
     Response for run-level aggregated operations (reprocess_run, skip_run).

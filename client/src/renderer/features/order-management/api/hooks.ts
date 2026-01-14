@@ -59,10 +59,17 @@ export const orderManagementQueryKeys = {
   pendingUpdateDetail: (id: number) =>
     [...orderManagementQueryKeys.pendingUpdates(), 'detail', id] as const,
 
-  // Unified Actions
-  unifiedActions: () => [...orderManagementQueryKeys.all, 'unified-actions'] as const,
+  // Unified Actions (Pending Actions)
+  pendingActions: () => [...orderManagementQueryKeys.all, 'pending-actions'] as const,
+  pendingActionsList: (params?: GetUnifiedActionsParams) =>
+    [...orderManagementQueryKeys.pendingActions(), 'list', params] as const,
+  pendingActionDetail: (id: number) =>
+    [...orderManagementQueryKeys.pendingActions(), 'detail', id] as const,
+
+  // Legacy aliases for unified actions
+  unifiedActions: () => orderManagementQueryKeys.pendingActions(),
   unifiedActionsList: (params?: GetUnifiedActionsParams) =>
-    [...orderManagementQueryKeys.unifiedActions(), 'list', params] as const,
+    orderManagementQueryKeys.pendingActionsList(params),
 
   // Order History
   orderHistory: () => [...orderManagementQueryKeys.all, 'history'] as const,
@@ -173,15 +180,16 @@ export function useApprovePendingAction() {
       return response.data;
     },
     onSuccess: (_data, variables) => {
-      // Invalidate all related queries
+      // Invalidate all related queries - use both detail key patterns for compatibility
       queryClient.invalidateQueries({
         queryKey: orderManagementQueryKeys.pendingActionDetail(variables.actionId),
       });
       queryClient.invalidateQueries({
-        queryKey: orderManagementQueryKeys.pendingActions(),
+        queryKey: orderManagementQueryKeys.pendingOrderDetail(variables.actionId),
       });
+      // Invalidate list queries
       queryClient.invalidateQueries({
-        queryKey: orderManagementQueryKeys.unifiedActions(),
+        queryKey: orderManagementQueryKeys.pendingActions(),
       });
     },
   });
@@ -214,15 +222,16 @@ export function useRejectPendingAction() {
       return response.data;
     },
     onSuccess: (_data, variables) => {
-      // Invalidate all related queries
+      // Invalidate all related queries - use both detail key patterns for compatibility
       queryClient.invalidateQueries({
         queryKey: orderManagementQueryKeys.pendingActionDetail(variables.actionId),
       });
       queryClient.invalidateQueries({
-        queryKey: orderManagementQueryKeys.pendingActions(),
+        queryKey: orderManagementQueryKeys.pendingOrderDetail(variables.actionId),
       });
+      // Invalidate list queries
       queryClient.invalidateQueries({
-        queryKey: orderManagementQueryKeys.unifiedActions(),
+        queryKey: orderManagementQueryKeys.pendingActions(),
       });
     },
   });

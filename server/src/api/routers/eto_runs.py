@@ -21,6 +21,8 @@ from api.schemas.eto_runs import (
     SubRunOperationResponse,
     RunOperationResponse,
     EtoSubRunFullDetail,
+    ReprocessWarningsResponse,
+    AffectedTerminalAction,
 )
 from shared.types.eto_runs import EtoRunUpdate
 from api.mappers.eto_runs import (
@@ -447,6 +449,64 @@ async def get_sub_run_detail(
     return eto_sub_run_full_detail_to_api(detail_view, customer_name)
 
 
+@router.get("/sub-runs/{sub_run_id}/reprocess-warnings", response_model=ReprocessWarningsResponse)
+async def get_reprocess_warnings(
+    sub_run_id: int,
+    service: EtoRunsService = Depends(lambda: ServiceContainer.get_eto_runs_service())
+) -> ReprocessWarningsResponse:
+    """
+    Check for warnings before reprocessing a sub-run.
+
+    Returns information about any pending actions in terminal states (completed,
+    rejected, failed) that would be affected by reprocessing this sub-run.
+
+    If terminal actions exist, the frontend should warn the user that reprocessing
+    will delete the contribution data from those actions, which may affect
+    historical records and contributing sources display.
+
+    Returns:
+    - has_warnings: True if there are terminal actions that would be affected
+    - terminal_actions: List of affected actions with their details
+    - warning_message: Human-readable warning message
+
+    Errors:
+    - 404: Sub-run not found
+    """
+    logger.debug(f"Checking reprocess warnings for sub-run {sub_run_id}")
+
+    # Verify sub-run exists
+    sub_run = service.sub_run_repo.get_by_id(sub_run_id)
+    if not sub_run:
+        raise ObjectNotFoundError(f"Sub-run {sub_run_id} not found")
+
+    # Get terminal actions from order management service
+    order_mgmt_service = ServiceContainer.get_order_management_service()
+    terminal_actions = order_mgmt_service.get_terminal_actions_for_sub_run(sub_run_id)
+
+    has_warnings = len(terminal_actions) > 0
+    warning_message = None
+
+    if has_warnings:
+        action_summaries = [
+            f"{a['hawb']} ({a['action_type']}, {a['status']})"
+            for a in terminal_actions
+        ]
+        warning_message = (
+            f"This sub-run contributed to {len(terminal_actions)} action(s) that have already been "
+            f"processed: {', '.join(action_summaries)}. Reprocessing will remove the contribution "
+            f"history from these actions, which may affect historical records."
+        )
+
+    return ReprocessWarningsResponse(
+        sub_run_id=sub_run_id,
+        has_warnings=has_warnings,
+        terminal_actions=[
+            AffectedTerminalAction(**a) for a in terminal_actions
+        ],
+        warning_message=warning_message,
+    )
+
+
 @router.post("/sub-runs/{sub_run_id}/reprocess", response_model=SubRunOperationResponse)
 async def reprocess_sub_run(
     sub_run_id: int,
@@ -457,6 +517,11 @@ async def reprocess_sub_run(
 
     Deletes the sub-run and all its stage data (extraction, pipeline execution),
     then creates a new sub-run with the same pages for the worker to process.
+
+    NOTE: If this sub-run contributed to actions in terminal states (completed,
+    rejected, failed), the contribution data will be deleted. Use the
+    GET /sub-runs/{sub_run_id}/reprocess-warnings endpoint first to check
+    for warnings and inform the user.
 
     Flow:
     1. Delete extraction record (if exists)
