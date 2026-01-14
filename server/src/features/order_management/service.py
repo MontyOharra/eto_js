@@ -43,7 +43,7 @@ from shared.types.pending_actions import (
 )
 
 from features.htc_integration import HtcIntegrationService
-from shared.events.order_events_old import order_event_manager
+from shared.events.order_events import order_event_manager
 
 from .transformers import FIELD_TRANSFORMERS
 
@@ -1100,7 +1100,7 @@ class OrderManagementService:
 
         for action_id in affected_action_ids:
             # Check if any extracted fields remain
-            has_fields = self.pending_action_field_repo.has_extracted_fields_for_action(action_id)
+            has_fields = self.pending_action_field_repo.has_extracted_fields(action_id)
 
             if not has_fields:
                 # No extracted fields remain - delete the action

@@ -14,7 +14,7 @@ from datetime import datetime, timezone
 import json
 
 from shared.logging import get_logger
-from server.src.shared.events.order_events_old import order_event_manager
+from server.src.shared.events.order_events import order_event_manager
 from shared.database.connection import DatabaseConnectionManager
 from shared.database.repositories.eto_sub_run_output_execution import EtoSubRunOutputExecutionRepository
 from server.src.shared.database.repositories.pending_order_old import PendingOrderRepository

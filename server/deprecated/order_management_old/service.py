@@ -14,7 +14,7 @@ from typing import Any, cast, Dict, List, Optional, Tuple
 from datetime import datetime, timezone
 
 from shared.logging import get_logger
-from server.src.shared.events.order_events_old import order_event_manager
+from server.src.shared.events.order_events import order_event_manager
 from shared.database.connection import DatabaseConnectionManager
 from server.src.shared.database.repositories.pending_order_old import PendingOrderRepository
 from server.src.shared.database.repositories.pending_order_history_old import PendingOrderHistoryRepository

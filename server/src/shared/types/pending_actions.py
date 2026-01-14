@@ -399,16 +399,15 @@ class PendingActionDetailView(BaseModel):
 
 class CleanupResult(BaseModel):
     """
-    Result of cleanup_output_execution_contributions operation.
+    Result of cleanup operations (sub-run or output execution).
 
-    Returned when an output execution is reprocessed or deleted.
+    Returned when field contributions are cleaned up during reprocessing or deletion.
     """
     model_config = ConfigDict(frozen=True)
 
-    output_execution_id: int
-    affected_action_ids: list[int]  # Actions that had fields removed
-    deleted_action_ids: list[int]   # Actions that were fully deleted (no extracted fields remaining)
-    fields_removed_count: int
+    fields_deleted: int           # Number of field records removed
+    actions_deleted: int          # Actions fully deleted (no fields remaining)
+    actions_recalculated: int     # Actions that still have fields and were recalculated
 
 
 class ExecuteResult(BaseModel):

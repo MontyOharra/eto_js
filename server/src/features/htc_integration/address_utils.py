@@ -292,7 +292,7 @@ class HtcAddressUtils:
 
         try:
             parsed, address_type = usaddress.tag(address_string)
-        except RepeatedLabelError as e: #type; ignore
+        except RepeatedLabelError as e: #type: ignore
             logger.warning(f"Address parsing ambiguous (repeated labels): {e}")
             return None
 

@@ -6,19 +6,16 @@ Repository for pending_actions table with CRUD operations and specialized querie
 import logging
 from datetime import datetime
 
-from sqlalchemy import and_, or_
-from sqlalchemy.orm import joinedload
+from sqlalchemy import and_
 
 from shared.database.repositories.base import BaseRepository
-from shared.database.models import PendingActionModel, PendingActionFieldModel
+from shared.database.models import PendingActionModel
 from shared.exceptions.service import ObjectNotFoundError
 from shared.types.pending_actions import (
     PendingAction,
     PendingActionCreate,
     PendingActionUpdate,
     PendingActionListView,
-    PendingActionDetailView,
-    PendingActionFieldView,
     PendingActionStatus,
     REQUIRED_ORDER_FIELDS,
     OPTIONAL_ORDER_FIELDS,
@@ -309,67 +306,3 @@ class PendingActionRepository(BaseRepository[PendingActionModel]):
             ]
 
             return result, total
-
-    def get_detail_with_fields(self, action_id: int) -> PendingActionDetailView | None:
-        """
-        Get pending action with all field values for detail view.
-
-        Performs eager loading of fields and groups them by field_name.
-
-        Args:
-            action_id: Pending action ID
-
-        Returns:
-            PendingActionDetailView with fields grouped by field_name,
-            or None if not found
-        """
-        with self._get_session() as session:
-            model = (
-                session.query(self.model_class)
-                .options(joinedload(self.model_class.fields))
-                .filter(self.model_class.id == action_id)
-                .first()
-            )
-
-            if model is None:
-                return None
-
-            # Group fields by field_name
-            fields_by_name: dict[str, list[PendingActionFieldView]] = {}
-
-            for field in model.fields:
-                field_view = PendingActionFieldView(
-                    id=field.id,
-                    field_name=field.field_name,
-                    value=field.value,
-                    is_selected=field.is_selected,
-                    is_approved_for_update=field.is_approved_for_update,
-                    output_execution_id=field.output_execution_id,
-                    is_user_provided=field.output_execution_id is None,
-                )
-
-                if field.field_name not in fields_by_name:
-                    fields_by_name[field.field_name] = []
-                fields_by_name[field.field_name].append(field_view)
-
-            return PendingActionDetailView(
-                id=model.id,
-                customer_id=model.customer_id,
-                customer_name=None,  # Enriched at service layer
-                hawb=model.hawb,
-                htc_order_number=model.htc_order_number,
-                action_type=model.action_type,
-                status=model.status,
-                required_fields_present=model.required_fields_present,
-                required_fields_total=len(REQUIRED_ORDER_FIELDS),
-                optional_fields_present=model.optional_fields_present,
-                optional_fields_total=len(OPTIONAL_ORDER_FIELDS),
-                conflict_count=model.conflict_count,
-                error_message=model.error_message,
-                error_at=model.error_at,
-                is_read=model.is_read,
-                created_at=model.created_at,
-                updated_at=model.updated_at,
-                last_processed_at=model.last_processed_at,
-                fields=fields_by_name,
-            )

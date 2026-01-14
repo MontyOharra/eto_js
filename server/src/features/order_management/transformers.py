@@ -167,7 +167,7 @@ def transform_datetime_range_field(source_values: dict[str, Any]) -> DatetimeRan
     end_dt = _parse_datetime(end_value) if end_value else None
 
     # If only one is provided, we can't validate or create a proper range
-    if start_dt and not end_dt:
+    if start_dt is not None and end_dt is None:
         logger.warning(f"Only start datetime provided: {start_value}")
         return DatetimeRangeValue(
             date=start_dt.strftime("%Y-%m-%d"),
@@ -175,13 +175,17 @@ def transform_datetime_range_field(source_values: dict[str, Any]) -> DatetimeRan
             time_end="",  # Unknown
         )
 
-    if end_dt and not start_dt:
+    if end_dt is not None and start_dt is None:
         logger.warning(f"Only end datetime provided: {end_value}")
         return DatetimeRangeValue(
             date=end_dt.strftime("%Y-%m-%d"),
             time_start="",  # Unknown
             time_end=end_dt.strftime("%H:%M"),
         )
+
+    # Both None (values provided but failed to parse)
+    if start_dt is None or end_dt is None:
+        return None
 
     # Both provided - validate dates match
     if start_dt.date() != end_dt.date():
