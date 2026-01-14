@@ -338,27 +338,28 @@ class PendingActionFieldRepository(BaseRepository[PendingActionFieldModel]):
         """
         Set one field value as selected, deselecting all others for that field.
 
-        Performs a single UPDATE query for efficiency.
-
         Args:
             action_id: Pending action ID
             field_name: Field name to update
             selected_field_id: ID of the field value to select
         """
         with self._get_session() as session:
-            # Use a single UPDATE with CASE expression
-            # SET is_selected = (id = selected_field_id)
+            # First, deselect all values for this field
             session.query(self.model_class).filter(
                 and_(
                     self.model_class.pending_action_id == action_id,
                     self.model_class.field_name == field_name,
                 )
             ).update(
-                {
-                    self.model_class.is_selected: (
-                        self.model_class.id == selected_field_id
-                    )
-                },
+                {self.model_class.is_selected: False},
+                synchronize_session=False,
+            )
+
+            # Then, select the chosen value
+            session.query(self.model_class).filter(
+                self.model_class.id == selected_field_id
+            ).update(
+                {self.model_class.is_selected: True},
                 synchronize_session=False,
             )
 

@@ -203,7 +203,7 @@ class RejectActionResponse(BaseModel):
 
 class SelectFieldValueRequest(BaseModel):
     """Request for POST /pending-actions/{id}/select-field."""
-    field_id: int = Field(..., description="ID of the pending_action_field record to select")
+    field_id: int
 
 
 class SelectFieldValueResponse(BaseModel):
