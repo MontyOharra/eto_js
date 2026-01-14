@@ -1186,11 +1186,18 @@ class EtoRunsService:
             logger.debug(f"Sub-run {sub_run_id}: Created output_execution record {output_execution.id} for HAWB {hawb}")
 
             # Process via OrderManagementService - creates/updates pending action
+            # Returns None if update has no changed fields compared to HTC
             pending_action = self.order_management_service.process_output_execution(output_execution.id)
-            logger.debug(
-                f"Sub-run {sub_run_id}: Processed output_execution {output_execution.id} -> "
-                f"pending_action {pending_action.id} (status={pending_action.status})"
-            )
+            if pending_action:
+                logger.debug(
+                    f"Sub-run {sub_run_id}: Processed output_execution {output_execution.id} -> "
+                    f"pending_action {pending_action.id} (status={pending_action.status})"
+                )
+            else:
+                logger.debug(
+                    f"Sub-run {sub_run_id}: Output execution {output_execution.id} had no changes - "
+                    f"no pending action created"
+                )
 
         logger.monitor(f"Sub-run {sub_run_id}: Output execution completed for {len(hawbs)} HAWB(s)")
 

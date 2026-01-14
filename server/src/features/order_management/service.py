@@ -91,7 +91,7 @@ class OrderManagementService:
 
     # ========== Main Entry Point ==========
 
-    def process_output_execution(self, output_execution_id: int) -> PendingAction:
+    def process_output_execution(self, output_execution_id: int) -> PendingAction | None:
         """
         Main entry point - processes a single output execution record.
 
@@ -101,7 +101,8 @@ class OrderManagementService:
             output_execution_id: ID of the output execution to process
 
         Returns:
-            The created or updated PendingAction
+            The created or updated PendingAction, or None if the output had no
+            changes compared to HTC (for updates only - creates always return an action)
         """
         # 1. Load the data snapshot
         output_execution = self.output_execution_repo.get_by_id(output_execution_id)
@@ -114,36 +115,41 @@ class OrderManagementService:
             hawb=output_execution.hawb,
         )
 
-        # 3. Check if pending action already exists (for event type determination)
+        # 3. Transform output channels -> order fields
+        order_fields = self._transform_output_to_fields(
+            output_channel_data=output_execution.output_channel_data,
+        )
+
+        # 3b. Resolve address IDs for location fields
+        order_fields = self._resolve_address_ids(order_fields)
+
+        # 3c. For updates, filter out fields that match current HTC values BEFORE
+        # creating the pending action. If no fields differ, skip entirely.
+        if action_type == "update" and htc_order_number is not None:
+            order_fields = self._filter_unchanged_fields_for_storage(
+                order_fields, htc_order_number
+            )
+            if not order_fields:
+                logger.info(
+                    f"No changed fields for update on HAWB '{output_execution.hawb}' - "
+                    f"skipping pending action creation"
+                )
+                return None
+
+        # 4. Check if pending action already exists (for event type determination)
         existing_action = self.pending_action_repo.get_active_by_customer_hawb(
             customer_id=output_execution.customer_id,
             hawb=output_execution.hawb,
         )
         is_new_action = existing_action is None
 
-        # 4. Find or create the pending action record
+        # 5. Find or create the pending action record
         pending_action = self._get_or_create_pending_action(
             customer_id=output_execution.customer_id,
             hawb=output_execution.hawb,
             action_type=action_type,
             htc_order_number=htc_order_number,
         )
-
-        # 5. Transform output channels -> order fields
-        order_fields = self._transform_output_to_fields(
-            output_channel_data=output_execution.output_channel_data,
-        )
-
-        # 5b. Resolve address IDs for location fields
-        order_fields = self._resolve_address_ids(order_fields)
-
-        # 5c. For updates, filter out fields that match current HTC values
-        # We only want to store fields that actually differ from HTC
-        if action_type == "update" and htc_order_number is not None:
-            order_fields = self._filter_unchanged_fields_for_storage(
-                order_fields, htc_order_number
-            )
-            logger.debug(f"After HTC filter, remaining fields: {list(order_fields.keys())}")
 
         # 6. Add field values to pending action (handles conflict detection)
         self._add_fields_to_action(
@@ -1033,7 +1039,7 @@ class OrderManagementService:
         hawb: str,
         output_channel_data: dict[str, Any],
         pdf_filename: str = "mock_document.pdf",
-    ) -> PendingAction:
+    ) -> PendingAction | None:
         """
         Create a mock output execution and process it through the normal flow.
 
@@ -1050,7 +1056,7 @@ class OrderManagementService:
             pdf_filename: Optional filename for the mock PDF (default: "mock_document.pdf")
 
         Returns:
-            The created or updated PendingAction
+            The created or updated PendingAction, or None if update had no changes
         """
         logger.info(
             f"Creating mock output execution: customer_id={customer_id}, "
@@ -1123,10 +1129,15 @@ class OrderManagementService:
         # 5. Process through the normal flow
         pending_action = self.process_output_execution(output_execution.id)
 
-        logger.info(
-            f"Mock output execution processed: pending_action_id={pending_action.id}, "
-            f"status={pending_action.status}, action_type={pending_action.action_type}"
-        )
+        if pending_action:
+            logger.info(
+                f"Mock output execution processed: pending_action_id={pending_action.id}, "
+                f"status={pending_action.status}, action_type={pending_action.action_type}"
+            )
+        else:
+            logger.info(
+                f"Mock output execution had no changes compared to HTC - no pending action created"
+            )
 
         return pending_action
 

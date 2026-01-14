@@ -235,6 +235,15 @@ async def create_mock_output(
         pdf_filename=request.pdf_filename or "mock_document.pdf",
     )
 
+    if pending_action is None:
+        # Update had no changes compared to HTC - return informative response
+        return CreateMockOutputResponse(
+            pending_action_id=0,  # No action created
+            action_type="update",
+            status="completed",  # Effectively completed - nothing to do
+            message="No changes detected compared to current HTC values. No pending action created.",
+        )
+
     return CreateMockOutputResponse(
         pending_action_id=pending_action.id,
         action_type=pending_action.action_type,
