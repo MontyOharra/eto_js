@@ -385,18 +385,38 @@ async def approve_action(
     In the future, this will actually execute the action against HTC.
 
     Only actions with status 'ready', 'incomplete', or 'conflict' can be approved.
+
+    If requires_review is True in the response, the action was NOT approved and
+    remains in its current status. The frontend should show the review_reason
+    to the user and refresh the detail view.
     """
     logger.debug(f"Approve pending action {action_id}")
 
     result = service.approve_action(action_id)
+
+    # Determine new_status and message based on result
+    if result.requires_review:
+        # Action needs review - status unchanged
+        new_status = "ready"  # Action stays in ready state
+        message = f"Action requires review: {result.review_reason}"
+    elif result.success:
+        # Action approved successfully
+        new_status = "completed"
+        message = "Action approved successfully (mock)"
+    else:
+        # Action approval failed
+        new_status = "ready"
+        message = result.error_message
 
     return ApproveActionResponse(
         pending_action_id=result.pending_action_id,
         success=result.success,
         action_type=result.action_type,
         htc_order_number=result.htc_order_number,
-        new_status="completed" if result.success else "ready",
-        message=result.error_message if not result.success else "Action approved successfully (mock)",
+        new_status=new_status,
+        message=message,
+        requires_review=result.requires_review,
+        review_reason=result.review_reason,
     )
 
 

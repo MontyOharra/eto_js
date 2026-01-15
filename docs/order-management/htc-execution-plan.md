@@ -8,10 +8,16 @@ The Order Management system accumulates field values from PDF extractions into `
 
 ## Current State
 
+### What's Been Implemented
+
+- **API Schema**: `requires_review` and `review_reason` fields added to `ApproveActionResponse` and `ExecuteResult`
+- **Frontend Alert**: `ReviewRequiredAlert` modal component shows when approval requires review
+- **Mock Testing**: `approve_action()` randomly returns `requires_review=true` for frontend testing
+
 ### Relevant Services
 
 1. **OrderManagementService** (`server/src/features/order_management/service.py`)
-   - `approve_action()` - Currently a mock that logs and sets status to `completed`
+   - `approve_action()` - Mock implementation with random `requires_review` for testing
    - Handles field accumulation, conflict resolution, field approval toggles
 
 2. **HtcIntegrationService** (`server/src/features/htc_integration/service.py`)
@@ -233,21 +239,9 @@ def update_order(
 
 ---
 
-## API Response Changes
+## API Response Changes ✅ IMPLEMENTED
 
-### Current `ApproveActionResponse`:
-
-```python
-class ApproveActionResponse(BaseModel):
-    pending_action_id: int
-    success: bool
-    action_type: str
-    htc_order_number: float | None
-    new_status: str
-    message: str | None
-```
-
-### New `ApproveActionResponse`:
+### `ApproveActionResponse` (Updated)
 
 ```python
 class ApproveActionResponse(BaseModel):
@@ -258,10 +252,14 @@ class ApproveActionResponse(BaseModel):
     new_status: str
     message: str | None
 
-    # NEW - for handling state changes
+    # For handling state changes that require user review
     requires_review: bool = False
     review_reason: str | None = None
 ```
+
+**Files modified:**
+- `server/src/api/schemas/pending_actions.py` - API schema
+- `server/src/shared/types/pending_actions.py` - `ExecuteResult` type
 
 **Possible `review_reason` values:**
 - `"order_created_externally"` - Create became update (order exists now)
@@ -272,22 +270,31 @@ class ApproveActionResponse(BaseModel):
 
 ---
 
-## Frontend Handling
+## Frontend Handling ✅ IMPLEMENTED
+
+**Component:** `ReviewRequiredAlert` (`client/src/renderer/features/order-management/components/ReviewRequiredAlert/`)
 
 When `requires_review=True`:
 
-1. Show popup/modal with message based on `review_reason`:
-   - `"order_created_externally"`: "This order was created externally. Please review the update fields."
-   - `"order_deleted_converting_to_create"`: "The order was deleted. This has been converted to a create. Please review."
-   - `"htc_values_changed"`: "The order was modified in HTC. Please review the updated fields."
-   - `"no_changes_remaining"`: "All proposed changes now match the current order. Nothing to update."
-   - `"ambiguous"`: "Multiple orders exist for this HAWB. Please resolve manually in HTC."
+1. **Alert modal displays** with dynamic message based on action type:
+   - "The status of the order changed before the {creation/update} was approved.
+     This happened because another user may have {created/updated} the order
+     before ETO was approved to {create/update} it, and thus, the details of
+     the order have changed."
+   - "Please check the updated data to see what changed and approve again
+     if everything is accurate."
+   - Shows the `review_reason` for debugging/clarity
 
-2. User clicks OK
+2. User clicks OK to dismiss
 
-3. Detail view refreshes (SSE event already broadcast)
+3. Detail view refreshes (queries are invalidated on approval response)
 
 4. User sees updated state and can approve again (or reject)
+
+**Files modified:**
+- `client/src/renderer/features/order-management/components/ReviewRequiredAlert/` - New component
+- `client/src/renderer/features/order-management/api/hooks.ts` - Added `ApproveActionResponse` type
+- `client/src/renderer/pages/dashboard/orders/index.tsx` - Integrated alert handling
 
 ---
 
@@ -403,44 +410,48 @@ incomplete ──┬──> conflict ──> ready ──> processing ──> co
 
 ## Files to Modify
 
-| File | Changes |
-|------|---------|
-| `server/src/features/htc_integration/service.py` | Refactor `create_order()` and `update_order()` to accept `pickup_location_id` and `delivery_location_id` instead of strings |
-| `server/src/features/order_management/service.py` | Complete rewrite of `approve_action()`, add helper methods |
-| `server/src/api/schemas/pending_actions.py` | Add `requires_review` and `review_reason` to `ApproveActionResponse` |
-| `client/.../pages/dashboard/orders/index.tsx` | Handle `requires_review` response, show popup |
-| `client/.../components/...` | Potentially add review popup component |
+| File | Changes | Status |
+|------|---------|--------|
+| `server/src/features/htc_integration/service.py` | Refactor `create_order()` and `update_order()` to accept `pickup_location_id` and `delivery_location_id` instead of strings | ⏳ Pending |
+| `server/src/features/order_management/service.py` | Complete rewrite of `approve_action()`, add helper methods | ⏳ Pending (mock with random `requires_review` implemented) |
+| `server/src/api/schemas/pending_actions.py` | Add `requires_review` and `review_reason` to `ApproveActionResponse` | ✅ Done |
+| `server/src/shared/types/pending_actions.py` | Add `requires_review` and `review_reason` to `ExecuteResult` | ✅ Done |
+| `client/.../pages/dashboard/orders/index.tsx` | Handle `requires_review` response, show popup | ✅ Done |
+| `client/.../components/ReviewRequiredAlert/` | Add review popup component | ✅ Done |
+| `client/.../api/hooks.ts` | Add `ApproveActionResponse` type with new fields | ✅ Done |
 
 ---
 
 ## Implementation Order
 
-1. **Refactor HtcIntegrationService**
+1. **Refactor HtcIntegrationService** ⏳ Pending
    - Update `create_order()` signature to accept `pickup_location_id`, `delivery_location_id`
    - Update `update_order()` signature similarly
    - Remove internal `find_or_create_address()` calls
    - Keep `get_address_info()` calls for populating order fields
 
-2. **Update API schema**
+2. **Update API schema** ✅ Done
    - Add `requires_review` and `review_reason` to `ApproveActionResponse`
+   - Add `requires_review` and `review_reason` to `ExecuteResult`
 
-3. **Implement OrderManagementService helpers**
+3. **Implement OrderManagementService helpers** ⏳ Pending
    - `_resolve_addresses_for_execution()`
    - `_transform_fields_for_htc()`
    - `_compare_fields_to_current_htc()`
    - `_verify_htc_state_and_recalculate()`
 
-4. **Rewrite `approve_action()`**
+4. **Rewrite `approve_action()`** ⏳ Pending
    - Wire everything together
    - Handle all TOCTOU cases
    - Handle success and failure states
+   - (Currently has mock with random `requires_review` for frontend testing)
 
-5. **Update frontend**
+5. **Update frontend** ✅ Done
    - Handle `requires_review` response
-   - Show appropriate popup messages
-   - Refresh detail view
+   - Show `ReviewRequiredAlert` popup with dynamic message
+   - Refresh detail view via query invalidation
 
-6. **Implement email sending**
+6. **Implement email sending** ⏳ Pending
    - Find active email account in database
    - Send confirmation after successful creates
 

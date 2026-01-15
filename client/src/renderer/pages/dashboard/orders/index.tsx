@@ -5,6 +5,7 @@ import {
   PendingOrderDetailView,
   PendingUpdateDetailView,
   OrderHistoryTimeline,
+  ReviewRequiredAlert,
   usePendingOrderDetail,
   useSelectFieldValue,
   useApprovePendingAction,
@@ -81,6 +82,17 @@ function OrdersPage() {
 
   // ETO Sub-run viewer modal state
   const [viewingSubRunId, setViewingSubRunId] = useState<number | null>(null);
+
+  // Review required alert state
+  const [reviewAlert, setReviewAlert] = useState<{
+    isOpen: boolean;
+    actionType: 'create' | 'update';
+    reviewReason: string | null;
+  }>({
+    isOpen: false,
+    actionType: 'create',
+    reviewReason: null,
+  });
 
   // ============================================================================
   // Filter State
@@ -163,8 +175,21 @@ function OrdersPage() {
     markRead.mutate({ id, is_read: isRead });
   };
 
-  const handleApproveAction = (actionId: number) => {
-    approveAction.mutate({ actionId });
+  const handleApproveAction = (actionId: number, actionType: 'create' | 'update' = 'update') => {
+    approveAction.mutate(
+      { actionId },
+      {
+        onSuccess: (data) => {
+          if (data.requires_review) {
+            setReviewAlert({
+              isOpen: true,
+              actionType,
+              reviewReason: data.review_reason,
+            });
+          }
+        },
+      }
+    );
   };
 
   const handleRejectAction = (actionId: number, reason?: string) => {
@@ -229,7 +254,20 @@ function OrdersPage() {
 
   const handleApprovePendingOrder = () => {
     if (!selectedOrderId) return;
-    approveAction.mutate({ actionId: selectedOrderId });
+    approveAction.mutate(
+      { actionId: selectedOrderId },
+      {
+        onSuccess: (data) => {
+          if (data.requires_review) {
+            setReviewAlert({
+              isOpen: true,
+              actionType: 'create',
+              reviewReason: data.review_reason,
+            });
+          }
+        },
+      }
+    );
   };
 
   const handleRejectPendingOrder = () => {
@@ -243,6 +281,10 @@ function OrdersPage() {
 
   const handleCloseSubRunViewer = () => {
     setViewingSubRunId(null);
+  };
+
+  const handleCloseReviewAlert = () => {
+    setReviewAlert((prev) => ({ ...prev, isOpen: false }));
   };
 
   // Track which fields are currently being confirmed
@@ -296,6 +338,12 @@ function OrdersPage() {
           subRunId={viewingSubRunId}
           onClose={handleCloseSubRunViewer}
         />
+        <ReviewRequiredAlert
+          isOpen={reviewAlert.isOpen}
+          actionType={reviewAlert.actionType}
+          reviewReason={reviewAlert.reviewReason}
+          onClose={handleCloseReviewAlert}
+        />
       </>
     );
   }
@@ -323,7 +371,7 @@ function OrdersPage() {
         <PendingUpdateDetailView
           update={updateDetail}
           onBack={handleBackToList}
-          onApprove={(updateId: number) => handleApproveAction(updateId)}
+          onApprove={(updateId: number) => handleApproveAction(updateId, 'update')}
           onReject={(updateId: number) => handleRejectAction(updateId)}
           onConfirmField={handleConfirmUpdateField}
           onToggleFieldApproval={handleToggleFieldApproval}
@@ -337,6 +385,12 @@ function OrdersPage() {
           isOpen={viewingSubRunId !== null}
           subRunId={viewingSubRunId}
           onClose={handleCloseSubRunViewer}
+        />
+        <ReviewRequiredAlert
+          isOpen={reviewAlert.isOpen}
+          actionType={reviewAlert.actionType}
+          reviewReason={reviewAlert.reviewReason}
+          onClose={handleCloseReviewAlert}
         />
       </>
     );
@@ -555,6 +609,14 @@ function OrdersPage() {
         isOpen={viewingSubRunId !== null}
         subRunId={viewingSubRunId}
         onClose={handleCloseSubRunViewer}
+      />
+
+      {/* Review Required Alert */}
+      <ReviewRequiredAlert
+        isOpen={reviewAlert.isOpen}
+        actionType={reviewAlert.actionType}
+        reviewReason={reviewAlert.reviewReason}
+        onClose={handleCloseReviewAlert}
       />
     </div>
   );

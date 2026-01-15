@@ -21,3 +21,4 @@ export { UnifiedActionsTable } from './UnifiedActionsTable';
 // Shared
 export { FieldStatusBadge } from './FieldStatusBadge';
 export { OrderStatusBadge } from './OrderStatusBadge';
+export { ReviewRequiredAlert } from './ReviewRequiredAlert';

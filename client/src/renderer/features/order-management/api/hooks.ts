@@ -241,8 +241,26 @@ export function useSetFieldApproval() {
 }
 
 /**
+ * Response type for approve action endpoint
+ */
+export interface ApproveActionResponse {
+  pending_action_id: number;
+  success: boolean;
+  action_type: string;
+  htc_order_number: number | null;
+  new_status: string;
+  message: string | null;
+  requires_review: boolean;
+  review_reason: string | null;
+}
+
+/**
  * Approve a pending action (unified - works for both creates and updates)
  * Uses the new /pending-actions/{id}/approve endpoint
+ *
+ * If requires_review is true in the response, the action was NOT approved
+ * and remains in its current status. The caller should show the review_reason
+ * to the user and refresh the detail view.
  */
 export function useApprovePendingAction() {
   const queryClient = useQueryClient();
@@ -252,14 +270,7 @@ export function useApprovePendingAction() {
       actionId,
     }: {
       actionId: number;
-    }): Promise<{
-      pending_action_id: number;
-      success: boolean;
-      action_type: string;
-      htc_order_number: number | null;
-      new_status: string;
-      message: string | null;
-    }> => {
+    }): Promise<ApproveActionResponse> => {
       const response = await apiClient.post(
         `/api/pending-actions/${actionId}/approve`,
         {}

@@ -187,6 +187,10 @@ class ApproveActionResponse(BaseModel):
     new_status: PendingActionStatus
     message: str | None
 
+    # For handling state changes that require user review before proceeding
+    requires_review: bool = False
+    review_reason: str | None = None
+
 
 class RejectActionRequest(BaseModel):
     """Request for POST /pending-actions/{id}/reject."""

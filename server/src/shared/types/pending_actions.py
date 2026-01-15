@@ -424,3 +424,7 @@ class ExecuteResult(BaseModel):
     action_type: PendingActionType
     htc_order_number: float | None  # Set on successful create
     error_message: str | None
+
+    # For handling state changes that require user review before proceeding
+    requires_review: bool = False
+    review_reason: str | None = None

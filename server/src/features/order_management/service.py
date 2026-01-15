@@ -6,6 +6,7 @@ from output executions and manual input, execution against HTC, and user interac
 """
 import json
 import logging
+import random
 from dataclasses import asdict
 from typing import Any
 
@@ -811,6 +812,32 @@ class OrderManagementService:
                 action_type=action.action_type,
                 htc_order_number=action.htc_order_number,
                 error_message=f"Cannot approve action with status '{action.status}'",
+            )
+
+        # TEMPORARY: Random requires_review for frontend testing
+        # In the real implementation, this will be determined by TOCTOU checks
+        requires_review = random.choice([True, False])
+        if requires_review:
+            review_reason = random.choice([
+                "order_created_externally",
+                "order_deleted_converting_to_create",
+                "htc_values_changed",
+                "no_changes_remaining",
+                "ambiguous",
+            ])
+            logger.info(
+                f"=== MOCK REQUIRES REVIEW: Pending Action {pending_action_id} ===\n"
+                f"Reason: {review_reason}\n"
+                f"Action remains in '{action.status}' status for user review"
+            )
+            return ExecuteResult(
+                pending_action_id=pending_action_id,
+                success=True,  # Request succeeded, but action needs review
+                action_type=action.action_type,
+                htc_order_number=action.htc_order_number,
+                error_message=None,
+                requires_review=True,
+                review_reason=review_reason,
             )
 
         # Get selected fields to show what would be sent
