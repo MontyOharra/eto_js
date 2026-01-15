@@ -95,7 +95,7 @@ export function usePendingOrders(params?: GetPendingOrdersParams) {
       return response.data;
     },
     placeholderData: keepPreviousData,
-    staleTime: 30 * 1000,
+    staleTime: 0, // Real-time updates via SSE
     gcTime: 5 * 60 * 1000,
   });
 }
@@ -113,7 +113,7 @@ export function usePendingOrderDetail(id: number | null) {
       return response.data;
     },
     enabled: id !== null,
-    staleTime: 30 * 1000,
+    staleTime: 0, // Real-time updates via SSE
     gcTime: 5 * 60 * 1000,
   });
 }
@@ -183,7 +183,7 @@ export function useSelectFieldValue() {
       return response.data;
     },
     onSuccess: (_data, variables) => {
-      // Invalidate all related queries
+      // Invalidate all related queries (both create and update detail views)
       queryClient.invalidateQueries({
         queryKey: orderManagementQueryKeys.pendingActionDetail(variables.actionId),
       });
@@ -191,7 +191,50 @@ export function useSelectFieldValue() {
         queryKey: orderManagementQueryKeys.pendingOrderDetail(variables.actionId),
       });
       queryClient.invalidateQueries({
+        queryKey: orderManagementQueryKeys.pendingUpdateDetail(variables.actionId),
+      });
+      queryClient.invalidateQueries({
         queryKey: orderManagementQueryKeys.pendingActions(),
+      });
+    },
+  });
+}
+
+/**
+ * Set field approval status for updates (include/exclude field from update)
+ */
+export function useSetFieldApproval() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async ({
+      actionId,
+      fieldName,
+      isApproved,
+    }: {
+      actionId: number;
+      fieldName: string;
+      isApproved: boolean;
+    }): Promise<{
+      pending_action_id: number;
+      field_name: string;
+      is_approved: boolean;
+      success: boolean;
+      message: string | null;
+    }> => {
+      const response = await apiClient.post(
+        `/api/pending-actions/${actionId}/set-field-approval`,
+        { field_name: fieldName, is_approved: isApproved }
+      );
+      return response.data;
+    },
+    onSuccess: (_data, variables) => {
+      // Invalidate detail queries
+      queryClient.invalidateQueries({
+        queryKey: orderManagementQueryKeys.pendingActionDetail(variables.actionId),
+      });
+      queryClient.invalidateQueries({
+        queryKey: orderManagementQueryKeys.pendingUpdateDetail(variables.actionId),
       });
     },
   });
@@ -224,12 +267,15 @@ export function useApprovePendingAction() {
       return response.data;
     },
     onSuccess: (_data, variables) => {
-      // Invalidate all related queries - use both detail key patterns for compatibility
+      // Invalidate all related queries - use all detail key patterns for compatibility
       queryClient.invalidateQueries({
         queryKey: orderManagementQueryKeys.pendingActionDetail(variables.actionId),
       });
       queryClient.invalidateQueries({
         queryKey: orderManagementQueryKeys.pendingOrderDetail(variables.actionId),
+      });
+      queryClient.invalidateQueries({
+        queryKey: orderManagementQueryKeys.pendingUpdateDetail(variables.actionId),
       });
       // Invalidate list queries
       queryClient.invalidateQueries({
@@ -266,12 +312,15 @@ export function useRejectPendingAction() {
       return response.data;
     },
     onSuccess: (_data, variables) => {
-      // Invalidate all related queries - use both detail key patterns for compatibility
+      // Invalidate all related queries - use all detail key patterns for compatibility
       queryClient.invalidateQueries({
         queryKey: orderManagementQueryKeys.pendingActionDetail(variables.actionId),
       });
       queryClient.invalidateQueries({
         queryKey: orderManagementQueryKeys.pendingOrderDetail(variables.actionId),
+      });
+      queryClient.invalidateQueries({
+        queryKey: orderManagementQueryKeys.pendingUpdateDetail(variables.actionId),
       });
       // Invalidate list queries
       queryClient.invalidateQueries({
@@ -375,7 +424,7 @@ export function usePendingUpdates(params?: GetPendingUpdatesParams) {
       return response.data;
     },
     placeholderData: keepPreviousData,
-    staleTime: 30 * 1000,
+    staleTime: 0, // Real-time updates via SSE
     gcTime: 5 * 60 * 1000,
   });
 }
@@ -393,7 +442,7 @@ export function usePendingUpdateDetail(id: number | null) {
       return response.data;
     },
     enabled: id !== null,
-    staleTime: 30 * 1000,
+    staleTime: 0, // Real-time updates via SSE
     gcTime: 5 * 60 * 1000,
   });
 }
@@ -456,6 +505,7 @@ export function useRejectPendingUpdate() {
 }
 
 /**
+ * @deprecated Use useSelectFieldValue instead
  * Confirm a field selection to resolve a conflict in a pending update
  */
 export function useConfirmUpdateField() {
@@ -604,7 +654,8 @@ export function usePendingActions(params?: GetUnifiedActionsParams) {
       return response.data;
     },
     placeholderData: keepPreviousData,
-    staleTime: 30 * 1000,
+    // No staleTime - always refetch when invalidated for real-time updates
+    staleTime: 0,
     gcTime: 5 * 60 * 1000,
   });
 }

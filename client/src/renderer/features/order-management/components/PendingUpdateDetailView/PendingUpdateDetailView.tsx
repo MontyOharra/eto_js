@@ -13,25 +13,29 @@ import type {
   PendingActionDetail,
   PendingActionFieldItem,
   ContributingSourceItem,
+  OrderFieldDataType,
 } from '../../types';
 import { getStatusColorClasses } from '../../constants';
+import { formatFieldValue as formatValue } from '../../utils/formatFieldValue';
 
 // Internal field type for this component
 interface PendingUpdateFieldDetail {
   name: string;
   label: string;
-  current_value: string | null;
-  proposed_value: string | null;
+  data_type: OrderFieldDataType;
+  current_value: unknown;
+  proposed_value: unknown;
   state: 'empty' | 'set' | 'conflict' | 'confirmed';
   display_order: number;
   conflict_options: ConflictOption[] | null;
   source: { history_id: number } | null;
   sub_run_id: number | null; // For cross-highlighting with source cards
+  is_approved_for_update: boolean; // Whether this field will be included in the update
 }
 
 interface ConflictOption {
   history_id: number;
-  value: string;
+  value: unknown;
   contributed_at: string;
 }
 
@@ -48,16 +52,18 @@ interface PendingUpdateDetailViewProps {
   onApprove: (updateId: number) => void;
   onReject: (updateId: number) => void;
   onConfirmField: (fieldName: string, historyId: number) => void;
+  onToggleFieldApproval: (fieldName: string, isApproved: boolean) => void;
   onViewSubRun: (subRunId: number) => void;
   isApproving?: boolean;
   isRejecting?: boolean;
   confirmingFields?: Set<string>;
+  togglingApprovalFields?: Set<string>;
 }
 
 interface LocalFieldState {
   [fieldName: string]: {
     selectedHistoryId: number | null;
-    selectedValue: string | null;
+    selectedValue: unknown;
   };
 }
 
@@ -79,93 +85,11 @@ function formatDate(isoDate: string): string {
   }
 }
 
-/** Fields that contain datetime values and should be formatted */
-const DATETIME_FIELDS = new Set([
-  'pickup_time_start',
-  'pickup_time_end',
-  'delivery_time_start',
-  'delivery_time_end',
-]);
-
 /**
- * Check if value is a dim object (has height, length, width, qty, weight)
+ * Format a field value for display using the field's data type
  */
-function isDimObject(value: unknown): boolean {
-  return (
-    typeof value === 'object' &&
-    value !== null &&
-    'height' in value &&
-    'length' in value &&
-    'width' in value &&
-    'qty' in value &&
-    'weight' in value
-  );
-}
-
-/**
- * Format a single dim object as "qty - HxLxW @weightlbs"
- */
-function formatDim(dim: Record<string, unknown>): string {
-  const h = dim.height ?? 0;
-  const l = dim.length ?? 0;
-  const w = dim.width ?? 0;
-  const qty = dim.qty ?? 1;
-  const weight = dim.weight ?? 0;
-  return `${qty} - ${h}x${l}x${w} @${weight}lbs`;
-}
-
-/**
- * Try to parse a value as JSON, handling Python-style single quotes
- */
-function tryParseJson(value: string): unknown | null {
-  try {
-    return JSON.parse(value);
-  } catch {
-    try {
-      const jsonified = value.replace(/'/g, '"');
-      return JSON.parse(jsonified);
-    } catch {
-      return null;
-    }
-  }
-}
-
-/**
- * Format a field value for display.
- * For datetime fields, converts ISO string to human-readable format.
- * For dims fields, formats dim objects as human-readable text.
- */
-function formatFieldValue(fieldName: string, value: string | null): string | null {
-  if (value === null) return null;
-
-  if (DATETIME_FIELDS.has(fieldName)) {
-    try {
-      const date = new Date(value);
-      if (isNaN(date.getTime())) return value;
-
-      return date.toLocaleString('en-US', {
-        weekday: 'short',
-        month: 'short',
-        day: 'numeric',
-        hour: 'numeric',
-        minute: '2-digit',
-        hour12: true,
-      });
-    } catch {
-      return value;
-    }
-  }
-
-  // Handle dims field - show raw JSON object notation
-  if (fieldName === 'dims') {
-    const parsed = tryParseJson(value);
-    if (parsed !== null) {
-      // Return prettified JSON for object-style display
-      return JSON.stringify(parsed, null, 2);
-    }
-  }
-
-  return value;
+function formatFieldValue(value: unknown, dataType: OrderFieldDataType): string {
+  return formatValue(value, dataType);
 }
 
 // =============================================================================
@@ -174,7 +98,7 @@ function formatFieldValue(fieldName: string, value: string | null): string | nul
 
 interface FieldDropdownProps {
   field: PendingUpdateFieldDetail;
-  localSelection: { selectedHistoryId: number | null; selectedValue: string | null } | undefined;
+  localSelection: { selectedHistoryId: number | null; selectedValue: unknown } | undefined;
   onSelect: (fieldName: string, option: ConflictOption) => void;
   isConflict: boolean;
 }
@@ -191,7 +115,7 @@ function FieldDropdown({ field, localSelection, onSelect, isConflict }: FieldDro
     : null;
 
   const rawDisplayValue = localSelectedOption?.value ?? localSelection?.selectedValue ?? field.proposed_value;
-  const displayValue = formatFieldValue(field.name, rawDisplayValue);
+  const displayValue = formatFieldValue(rawDisplayValue, field.data_type);
 
   // Determine which option is currently "active" (for highlighting in dropdown)
   // This is either the local selection or the currently confirmed value
@@ -207,7 +131,7 @@ function FieldDropdown({ field, localSelection, onSelect, isConflict }: FieldDro
             : 'bg-gray-700 border-gray-600 text-white'
         }`}
       >
-        <span className="truncate">{displayValue ?? 'Choose value...'}</span>
+        <span className="truncate">{displayValue || 'Choose value...'}</span>
         <svg
           className={`w-4 h-4 flex-shrink-0 transition-transform ${isOpen ? 'rotate-180' : ''}`}
           fill="none"
@@ -239,7 +163,7 @@ function FieldDropdown({ field, localSelection, onSelect, isConflict }: FieldDro
                   }`}
                 >
                   <div className="flex items-center gap-2">
-                    <span className="text-sm text-white">{formatFieldValue(field.name, option.value)}</span>
+                    <span className="text-sm text-white">{formatFieldValue(option.value, field.data_type)}</span>
                     {isActive && !isConflict && (
                       <span className="text-xs text-blue-400">(current)</span>
                     )}
@@ -261,19 +185,22 @@ function FieldDropdown({ field, localSelection, onSelect, isConflict }: FieldDro
 
 interface FieldRowProps {
   field: PendingUpdateFieldDetail;
-  localSelection: { selectedHistoryId: number | null; selectedValue: string | null } | undefined;
+  localSelection: { selectedHistoryId: number | null; selectedValue: unknown } | undefined;
   onConflictSelect: (fieldName: string, option: ConflictOption) => void;
   onConfirm: (fieldName: string, historyId: number) => void;
+  onToggleApproval: (fieldName: string, isApproved: boolean) => void;
   isConfirming: boolean;
+  isTogglingApproval: boolean;
   canEdit: boolean;
   isHighlighted: boolean;
   onHover: (fieldName: string | null) => void;
 }
 
-function FieldRow({ field, localSelection, onConflictSelect, onConfirm, isConfirming, canEdit, isHighlighted, onHover }: FieldRowProps) {
+function FieldRow({ field, localSelection, onConflictSelect, onConfirm, onToggleApproval, isConfirming, isTogglingApproval, canEdit, isHighlighted, onHover }: FieldRowProps) {
   const isConflict = field.state === 'conflict';
   const hasMultipleOptions = (field.conflict_options?.length ?? 0) > 1;
   const hasLocalSelection = localSelection?.selectedHistoryId !== null;
+  const isApproved = field.is_approved_for_update;
 
   // Empty state - no proposed change for this field
   if (field.state === 'empty') {
@@ -290,92 +217,121 @@ function FieldRow({ field, localSelection, onConflictSelect, onConfirm, isConfir
     }
   };
 
+  const handleToggleApproval = () => {
+    onToggleApproval(field.name, !isApproved);
+  };
+
   // Format current HTC value
-  const currentValue = formatFieldValue(field.name, field.current_value);
+  const currentValue = formatFieldValue(field.current_value, field.data_type);
 
   // Get the new value to display
   const newValue = localSelection?.selectedValue ?? field.proposed_value;
-  const formattedNewValue = formatFieldValue(field.name, newValue);
+  const formattedNewValue = formatFieldValue(newValue, field.data_type);
 
   // Show dropdown if there are multiple options (conflict or confirmed with history)
   // But only if the update is editable (pending status)
   const showDropdown = hasMultipleOptions && canEdit;
 
   return (
-    <div
-      className={`py-2 px-3 rounded-lg border transition-colors ${
-        isHighlighted
-          ? 'bg-blue-500/20 border-blue-500/50 ring-1 ring-blue-500/50'
-          : isConflict
-            ? 'bg-yellow-500/5 border-yellow-500/30'
-            : 'bg-gray-800/50 border-gray-700'
-      }`}
-      onMouseEnter={() => onHover(field.name)}
-      onMouseLeave={() => onHover(null)}
-    >
-      <div className="flex items-start gap-3">
-        {/* Label - fixed width on left */}
-        <div className="w-36 flex-shrink-0 flex items-center gap-2 pt-0.5">
-          {isConflict && (
-            <span className="text-yellow-400 text-sm">⚠</span>
-          )}
-          <span className="text-sm text-gray-400">{field.label}</span>
-        </div>
-
-        {/* Values section - flows naturally */}
-        <div className="flex-1 min-w-0 flex flex-wrap items-start gap-x-3 gap-y-1">
-          {/* Current Value - up to ~half width, then wraps */}
-          <div className="max-w-[45%] flex items-start gap-2">
-            <span className={`text-sm text-gray-300 ${
-              field.name === 'dims' && currentValue ? 'whitespace-pre-wrap font-mono text-xs' : 'break-words'
-            }`}>
-              {currentValue ?? <span className="italic text-gray-500">Empty</span>}
-            </span>
-            {/* Arrow inline after current */}
-            <svg className="w-4 h-4 text-gray-500 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M14 5l7 7m0 0l-7 7m7-7H3" />
-            </svg>
+    <div className="flex items-stretch gap-2">
+      {/* Main Row Content */}
+      <div
+        className={`flex-1 py-2 px-3 rounded-lg border transition-colors ${
+          !isApproved
+            ? 'bg-gray-800/30 border-gray-700/50 opacity-60'
+            : isHighlighted
+              ? 'bg-blue-500/20 border-blue-500/50 ring-1 ring-blue-500/50'
+              : isConflict
+                ? 'bg-yellow-500/5 border-yellow-500/30'
+                : 'bg-gray-800/50 border-gray-700'
+        }`}
+        onMouseEnter={() => onHover(field.name)}
+        onMouseLeave={() => onHover(null)}
+      >
+        <div className="flex items-start gap-3">
+          {/* Label - fixed width on left */}
+          <div className="w-32 flex-shrink-0 flex items-center gap-2 pt-0.5">
+            {isConflict && (
+              <span className="text-yellow-400 text-sm">⚠</span>
+            )}
+            <span className={`text-sm ${isApproved ? 'text-gray-400' : 'text-gray-500 line-through'}`}>{field.label}</span>
           </div>
 
-          {/* New Value */}
-          <div className="flex-1 min-w-0 flex items-center gap-2">
-            {showDropdown ? (
-              <>
-                <FieldDropdown
-                  field={field}
-                  localSelection={localSelection}
-                  onSelect={onConflictSelect}
-                  isConflict={isConflict}
-                />
-                {/* Confirm Button */}
-                {(isConflict || hasNewSelection) && (
-                  <button
-                    onClick={handleConfirm}
-                    disabled={!hasLocalSelection || isConfirming}
-                    className={`flex-shrink-0 px-3 py-1 text-sm rounded font-medium transition-colors ${
-                      hasLocalSelection && !isConfirming
-                        ? 'bg-blue-600 hover:bg-blue-700 text-white'
-                        : 'bg-gray-700 text-gray-500 cursor-not-allowed'
-                    }`}
-                  >
-                    {isConfirming ? (
-                      <span className="inline-block w-4 h-4 border-2 border-gray-500 border-t-white rounded-full animate-spin" />
-                    ) : (
-                      'Confirm'
-                    )}
-                  </button>
-                )}
-              </>
-            ) : (
-              <span className={`text-sm text-white ${
-                field.name === 'dims' && formattedNewValue ? 'whitespace-pre-wrap font-mono text-xs' : 'break-words'
-              }`}>
-                {formattedNewValue ?? <span className="italic text-gray-500">N/A</span>}
+          {/* Values section - flows naturally */}
+          <div className="flex-1 min-w-0 flex flex-wrap items-start gap-x-3 gap-y-1">
+            {/* Current Value - up to ~half width, then wraps */}
+            <div className="max-w-[40%] flex items-start gap-2">
+              <span className={`text-sm break-words ${isApproved ? 'text-gray-300' : 'text-gray-500'}`}>
+                {currentValue || <span className="italic text-gray-500">Empty</span>}
               </span>
-            )}
+              {/* Arrow inline after current */}
+              <svg className={`w-4 h-4 flex-shrink-0 ${isApproved ? 'text-gray-500' : 'text-gray-600'}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M14 5l7 7m0 0l-7 7m7-7H3" />
+              </svg>
+            </div>
+
+            {/* New Value */}
+            <div className="flex-1 min-w-0 flex items-center gap-2">
+              {showDropdown ? (
+                <>
+                  <FieldDropdown
+                    field={field}
+                    localSelection={localSelection}
+                    onSelect={onConflictSelect}
+                    isConflict={isConflict}
+                  />
+                  {/* Confirm Button */}
+                  {(isConflict || hasNewSelection) && (
+                    <button
+                      onClick={handleConfirm}
+                      disabled={!hasLocalSelection || isConfirming}
+                      className={`flex-shrink-0 px-3 py-1 text-sm rounded font-medium transition-colors ${
+                        hasLocalSelection && !isConfirming
+                          ? 'bg-blue-600 hover:bg-blue-700 text-white'
+                          : 'bg-gray-700 text-gray-500 cursor-not-allowed'
+                      }`}
+                    >
+                      {isConfirming ? (
+                        <span className="inline-block w-4 h-4 border-2 border-gray-500 border-t-white rounded-full animate-spin" />
+                      ) : (
+                        'Confirm'
+                      )}
+                    </button>
+                  )}
+                </>
+              ) : (
+                <span className={`text-sm break-words ${isApproved ? 'text-white' : 'text-gray-500'}`}>
+                  {formattedNewValue || <span className="italic text-gray-500">Empty</span>}
+                </span>
+              )}
+            </div>
           </div>
         </div>
       </div>
+
+      {/* Include/Exclude Toggle Button - separate from the row */}
+      {canEdit && (
+        <button
+          onClick={handleToggleApproval}
+          disabled={isTogglingApproval}
+          className={`flex-shrink-0 w-20 rounded-lg border text-sm font-medium transition-colors flex items-center justify-center ${
+            isTogglingApproval
+              ? 'bg-gray-700 border-gray-600 text-gray-500 cursor-not-allowed'
+              : isApproved
+                ? 'bg-gray-700 border-gray-600 hover:bg-gray-600 text-gray-300'
+                : 'bg-green-700 border-green-600 hover:bg-green-600 text-white'
+          }`}
+          title={isApproved ? 'Exclude this field from update' : 'Include this field in update'}
+        >
+          {isTogglingApproval ? (
+            <span className="inline-block w-4 h-4 border-2 border-gray-500 border-t-white rounded-full animate-spin" />
+          ) : isApproved ? (
+            'Exclude'
+          ) : (
+            'Include'
+          )}
+        </button>
+      )}
     </div>
   );
 }
@@ -464,10 +420,12 @@ export function PendingUpdateDetailView({
   onApprove,
   onReject,
   onConfirmField,
+  onToggleFieldApproval,
   onViewSubRun,
   isApproving = false,
   isRejecting = false,
   confirmingFields = new Set(),
+  togglingApprovalFields = new Set(),
 }: PendingUpdateDetailViewProps) {
   const [localSelections, setLocalSelections] = useState<LocalFieldState>({});
   // Track hovered field name for cross-highlighting field tags in source cards
@@ -486,6 +444,7 @@ export function PendingUpdateDetailView({
     for (const [fieldName, fieldMeta] of Object.entries(metadata)) {
       const label = fieldMeta.label;
       const displayOrder = fieldMeta.display_order;
+      const dataType = fieldMeta.data_type;
 
       // Get field values if they exist (may be empty array or undefined)
       const fieldItems = update.fields[fieldName] ?? [];
@@ -495,11 +454,8 @@ export function PendingUpdateDetailView({
       const hasNoSelection = !selectedItem && fieldItems.length > 0;
       const hasNoValues = fieldItems.length === 0;
 
-      // Get current HTC value for comparison
-      const currentValue = currentHtcValues[fieldName];
-      const currentValueStr = currentValue !== undefined
-        ? (typeof currentValue === 'string' ? currentValue : JSON.stringify(currentValue))
-        : null;
+      // Get current HTC value for comparison (keep as object)
+      const currentValue = currentHtcValues[fieldName] ?? null;
 
       // Determine state
       let state: 'empty' | 'set' | 'conflict' | 'confirmed' = 'set';
@@ -511,29 +467,29 @@ export function PendingUpdateDetailView({
         state = 'confirmed';
       }
 
-      // Determine the proposed value:
+      // Determine the proposed value (keep as object):
       // - If there's a selected item, use that
       // - If there's only one item (no selection needed), use that
       // - Otherwise null (conflict with no selection yet)
-      let proposedValue: string | null = null;
+      let proposedValue: unknown = null;
       let sourceRef: { history_id: number } | null = null;
 
       if (selectedItem) {
-        proposedValue = typeof selectedItem.value === 'string' ? selectedItem.value : JSON.stringify(selectedItem.value);
+        proposedValue = selectedItem.value;
         sourceRef = { history_id: selectedItem.id };
       } else if (fieldItems.length === 1) {
         // Single item - use it directly (no selection needed)
         const singleItem = fieldItems[0];
-        proposedValue = typeof singleItem.value === 'string' ? singleItem.value : JSON.stringify(singleItem.value);
+        proposedValue = singleItem.value;
         sourceRef = { history_id: singleItem.id };
       }
       // else: multiple items with no selection = conflict, value stays null
 
-      // Build conflict options
+      // Build conflict options (keep values as objects)
       const conflictOptions: ConflictOption[] | null = hasMultipleValues
         ? fieldItems.map(item => ({
             history_id: item.id,
-            value: typeof item.value === 'string' ? item.value : JSON.stringify(item.value),
+            value: item.value,
             contributed_at: update.updated_at,
           }))
         : null;
@@ -541,16 +497,22 @@ export function PendingUpdateDetailView({
       // Get sub_run_id for cross-highlighting (from selected or single item)
       const subRunId = selectedItem?.sub_run_id ?? (fieldItems.length === 1 ? fieldItems[0].sub_run_id : null);
 
+      // Get is_approved_for_update - all values for a field share the same approval status
+      // Default to true if no field items exist
+      const isApprovedForUpdate = fieldItems.length > 0 ? fieldItems[0].is_approved_for_update : true;
+
       result.push({
         name: fieldName,
         label,
-        current_value: currentValueStr,
+        data_type: dataType,
+        current_value: currentValue,
         proposed_value: proposedValue,
         state,
         display_order: displayOrder,
         conflict_options: conflictOptions,
         source: sourceRef,
         sub_run_id: subRunId,
+        is_approved_for_update: isApprovedForUpdate,
       });
     }
 
@@ -607,7 +569,7 @@ export function PendingUpdateDetailView({
   return (
     <div className="h-full flex flex-col overflow-hidden bg-gray-900">
       {/* Header */}
-      <div className="flex-shrink-0 px-6 py-4 border-b border-gray-700">
+      <div className="flex-shrink-0 px-6 pt-4 pb-3 border-b border-gray-700">
         {/* Row 1: Back | Action Type | Status */}
         <div className="flex items-center justify-between">
           {/* Left: Back Button */}
@@ -719,7 +681,9 @@ export function PendingUpdateDetailView({
                   localSelection={localSelections[field.name]}
                   onConflictSelect={handleConflictSelect}
                   onConfirm={handleFieldConfirm}
+                  onToggleApproval={onToggleFieldApproval}
                   isConfirming={confirmingFields.has(field.name)}
+                  isTogglingApproval={togglingApprovalFields.has(field.name)}
                   canEdit={canEdit}
                   isHighlighted={hoveredFieldName === field.name || (hoveredSubRunId !== null && field.sub_run_id === hoveredSubRunId)}
                   onHover={setHoveredFieldName}

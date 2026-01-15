@@ -398,6 +398,116 @@ class PendingActionFieldRepository(BaseRepository[PendingActionFieldModel]):
                 f"Cleared selection for action {action_id}, field {field_name}"
             )
 
+    def auto_select_single_value(self, action_id: int, field_name: str) -> bool:
+        """
+        Auto-select the single value for a field if only one value exists.
+
+        Used during status recalculation to fix fields that have one value
+        but is_selected=False (can happen after conflict resolution when
+        one value is deleted).
+
+        Args:
+            action_id: Pending action ID
+            field_name: Field name to auto-select
+
+        Returns:
+            True if a value was selected, False if no values or multiple values exist
+        """
+        with self._get_session() as session:
+            # Count values for this field
+            count = (
+                session.query(func.count(self.model_class.id))
+                .filter(
+                    and_(
+                        self.model_class.pending_action_id == action_id,
+                        self.model_class.field_name == field_name,
+                    )
+                )
+                .scalar()
+            )
+
+            if count != 1:
+                return False
+
+            # Select the single value
+            session.query(self.model_class).filter(
+                and_(
+                    self.model_class.pending_action_id == action_id,
+                    self.model_class.field_name == field_name,
+                )
+            ).update(
+                {self.model_class.is_selected: True},
+                synchronize_session=False,
+            )
+            session.flush()
+
+            logger.debug(
+                f"Auto-selected single value for action {action_id}, field {field_name}"
+            )
+            return True
+
+    def set_approval_for_field(
+        self,
+        action_id: int,
+        field_name: str,
+        is_approved: bool,
+    ) -> int:
+        """
+        Set is_approved_for_update for ALL values of a field.
+
+        Approval is conceptually per-field-name, not per-value, so we update
+        all values for this field to maintain consistency.
+
+        Args:
+            action_id: Pending action ID
+            field_name: Field name to update
+            is_approved: Whether the field should be included in the update
+
+        Returns:
+            Number of rows updated
+        """
+        with self._get_session() as session:
+            rows_updated = session.query(self.model_class).filter(
+                and_(
+                    self.model_class.pending_action_id == action_id,
+                    self.model_class.field_name == field_name,
+                )
+            ).update(
+                {self.model_class.is_approved_for_update: is_approved},
+                synchronize_session=False,
+            )
+            session.flush()
+
+            logger.debug(
+                f"Set approval={is_approved} for action {action_id}, "
+                f"field {field_name} ({rows_updated} rows)"
+            )
+            return rows_updated
+
+    def get_approval_for_field(self, action_id: int, field_name: str) -> bool | None:
+        """
+        Get the approval status for a field.
+
+        Since all values for a field should have the same approval status,
+        we just return the status of the first value found.
+
+        Args:
+            action_id: Pending action ID
+            field_name: Field name to check
+
+        Returns:
+            True/False for approval status, None if no values exist for field
+        """
+        with self._get_session() as session:
+            result = session.query(self.model_class.is_approved_for_update).filter(
+                and_(
+                    self.model_class.pending_action_id == action_id,
+                    self.model_class.field_name == field_name,
+                )
+            ).first()
+
+            return result[0] if result else None
+
     def count_by_field_name(self, action_id: int) -> dict[str, int]:
         """
         Count values per field for a pending action.

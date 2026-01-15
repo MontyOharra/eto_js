@@ -11,9 +11,9 @@ import {
   useRejectPendingAction,
   usePendingUpdateDetail,
   useOrderHistory,
-  useConfirmUpdateField,
   useUnifiedActions,
   useMarkRead,
+  useSetFieldApproval,
   ActionType,
 } from '../../../features/order-management';
 import { useOrderEvents } from '../../../features/order-management/hooks';
@@ -134,8 +134,8 @@ function OrdersPage() {
   const selectFieldValue = useSelectFieldValue();
   const approveAction = useApprovePendingAction();
   const rejectAction = useRejectPendingAction();
-  const confirmUpdateField = useConfirmUpdateField();
   const markRead = useMarkRead();
+  const setFieldApproval = useSetFieldApproval();
 
   // ============================================================================
   // Handlers
@@ -174,20 +174,46 @@ function OrdersPage() {
   // Track which update fields are currently being confirmed
   const [confirmingUpdateFields, setConfirmingUpdateFields] = useState<Set<string>>(new Set());
 
-  const handleConfirmUpdateField = (fieldName: string, historyId: number) => {
+  // Note: historyId is actually the field_id (pending_action_fields.id)
+  const handleConfirmUpdateField = (fieldName: string, fieldId: number) => {
     if (!selectedUpdateId) return;
 
     setConfirmingUpdateFields((prev) => new Set(prev).add(fieldName));
 
-    confirmUpdateField.mutate(
+    selectFieldValue.mutate(
       {
-        pendingUpdateId: selectedUpdateId,
-        fieldName,
-        historyId,
+        actionId: selectedUpdateId,
+        fieldId,
       },
       {
         onSettled: () => {
           setConfirmingUpdateFields((prev) => {
+            const next = new Set(prev);
+            next.delete(fieldName);
+            return next;
+          });
+        },
+      }
+    );
+  };
+
+  // Track which update fields are currently toggling approval
+  const [togglingApprovalFields, setTogglingApprovalFields] = useState<Set<string>>(new Set());
+
+  const handleToggleFieldApproval = (fieldName: string, isApproved: boolean) => {
+    if (!selectedUpdateId) return;
+
+    setTogglingApprovalFields((prev) => new Set(prev).add(fieldName));
+
+    setFieldApproval.mutate(
+      {
+        actionId: selectedUpdateId,
+        fieldName,
+        isApproved,
+      },
+      {
+        onSettled: () => {
+          setTogglingApprovalFields((prev) => {
             const next = new Set(prev);
             next.delete(fieldName);
             return next;
@@ -203,28 +229,12 @@ function OrdersPage() {
 
   const handleApprovePendingOrder = () => {
     if (!selectedOrderId) return;
-    approveAction.mutate(
-      { actionId: selectedOrderId },
-      {
-        onSuccess: () => {
-          // Go back to list after successful creation
-          setDetailView(null);
-        },
-      }
-    );
+    approveAction.mutate({ actionId: selectedOrderId });
   };
 
   const handleRejectPendingOrder = () => {
     if (!selectedOrderId) return;
-    rejectAction.mutate(
-      { actionId: selectedOrderId },
-      {
-        onSuccess: () => {
-          // Go back to list after successful rejection
-          setDetailView(null);
-        },
-      }
-    );
+    rejectAction.mutate({ actionId: selectedOrderId });
   };
 
   const handleViewSubRun = (subRunId: number) => {
@@ -316,10 +326,12 @@ function OrdersPage() {
           onApprove={(updateId: number) => handleApproveAction(updateId)}
           onReject={(updateId: number) => handleRejectAction(updateId)}
           onConfirmField={handleConfirmUpdateField}
+          onToggleFieldApproval={handleToggleFieldApproval}
           onViewSubRun={handleViewSubRun}
           isApproving={approveAction.isPending}
           isRejecting={rejectAction.isPending}
           confirmingFields={confirmingUpdateFields}
+          togglingApprovalFields={togglingApprovalFields}
         />
         <EtoSubRunDetailViewer
           isOpen={viewingSubRunId !== null}

@@ -317,12 +317,17 @@ class OrderManagementService:
         For pickup_location and delivery_location fields, if address_id is None
         but address is present, attempts to find a matching address in the HTC database.
 
+        When an address ID is found, the name and address are replaced with the
+        canonical values from the HTC address table to ensure consistency.
+
         Args:
             order_fields: Dict of transformed order fields
 
         Returns:
-            Updated order_fields with resolved address IDs
+            Updated order_fields with resolved address IDs and canonical address data
         """
+        from shared.types.pending_actions import LocationValue
+
         location_fields = ["pickup_location", "delivery_location"]
 
         for field_name in location_fields:
@@ -345,13 +350,27 @@ class OrderManagementService:
                 address_id = self.htc_service.find_address_id(address)
                 if address_id is not None:
                     logger.debug(f"Resolved {field_name} address_id: {address_id}")
-                    # Create new LocationValue with resolved ID
-                    from shared.types.pending_actions import LocationValue
-                    order_fields[field_name] = LocationValue(
-                        address_id=int(address_id),
-                        name=location.name,
-                        address=location.address,
-                    )
+                    # Look up canonical address data from HTC address table
+                    addr_info = self.htc_service.get_address_info(address_id)
+                    if addr_info:
+                        # Use standardized data from the address table
+                        formatted_address = addr_info.addr_ln1
+                        if addr_info.addr_ln2:
+                            formatted_address = f"{addr_info.addr_ln1} {addr_info.addr_ln2}"
+                        formatted_address = f"{formatted_address}, {addr_info.city}, {addr_info.state} {addr_info.zip_code}"
+
+                        order_fields[field_name] = LocationValue(
+                            address_id=int(address_id),
+                            name=addr_info.company,  # Use company from address table
+                            address=formatted_address,  # Use formatted address from address table
+                        )
+                    else:
+                        # Fallback: just set the ID, keep original name/address
+                        order_fields[field_name] = LocationValue(
+                            address_id=int(address_id),
+                            name=location.name,
+                            address=location.address,
+                        )
                 else:
                     logger.debug(f"Could not resolve address for {field_name}: {address}")
 
@@ -367,7 +386,21 @@ class OrderManagementService:
                 address_id = self.htc_service.find_address_id(address)
                 if address_id is not None:
                     logger.debug(f"Resolved {field_name} address_id: {address_id}")
-                    location["address_id"] = int(address_id)
+                    # Look up canonical address data from HTC address table
+                    addr_info = self.htc_service.get_address_info(address_id)
+                    if addr_info:
+                        # Use standardized data from the address table
+                        formatted_address = addr_info.addr_ln1
+                        if addr_info.addr_ln2:
+                            formatted_address = f"{addr_info.addr_ln1} {addr_info.addr_ln2}"
+                        formatted_address = f"{formatted_address}, {addr_info.city}, {addr_info.state} {addr_info.zip_code}"
+
+                        location["address_id"] = int(address_id)
+                        location["name"] = addr_info.company
+                        location["address"] = formatted_address
+                    else:
+                        # Fallback: just set the ID
+                        location["address_id"] = int(address_id)
                 else:
                     logger.debug(f"Could not resolve address for {field_name}: {address}")
 
@@ -480,9 +513,10 @@ class OrderManagementService:
         Add field values to pending action, handling conflict detection.
 
         For each field:
-        - If no existing values: create with is_selected=True
+        - If no existing values: create with is_selected=True, is_approved_for_update=True
         - If value matches existing: skip (duplicate - no point storing same value twice)
-        - If value differs: clear all selections, create with is_selected=False (conflict)
+        - If value differs: clear all selections, create with is_selected=False
+          and inherit is_approved_for_update from existing values
         """
         # Get all existing fields for this action
         existing_fields = self.pending_action_field_repo.get_fields_for_action(pending_action_id)
@@ -501,7 +535,7 @@ class OrderManagementService:
             new_value_json = self._serialize_value_for_comparison(value)
 
             if not existing_for_field:
-                # No existing values - first value is auto-selected
+                # No existing values - first value is auto-selected and auto-approved
                 logger.debug(f"Adding first value for field '{field_name}' (auto-selected)")
                 self.pending_action_field_repo.create(
                     data=PendingActionFieldCreate(
@@ -510,6 +544,7 @@ class OrderManagementService:
                         field_name=field_name,
                         value=value,
                         is_selected=True,
+                        is_approved_for_update=True,
                     )
                 )
             else:
@@ -524,7 +559,13 @@ class OrderManagementService:
                     logger.debug(f"Skipping duplicate value for field '{field_name}'")
                 else:
                     # Different value - conflict! Clear all selections
-                    logger.debug(f"Conflict detected for field '{field_name}' - clearing selections")
+                    # Inherit approval status from existing values (they should all be the same)
+                    inherit_approval = existing_for_field[0].is_approved_for_update
+
+                    logger.debug(
+                        f"Conflict detected for field '{field_name}' - clearing selections, "
+                        f"inheriting approval={inherit_approval}"
+                    )
                     self.pending_action_field_repo.clear_selection_for_field(
                         action_id=pending_action_id,
                         field_name=field_name,
@@ -536,6 +577,7 @@ class OrderManagementService:
                             field_name=field_name,
                             value=value,
                             is_selected=False,
+                            is_approved_for_update=inherit_approval,
                         )
                     )
 
@@ -658,18 +700,32 @@ class OrderManagementService:
         Also updates denormalized counts:
         - required_fields_present
         - conflict_count
+
+        Auto-selects single-value fields that aren't selected (can happen after
+        conflict resolution when one value is deleted).
         """
         # Get current action state
         action = self.pending_action_repo.get_by_id(pending_action_id)
         if not action:
             raise ValueError(f"Pending action {pending_action_id} not found")
 
+        # Count values per field to detect unresolved conflicts
+        value_counts = self.pending_action_field_repo.count_by_field_name(pending_action_id)
+
         # Get selected fields (the "current" values)
         selected_fields = self.pending_action_field_repo.get_selected_fields_for_action(pending_action_id)
         selected_field_names = set(selected_fields.keys())
 
-        # Count values per field to detect unresolved conflicts
-        value_counts = self.pending_action_field_repo.count_by_field_name(pending_action_id)
+        # Auto-select single-value fields that aren't selected
+        # This can happen when a conflict existed and one value was deleted during cleanup
+        for field_name, count in value_counts.items():
+            if count == 1 and field_name not in selected_field_names:
+                logger.debug(f"Auto-selecting single value for field '{field_name}' on action {pending_action_id}")
+                self.pending_action_field_repo.auto_select_single_value(
+                    action_id=pending_action_id,
+                    field_name=field_name,
+                )
+                selected_field_names.add(field_name)
 
         # Calculate conflict count: fields with multiple values but no selection
         conflict_count = 0
@@ -760,6 +816,21 @@ class OrderManagementService:
         # Get selected fields to show what would be sent
         selected_fields = self.pending_action_field_repo.get_selected_fields_for_action(pending_action_id)
 
+        # For updates, filter to only approved fields
+        if action.action_type == "update":
+            fields_to_send = {
+                name: field for name, field in selected_fields.items()
+                if field.is_approved_for_update
+            }
+            excluded_fields = {
+                name: field for name, field in selected_fields.items()
+                if not field.is_approved_for_update
+            }
+        else:
+            # Creates send all selected fields
+            fields_to_send = selected_fields
+            excluded_fields = {}
+
         # Log what would happen
         logger.info(f"=== MOCK APPROVAL: Pending Action {pending_action_id} ===")
         logger.info(f"Action Type: {action.action_type}")
@@ -767,16 +838,16 @@ class OrderManagementService:
         logger.info(f"HAWB: {action.hawb}")
         if action.htc_order_number:
             logger.info(f"HTC Order Number: {action.htc_order_number}")
-        logger.info(f"Selected fields that would be sent to HTC:")
-        for field_name, field in selected_fields.items():
-            # For updates, check is_approved_for_update
-            if action.action_type == "update":
-                if field.is_approved_for_update:
-                    logger.info(f"  - {field_name}: {field.value}")
-                else:
-                    logger.info(f"  - {field_name}: {field.value} (NOT approved for update, would be skipped)")
-            else:
-                logger.info(f"  - {field_name}: {field.value}")
+
+        logger.info(f"Fields that WOULD be sent to HTC ({len(fields_to_send)}):")
+        for field_name, field in fields_to_send.items():
+            logger.info(f"  [SEND] {field_name}: {field.value}")
+
+        if excluded_fields:
+            logger.info(f"Fields EXCLUDED from update ({len(excluded_fields)}):")
+            for field_name, field in excluded_fields.items():
+                logger.info(f"  [SKIP] {field_name}: {field.value}")
+
         logger.info(f"=== END MOCK APPROVAL ===")
 
         # Update status to completed
@@ -1229,15 +1300,64 @@ class OrderManagementService:
         pending_action_id: int,
         field_name: str,
         is_approved: bool,
-    ) -> None:
+    ) -> bool:
         """
-        User toggles whether a field should be included in an update.
+        Toggle whether a field should be included in an update.
 
-        Sets is_approved_for_update on the currently selected value.
-        Only relevant for action_type='update'.
+        Sets is_approved_for_update on ALL values for this field (approval is
+        per-field-name, not per-value). Only relevant for action_type='update'.
+
+        Args:
+            pending_action_id: ID of the pending action
+            field_name: Name of the field to toggle
+            is_approved: Whether the field should be included in the update
+
+        Returns:
+            The new approval status
+
+        Raises:
+            ValueError: If action not found or is not an update type
         """
-        # TODO: Implement field approval toggle
-        raise NotImplementedError()
+        logger.info(
+            f"Setting field approval for action {pending_action_id}, "
+            f"field {field_name}, approved={is_approved}"
+        )
+
+        # Verify the action exists and is an update type
+        action = self.pending_action_repo.get_by_id(pending_action_id)
+        if action is None:
+            raise ValueError(f"Pending action {pending_action_id} not found")
+
+        if action.action_type != "update":
+            raise ValueError(
+                f"Field approval only applies to updates, not {action.action_type}"
+            )
+
+        # Update approval for all values of this field
+        rows_updated = self.pending_action_field_repo.set_approval_for_field(
+            action_id=pending_action_id,
+            field_name=field_name,
+            is_approved=is_approved,
+        )
+
+        if rows_updated == 0:
+            raise ValueError(
+                f"No field values found for field '{field_name}' on action {pending_action_id}"
+            )
+
+        # Broadcast update event
+        order_event_manager.broadcast_sync("pending_action_updated", {
+            "id": action.id,
+            "status": action.status,
+            "action_type": action.action_type,
+        })
+
+        logger.info(
+            f"Set approval={is_approved} for {rows_updated} values of "
+            f"field '{field_name}' on action {pending_action_id}"
+        )
+
+        return is_approved
 
     def reject_action(
         self,

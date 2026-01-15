@@ -28,6 +28,8 @@ from api.schemas.pending_actions import (
     RejectActionResponse,
     SelectFieldValueRequest,
     SelectFieldValueResponse,
+    SetFieldApprovalRequest,
+    SetFieldApprovalResponse,
 )
 from shared.types.pending_actions import PendingActionStatus, PendingActionType, ORDER_FIELDS
 from shared.services.service_container import ServiceContainer
@@ -466,6 +468,45 @@ async def select_field_value(
             new_status=updated_action.status,
             success=True,
             message=f"Selected value for field '{field.field_name}'",
+        )
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+@router.post("/{action_id}/set-field-approval", response_model=SetFieldApprovalResponse)
+async def set_field_approval(
+    action_id: int,
+    request: SetFieldApprovalRequest,
+    service: OrderManagementService = Depends(lambda: ServiceContainer.get_order_management_service())
+) -> SetFieldApprovalResponse:
+    """
+    Set whether a field should be included in an update.
+
+    Only applicable for pending actions with action_type='update'.
+    This toggles the is_approved_for_update flag for ALL values of the field
+    (approval is per-field-name, not per-value).
+
+    When is_approved=True, the field will be included when the update is executed.
+    When is_approved=False, the field will be skipped during update execution.
+    """
+    logger.info(
+        f"Set field approval: action={action_id}, "
+        f"field={request.field_name}, approved={request.is_approved}"
+    )
+
+    try:
+        is_approved = service.set_field_approval(
+            pending_action_id=action_id,
+            field_name=request.field_name,
+            is_approved=request.is_approved,
+        )
+
+        return SetFieldApprovalResponse(
+            pending_action_id=action_id,
+            field_name=request.field_name,
+            is_approved=is_approved,
+            success=True,
+            message=f"Field '{request.field_name}' {'included in' if is_approved else 'excluded from'} update",
         )
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))

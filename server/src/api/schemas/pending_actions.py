@@ -214,3 +214,18 @@ class SelectFieldValueResponse(BaseModel):
     new_status: PendingActionStatus
     success: bool
     message: str | None
+
+
+class SetFieldApprovalRequest(BaseModel):
+    """Request for POST /pending-actions/{id}/set-field-approval."""
+    field_name: str
+    is_approved: bool
+
+
+class SetFieldApprovalResponse(BaseModel):
+    """Response for POST /pending-actions/{id}/set-field-approval."""
+    pending_action_id: int
+    field_name: str
+    is_approved: bool
+    success: bool
+    message: str | None

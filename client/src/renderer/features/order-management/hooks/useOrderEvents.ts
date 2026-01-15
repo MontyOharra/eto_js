@@ -83,7 +83,10 @@ export function useOrderEvents(options: UseOrderEventsOptions = {}) {
         // Pending action changed - invalidate list and detail if we have the ID
         queryClient.invalidateQueries({ queryKey: orderManagementQueryKeys.unifiedActions() });
         if (actionId) {
-          // Invalidate both possible detail query keys (order and update use same endpoint)
+          // Invalidate all possible detail query keys (order, update, and action all use same endpoint)
+          queryClient.invalidateQueries({
+            queryKey: orderManagementQueryKeys.pendingActionDetail(actionId)
+          });
           queryClient.invalidateQueries({
             queryKey: orderManagementQueryKeys.pendingOrderDetail(actionId)
           });
@@ -97,6 +100,9 @@ export function useOrderEvents(options: UseOrderEventsOptions = {}) {
         // Pending action deleted - invalidate list and remove detail from cache
         queryClient.invalidateQueries({ queryKey: orderManagementQueryKeys.unifiedActions() });
         if (actionId) {
+          queryClient.removeQueries({
+            queryKey: orderManagementQueryKeys.pendingActionDetail(actionId)
+          });
           queryClient.removeQueries({
             queryKey: orderManagementQueryKeys.pendingOrderDetail(actionId)
           });

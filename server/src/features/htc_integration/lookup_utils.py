@@ -378,6 +378,17 @@ class HtcLookupUtils:
             logger.error(f"Failed to get default agent for customer {customer_id}: {e}")
             return None
 
+    def _format_address_from_info(self, addr_info: AddressInfo) -> str:
+        """
+        Format an address string from AddressInfo for display.
+        Format: '{AddrLn1} {AddrLn2}, {City}, {State} {Zip}'
+        """
+        street = addr_info.addr_ln1
+        if addr_info.addr_ln2:
+            street = f"{addr_info.addr_ln1} {addr_info.addr_ln2}"
+
+        return f"{street}, {addr_info.city}, {addr_info.state} {addr_info.zip_code}"
+
     def get_address_info(self, address_id: float) -> AddressInfo | None:
         """
         Get full address information for order creation.
@@ -649,18 +660,35 @@ class HtcLookupUtils:
                     dims_json = json.dumps(dims_list)
                     logger.debug(f"Found {len(dims_list)} dims for order {order_number}")
 
+            # Build location strings from address table if IDs exist (more reliable than M_PULocn/M_DelLocn)
+            pickup_company_name = str(order_row[4]) if order_row[4] else None
+            pickup_address_str = str(order_row[5]) if order_row[5] else None
+            if order_row[3] is not None:  # M_PUID exists
+                addr_info = self.get_address_info(float(order_row[3]))
+                if addr_info:
+                    pickup_company_name = addr_info.company
+                    pickup_address_str = self._format_address_from_info(addr_info)
+
+            delivery_company_name = str(order_row[10]) if order_row[10] else None
+            delivery_address_str = str(order_row[11]) if order_row[11] else None
+            if order_row[9] is not None:  # M_DelID exists
+                addr_info = self.get_address_info(float(order_row[9]))
+                if addr_info:
+                    delivery_company_name = addr_info.company
+                    delivery_address_str = self._format_address_from_info(addr_info)
+
             return HtcOrderFields(
                 order_number=float(order_row[0]),
                 customer_id=int(order_row[1]),
                 hawb=str(order_row[2]) if order_row[2] else "",
                 pickup_address_id=float(order_row[3]) if order_row[3] is not None else None,
-                pickup_company_name=str(order_row[4]) if order_row[4] else None,
-                pickup_address=str(order_row[5]) if order_row[5] else None,
+                pickup_company_name=pickup_company_name,
+                pickup_address=pickup_address_str,
                 pickup_time_start=combine_datetime(order_row[6], order_row[7]),
                 pickup_time_end=combine_datetime(order_row[6], order_row[8]),
                 delivery_address_id=float(order_row[9]) if order_row[9] is not None else None,
-                delivery_company_name=str(order_row[10]) if order_row[10] else None,
-                delivery_address=str(order_row[11]) if order_row[11] else None,
+                delivery_company_name=delivery_company_name,
+                delivery_address=delivery_address_str,
                 delivery_time_start=combine_datetime(order_row[12], order_row[13]),
                 delivery_time_end=combine_datetime(order_row[12], order_row[14]),
                 mawb=str(order_row[15]) if order_row[15] else None,
