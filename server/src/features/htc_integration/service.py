@@ -405,12 +405,10 @@ class HtcIntegrationService:
         self,
         customer_id: int,
         hawb: str,
-        pickup_company_name: str,
-        pickup_address: str,
+        pickup_location_id: float,
+        delivery_location_id: float,
         pickup_time_start: str,
         pickup_time_end: str,
-        delivery_company_name: str,
-        delivery_address: str,
         delivery_time_start: str,
         delivery_time_end: str,
         mawb: str | None = None,
@@ -420,32 +418,33 @@ class HtcIntegrationService:
         dims: list[dict[str, Any]] | None = None,
     ) -> float:
         """
-        Create an HTC order from raw input data.
+        Create an HTC order from pre-resolved data.
 
         This is the main orchestrator that follows the two-phase order creation flow:
 
         Phase 1 - Data Gathering:
-            1. Resolve pickup address (find or create)
-            2. Resolve delivery address (find or create)
-            3. Look up full address info for both
-            4. Look up customer info
-            5. Determine order type
-            6. Prepare all field values
+            1. Look up full address info for both locations
+            2. Look up customer info
+            3. Determine order type
+            4. Prepare all field values
 
         Phase 2 - Order Creation:
-            7. Reserve order number (adds to OIW)
-            8. Insert order record
-            9. On success: update LON, remove from OIW, save HAWB, create history
+            5. Reserve order number (adds to OIW)
+            6. Insert order record
+            7. On success: update LON, remove from OIW, save HAWB, create history
+
+        Note:
+            Address resolution (find_or_create_address) must be done by the caller
+            before calling this method. This separation allows the caller to handle
+            address creation failures separately from order creation failures.
 
         Args:
             customer_id: HTC customer ID
             hawb: House Air Waybill number
-            pickup_company_name: Company name for pickup location
-            pickup_address: Pickup street address (e.g., "123 Main St, Dallas, TX 75201")
+            pickup_location_id: Pre-resolved pickup address ID (from find_or_create_address)
+            delivery_location_id: Pre-resolved delivery address ID (from find_or_create_address)
             pickup_time_start: Pickup start datetime (e.g., "2025-12-15 09:00")
             pickup_time_end: Pickup end datetime
-            delivery_company_name: Company name for delivery location
-            delivery_address: Delivery street address (e.g., "456 Oak Ave, Fort Worth, TX 76102")
             delivery_time_start: Delivery start datetime
             delivery_time_end: Delivery end datetime
             mawb: Optional Master Air Waybill number
@@ -459,7 +458,6 @@ class HtcIntegrationService:
 
         Raises:
             OutputExecutionError: If order creation fails
-            ValueError: If required data is missing
         """
         logger.info(f"Creating HTC order for customer {customer_id}, HAWB: {hawb}")
 
@@ -468,11 +466,7 @@ class HtcIntegrationService:
         # ================================================================
         hawb = _uppercase_str(hawb) or ""
         mawb = _uppercase_str(mawb)
-        pickup_company_name = _uppercase_str(pickup_company_name) or ""
-        pickup_address = _uppercase_str(pickup_address) or ""
         pickup_notes = _uppercase_str(pickup_notes)
-        delivery_company_name = _uppercase_str(delivery_company_name) or ""
-        delivery_address = _uppercase_str(delivery_address) or ""
         delivery_notes = _uppercase_str(delivery_notes)
         order_notes = _uppercase_str(order_notes)
 
@@ -480,50 +474,26 @@ class HtcIntegrationService:
         # PHASE 1: DATA GATHERING
         # ================================================================
 
-        # --- Step 1: Resolve pickup address ---
-        if not pickup_address:
-            raise ValueError("Pickup address is required")
-        if not pickup_company_name:
-            raise ValueError("Pickup company name is required")
-
-        pu_address_id = self._address_utils.find_or_create_address(
-            address_string=pickup_address,
-            company_name=pickup_company_name,
-        )
-        logger.debug(f"Resolved pickup address ID: {pu_address_id}")
-
-        # --- Step 2: Resolve delivery address ---
-        if not delivery_address:
-            raise ValueError("Delivery address is required")
-        if not delivery_company_name:
-            raise ValueError("Delivery company name is required")
-
-        del_address_id = self._address_utils.find_or_create_address(
-            address_string=delivery_address,
-            company_name=delivery_company_name,
-        )
-        logger.debug(f"Resolved delivery address ID: {del_address_id}")
-
-        # --- Step 3: Look up full pickup address info ---
-        pu_addr = self._lookup_utils.get_address_info(pu_address_id)
+        # --- Step 1: Look up full pickup address info ---
+        pu_addr = self._lookup_utils.get_address_info(pickup_location_id)
         if not pu_addr:
-            raise OutputExecutionError(f"Failed to get pickup address info for ID {pu_address_id}")
+            raise OutputExecutionError(f"Failed to get pickup address info for ID {pickup_location_id}")
 
         pu_aci_letter = self._lookup_utils.get_aci_letter(pu_addr.aci_id)
 
-        # --- Step 4: Look up full delivery address info ---
-        del_addr = self._lookup_utils.get_address_info(del_address_id)
+        # --- Step 2: Look up full delivery address info ---
+        del_addr = self._lookup_utils.get_address_info(delivery_location_id)
         if not del_addr:
-            raise OutputExecutionError(f"Failed to get delivery address info for ID {del_address_id}")
+            raise OutputExecutionError(f"Failed to get delivery address info for ID {delivery_location_id}")
 
         del_aci_letter = self._lookup_utils.get_aci_letter(del_addr.aci_id)
 
-        # --- Step 5: Look up customer info ---
+        # --- Step 3: Look up customer info ---
         customer = self._lookup_utils.get_customer_info(customer_id)
         if not customer:
             raise OutputExecutionError(f"Failed to get customer info for ID {customer_id}")
 
-        # --- Step 5b: Look up default agent for customer ---
+        # --- Step 3b: Look up default agent for customer ---
         default_agent_id = self._lookup_utils.get_default_agent_id(customer_id)
         if default_agent_id is None:
             raise OutputExecutionError(
@@ -532,7 +502,7 @@ class HtcIntegrationService:
             )
         logger.debug(f"Found default agent {default_agent_id} for customer {customer_id}")
 
-        # --- Step 6: Determine order type ---
+        # --- Step 4: Determine order type ---
         order_type = self._order_utils.determine_order_type(
             pu_aci=pu_aci_letter,
             pu_branch=pu_addr.branch_yn,
@@ -543,13 +513,13 @@ class HtcIntegrationService:
         )
         logger.debug(f"Determined order type: {order_type}")
 
-        # --- Step 7: Parse dates and times ---
+        # --- Step 5: Parse dates and times ---
         pu_date, pu_time_start_parsed = self._order_utils.parse_datetime_string(pickup_time_start)
         _, pu_time_end_parsed = self._order_utils.parse_datetime_string(pickup_time_end)
         del_date, del_time_start_parsed = self._order_utils.parse_datetime_string(delivery_time_start)
         _, del_time_end_parsed = self._order_utils.parse_datetime_string(delivery_time_end)
 
-        # --- Step 8: Prepare all field values ---
+        # --- Step 6: Prepare all field values ---
         prepared_data = PreparedOrderData(
             # Order type
             order_type=order_type,
@@ -562,12 +532,12 @@ class HtcIntegrationService:
             pu_date=pu_date,
             pu_time_start=pu_time_start_parsed,
             pu_time_end=pu_time_end_parsed,
-            pu_address_id=pu_address_id,
+            pu_address_id=pickup_location_id,
             pu_notes=pickup_notes or "",
             del_date=del_date,
             del_time_start=del_time_start_parsed,
             del_time_end=del_time_end_parsed,
-            del_address_id=del_address_id,
+            del_address_id=delivery_location_id,
             del_notes=delivery_notes or "",
 
             # Customer lookup
@@ -614,18 +584,18 @@ class HtcIntegrationService:
         order_number = None
 
         try:
-            # --- Step 9: Reserve order number (adds to OIW) ---
+            # --- Step 7: Reserve order number (adds to OIW) ---
             order_number = self._order_utils.generate_next_order_number()
             logger.info(f"Reserved order number: {order_number}")
 
-            # --- Step 10: Insert order record ---
+            # --- Step 8: Insert order record ---
             self._order_utils.create_order_record(order_number, prepared_data)
 
-            # --- Step 10b: Create dims records if provided ---
+            # --- Step 8b: Create dims records if provided ---
             if dims:
                 self._order_utils.create_dims_records(order_number, dims)
 
-            # --- Step 11: Finalize on success ---
+            # --- Step 9: Finalize on success ---
             # Update LON
             self._order_utils.update_lon(order_number)
 
@@ -656,64 +626,16 @@ class HtcIntegrationService:
             logger.error(f"Failed to create HTC order: {e}")
             # Note: OIW entry remains if we fail - will be skipped by next order number generation
             raise OutputExecutionError(f"Failed to create HTC order: {e}") from e
-    '''
-    def create_order_from_pending(self, pending_order: PendingOrder) -> float:
-        """
-        Create an HTC order from a pending order.
 
-        This is a convenience wrapper around create_order() that extracts
-        the necessary fields from a PendingOrder dataclass.
-
-        Args:
-            pending_order: The PendingOrder dataclass with all required fields
-
-        Returns:
-            The new HTC order number
-
-        Raises:
-            OutputExecutionError: If order creation fails
-            ValueError: If required data is missing
-        """
-
-        logger.info(f"Creating HTC order from pending order {pending_order.id}")
-
-        # Parse dims from JSON string if present
-        dims_list = None
-        if pending_order.dims:
-            try:
-                dims_list = json.loads(pending_order.dims)
-            except json.JSONDecodeError as e:
-                logger.warning(f"Failed to parse dims JSON for pending order {pending_order.id}: {e}")
-
-        return self.create_order(
-            customer_id=pending_order.customer_id,
-            hawb=pending_order.hawb,
-            pickup_company_name=pending_order.pickup_company_name,
-            pickup_address=pending_order.pickup_address,
-            pickup_time_start=pending_order.pickup_time_start,
-            pickup_time_end=pending_order.pickup_time_end,
-            delivery_company_name=pending_order.delivery_company_name,
-            delivery_address=pending_order.delivery_address,
-            delivery_time_start=pending_order.delivery_time_start,
-            delivery_time_end=pending_order.delivery_time_end,
-            mawb=pending_order.mawb,
-            pickup_notes=pending_order.pickup_notes,
-            delivery_notes=pending_order.delivery_notes,
-            order_notes=pending_order.order_notes,
-            dims=dims_list,
-        )
-    '''
     # ==================== Order Update Orchestrator ====================
 
     def update_order(
         self,
         order_number: float,
-        pickup_company_name: str | None = None,
-        pickup_address: str | None = None,
+        pickup_location_id: float | None = None,
+        delivery_location_id: float | None = None,
         pickup_time_start: str | None = None,
         pickup_time_end: str | None = None,
-        delivery_company_name: str | None = None,
-        delivery_address: str | None = None,
         delivery_time_start: str | None = None,
         delivery_time_end: str | None = None,
         mawb: str | None = None,
@@ -729,20 +651,23 @@ class HtcIntegrationService:
         Update an existing HTC order with new field values.
 
         This orchestrator handles the complexity of updating an order:
-        - Address fields: Finds or creates the address, then updates all related columns
+        - Address fields: Looks up full address info and updates all related columns
         - DateTime fields: Parses and splits into date + time components
         - Simple fields: Direct updates (notes, mawb)
 
         After updates, recalculates order type if addresses changed.
 
+        Note:
+            Address resolution (find_or_create_address) must be done by the caller
+            before calling this method. This separation allows the caller to handle
+            address creation failures separately from order update failures.
+
         Args:
             order_number: The HTC order number to update
-            pickup_company_name: New pickup company name (required if pickup_address provided)
-            pickup_address: New pickup address string
+            pickup_location_id: Pre-resolved pickup address ID (from find_or_create_address)
+            delivery_location_id: Pre-resolved delivery address ID (from find_or_create_address)
             pickup_time_start: New pickup start datetime (ISO format)
             pickup_time_end: New pickup end datetime (ISO format)
-            delivery_company_name: New delivery company name (required if delivery_address provided)
-            delivery_address: New delivery address string
             delivery_time_start: New delivery start datetime (ISO format)
             delivery_time_end: New delivery end datetime (ISO format)
             mawb: New MAWB value
@@ -759,7 +684,6 @@ class HtcIntegrationService:
 
         Raises:
             OutputExecutionError: If update fails
-            ValueError: If address provided without company name
         """
         logger.info(f"Updating HTC order {order_number}")
 
@@ -767,11 +691,7 @@ class HtcIntegrationService:
         # UPPERCASE ALL STRING FIELDS FOR HTC DATABASE
         # ================================================================
         mawb = _uppercase_str(mawb)
-        pickup_company_name = _uppercase_str(pickup_company_name)
-        pickup_address = _uppercase_str(pickup_address)
         pickup_notes = _uppercase_str(pickup_notes)
-        delivery_company_name = _uppercase_str(delivery_company_name)
-        delivery_address = _uppercase_str(delivery_address)
         delivery_notes = _uppercase_str(delivery_notes)
         order_notes = _uppercase_str(order_notes)
 
@@ -786,26 +706,16 @@ class HtcIntegrationService:
         # ================================================================
         # PICKUP ADDRESS HANDLING
         # ================================================================
-        if pickup_address is not None:
-            if not pickup_company_name:
-                raise ValueError("pickup_company_name is required when updating pickup_address")
-
-            # Find or create the address
-            pu_address_id = self._address_utils.find_or_create_address(
-                address_string=pickup_address,
-                company_name=pickup_company_name,
-            )
-            logger.debug(f"Resolved pickup address ID: {pu_address_id}")
-
-            # Get full address info
-            pu_addr_info = self._lookup_utils.get_address_info(pu_address_id)
+        if pickup_location_id is not None:
+            # Get full address info from pre-resolved ID
+            pu_addr_info = self._lookup_utils.get_address_info(pickup_location_id)
             if not pu_addr_info:
-                raise OutputExecutionError(f"Failed to get pickup address info for ID {pu_address_id}")
+                raise OutputExecutionError(f"Failed to get pickup address info for ID {pickup_location_id}")
 
             pu_aci_letter = self._lookup_utils.get_aci_letter(pu_addr_info.aci_id)
 
             # Add all pickup address columns to update
-            htc_updates["M_PUID"] = pu_address_id
+            htc_updates["M_PUID"] = pickup_location_id
             htc_updates["M_PUCo"] = pu_addr_info.company
             htc_updates["M_PULocn"] = pu_addr_info.formatted_location
             htc_updates["M_PUZip"] = pu_addr_info.zip_code
@@ -819,33 +729,22 @@ class HtcIntegrationService:
             htc_updates["M_PULocalYN"] = pu_addr_info.local_yn
             htc_updates["M_PUBranchYN"] = pu_addr_info.branch_yn
 
-            updated_fields.append("pickup_address")
-            updated_fields.append("pickup_company_name")
+            updated_fields.append("pickup_location")
             address_changed = True
 
         # ================================================================
         # DELIVERY ADDRESS HANDLING
         # ================================================================
-        if delivery_address is not None:
-            if not delivery_company_name:
-                raise ValueError("delivery_company_name is required when updating delivery_address")
-
-            # Find or create the address
-            del_address_id = self._address_utils.find_or_create_address(
-                address_string=delivery_address,
-                company_name=delivery_company_name,
-            )
-            logger.debug(f"Resolved delivery address ID: {del_address_id}")
-
-            # Get full address info
-            del_addr_info = self._lookup_utils.get_address_info(del_address_id)
+        if delivery_location_id is not None:
+            # Get full address info from pre-resolved ID
+            del_addr_info = self._lookup_utils.get_address_info(delivery_location_id)
             if not del_addr_info:
-                raise OutputExecutionError(f"Failed to get delivery address info for ID {del_address_id}")
+                raise OutputExecutionError(f"Failed to get delivery address info for ID {delivery_location_id}")
 
             del_aci_letter = self._lookup_utils.get_aci_letter(del_addr_info.aci_id)
 
             # Add all delivery address columns to update
-            htc_updates["M_DelID"] = del_address_id
+            htc_updates["M_DelID"] = delivery_location_id
             htc_updates["M_DelCo"] = del_addr_info.company
             htc_updates["M_DelLocn"] = del_addr_info.formatted_location
             htc_updates["M_DelZip"] = del_addr_info.zip_code
@@ -859,8 +758,7 @@ class HtcIntegrationService:
             htc_updates["M_DelLocalYN"] = del_addr_info.local_yn
             htc_updates["M_DelBranchYN"] = del_addr_info.branch_yn
 
-            updated_fields.append("delivery_address")
-            updated_fields.append("delivery_company_name")
+            updated_fields.append("delivery_location")
             address_changed = True
 
         # ================================================================

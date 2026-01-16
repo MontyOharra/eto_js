@@ -412,7 +412,7 @@ incomplete ──┬──> conflict ──> ready ──> processing ──> co
 
 | File | Changes | Status |
 |------|---------|--------|
-| `server/src/features/htc_integration/service.py` | Refactor `create_order()` and `update_order()` to accept `pickup_location_id` and `delivery_location_id` instead of strings | ⏳ Pending |
+| `server/src/features/htc_integration/service.py` | Refactor `create_order()` and `update_order()` to accept `pickup_location_id` and `delivery_location_id` instead of strings | ✅ Done |
 | `server/src/features/order_management/service.py` | Complete rewrite of `approve_action()`, add helper methods | ⏳ Pending (mock with random `requires_review` implemented) |
 | `server/src/api/schemas/pending_actions.py` | Add `requires_review` and `review_reason` to `ApproveActionResponse` | ✅ Done |
 | `server/src/shared/types/pending_actions.py` | Add `requires_review` and `review_reason` to `ExecuteResult` | ✅ Done |
@@ -424,11 +424,12 @@ incomplete ──┬──> conflict ──> ready ──> processing ──> co
 
 ## Implementation Order
 
-1. **Refactor HtcIntegrationService** ⏳ Pending
-   - Update `create_order()` signature to accept `pickup_location_id`, `delivery_location_id`
-   - Update `update_order()` signature similarly
-   - Remove internal `find_or_create_address()` calls
-   - Keep `get_address_info()` calls for populating order fields
+1. **Refactor HtcIntegrationService** ✅ Done
+   - Updated `create_order()` signature to accept `pickup_location_id`, `delivery_location_id`
+   - Updated `update_order()` signature similarly
+   - Removed internal `find_or_create_address()` calls
+   - Kept `get_address_info()` calls for populating order fields
+   - Removed dead code: `create_order_from_pending()`
 
 2. **Update API schema** ✅ Done
    - Add `requires_review` and `review_reason` to `ApproveActionResponse`
