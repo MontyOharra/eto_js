@@ -909,8 +909,8 @@ class OrderManagementService:
         """
         Approve a pending action for execution.
 
-        For now, this sets the status to 'completed' and logs what would be sent to HTC.
-        Future: Will actually execute against HTC via execute_action().
+        Validates the action can be approved, then delegates to execute_action()
+        for the actual execution flow (currently stub with logging).
 
         Args:
             pending_action_id: ID of the pending action to approve
@@ -949,11 +949,48 @@ class OrderManagementService:
                 error_message=f"Cannot approve action with status '{action.status}'",
             )
 
-        # TOCTOU Check 1: Verify action type hasn't changed since user viewed detail page
-        # This catches scenarios where:
-        # - create → update (order_created_externally)
-        # - update → create (order_deleted_converting_to_create)
-        # - any → ambiguous (multiple orders now exist)
+        # Delegate to execute_action for the full execution flow
+        return self.execute_action(
+            pending_action_id=pending_action_id,
+            detail_viewed_at=detail_viewed_at,
+        )
+
+    def execute_action(
+        self,
+        pending_action_id: int,
+        detail_viewed_at: datetime | None = None,
+    ) -> ExecuteResult:
+        """
+        Execute pending action against HTC (create or update order).
+
+        Re-checks HTC state before executing (TOCTOU protection).
+        For creates: sends all selected fields.
+        For updates: sends only selected AND approved fields.
+
+        Args:
+            pending_action_id: ID of the pending action to execute
+            detail_viewed_at: When the user first viewed the detail page (for TOCTOU check)
+
+        Returns:
+            ExecuteResult with success status and details
+        """
+        logger.info(f"Executing pending action {pending_action_id}")
+
+        # Get the action
+        action = self.pending_action_repo.get_by_id(pending_action_id)
+        if action is None:
+            logger.warning(f"Cannot execute: pending action {pending_action_id} not found")
+            return ExecuteResult(
+                pending_action_id=pending_action_id,
+                success=False,
+                action_type="create",
+                htc_order_number=None,
+                error_message=f"Pending action {pending_action_id} not found",
+            )
+
+        # ================================================================
+        # STEP 1: TOCTOU CHECK - Verify action type hasn't changed
+        # ================================================================
         verify_result = self.verify_and_update_action_type(pending_action_id)
 
         if verify_result.type_changed:
@@ -964,7 +1001,7 @@ class OrderManagementService:
             )
             return ExecuteResult(
                 pending_action_id=pending_action_id,
-                success=True,  # Request succeeded, but action needs review
+                success=True,
                 action_type=verify_result.new_action_type,
                 htc_order_number=verify_result.new_htc_order_number,
                 error_message=None,
@@ -972,10 +1009,9 @@ class OrderManagementService:
                 review_reason=review_reason,
             )
 
-        # Re-fetch action after verification (in case it was updated)
+        # Re-fetch action after verification (may have been updated)
         action = self.pending_action_repo.get_by_id(pending_action_id)
         if action is None:
-            # Shouldn't happen, but handle gracefully
             return ExecuteResult(
                 pending_action_id=pending_action_id,
                 success=False,
@@ -984,20 +1020,14 @@ class OrderManagementService:
                 error_message=f"Pending action {pending_action_id} not found after verification",
             )
 
-        # TOCTOU Check 2: For updates, check if HTC order was modified since user viewed detail
-        # This catches scenarios where another user modified the order in HTC directly,
-        # and the values the user sees may be stale.
-        logger.info(
-            f"TOCTOU Check 2 inputs: action_type={action.action_type}, "
-            f"htc_order_number={action.htc_order_number}, "
-            f"detail_viewed_at={detail_viewed_at} (type={type(detail_viewed_at).__name__})"
-        )
+        # ================================================================
+        # STEP 2: TOCTOU CHECK - For updates, check if HTC modified since viewing
+        # ================================================================
         if (
             action.action_type == "update"
             and action.htc_order_number is not None
             and detail_viewed_at is not None
         ):
-            logger.info("TOCTOU Check 2: All conditions met, checking HTC modification history")
             try:
                 was_modified = self.htc_service.check_order_modified_since(
                     order_number=action.htc_order_number,
@@ -1010,7 +1040,7 @@ class OrderManagementService:
                     )
                     return ExecuteResult(
                         pending_action_id=pending_action_id,
-                        success=True,  # Request succeeded, but action needs review
+                        success=True,
                         action_type=action.action_type,
                         htc_order_number=action.htc_order_number,
                         error_message=None,
@@ -1018,54 +1048,73 @@ class OrderManagementService:
                         review_reason="htc_values_changed",
                     )
             except Exception as e:
-                # Log but don't fail the approval if the check fails
                 logger.warning(
                     f"Failed to check HTC modification history for order "
                     f"{action.htc_order_number}: {e}"
                 )
 
-        # Get selected fields to show what would be sent
+        # ================================================================
+        # STEP 3: COLLECT FIELDS
+        # ================================================================
         selected_fields = self.pending_action_field_repo.get_selected_fields_for_action(pending_action_id)
 
-        # For updates, filter to only approved fields
         if action.action_type == "update":
             fields_to_send = {
                 name: field for name, field in selected_fields.items()
                 if field.is_approved_for_update
             }
-            excluded_fields = {
-                name: field for name, field in selected_fields.items()
-                if not field.is_approved_for_update
-            }
         else:
-            # Creates send all selected fields
             fields_to_send = selected_fields
-            excluded_fields = {}
 
-        # Log what would happen
-        logger.info(f"=== MOCK APPROVAL: Pending Action {pending_action_id} ===")
+        logger.info(f"=== EXECUTION START: Pending Action {pending_action_id} ===")
         logger.info(f"Action Type: {action.action_type}")
         logger.info(f"Customer ID: {action.customer_id}")
         logger.info(f"HAWB: {action.hawb}")
         if action.htc_order_number:
             logger.info(f"HTC Order Number: {action.htc_order_number}")
+        logger.info(f"Fields to process: {list(fields_to_send.keys())}")
 
-        logger.info(f"Fields that WOULD be sent to HTC ({len(fields_to_send)}):")
-        for field_name, field in fields_to_send.items():
-            logger.info(f"  [SEND] {field_name}: {field.value}")
+        # ================================================================
+        # STEP 4: ADDRESS RESOLUTION (if needed)
+        # ================================================================
+        self._stub_resolve_addresses(fields_to_send)
 
-        if excluded_fields:
-            logger.info(f"Fields EXCLUDED from update ({len(excluded_fields)}):")
-            for field_name, field in excluded_fields.items():
-                logger.info(f"  [SKIP] {field_name}: {field.value}")
+        # ================================================================
+        # STEP 5: EXECUTE CREATE OR UPDATE
+        # ================================================================
+        if action.action_type == "create":
+            order_number = self._stub_create_order(action, fields_to_send)
+        else:
+            order_number = action.htc_order_number
+            self._stub_update_order(action, fields_to_send)
 
-        logger.info(f"=== END MOCK APPROVAL ===")
+        # ================================================================
+        # STEP 6: CREATE HISTORY RECORD
+        # ================================================================
+        self._stub_create_history(action, fields_to_send, order_number)
 
-        # Update status to completed
+        # ================================================================
+        # STEP 7: PROCESS ATTACHMENTS
+        # ================================================================
+        self._stub_process_attachments(action, order_number)
+
+        # ================================================================
+        # STEP 8: SEND NOTIFICATION EMAIL (creates only)
+        # ================================================================
+        if action.action_type == "create":
+            self._stub_send_notification_email(action, order_number)
+
+        # ================================================================
+        # STEP 9: SET STATUS TO COMPLETED
+        # ================================================================
+        logger.info(f"[STUB] Would set pending action {pending_action_id} status to 'completed'")
+
+        # Actually update status for now
         self.pending_action_repo.update(
             pending_action_id,
             PendingActionUpdate(
                 status="completed",
+                htc_order_number=order_number,
                 last_processed_at=datetime.now(timezone.utc),
             ),
         )
@@ -1077,26 +1126,223 @@ class OrderManagementService:
             "action_type": action.action_type,
         })
 
-        logger.info(f"Pending action {pending_action_id} approved (mock - status set to completed)")
+        logger.info(f"=== EXECUTION COMPLETE: Pending Action {pending_action_id} ===")
 
         return ExecuteResult(
             pending_action_id=pending_action_id,
             success=True,
             action_type=action.action_type,
-            htc_order_number=action.htc_order_number,
+            htc_order_number=order_number,
             error_message=None,
         )
 
-    def execute_action(self, pending_action_id: int) -> ExecuteResult:
-        """
-        Execute pending action against HTC (create or update order).
+    # ========== Stub Methods for Execute Flow ==========
 
-        Re-checks HTC state before executing (TOCTOU protection).
-        For creates: sends all selected fields.
-        For updates: sends only selected AND approved fields.
+    def _stub_resolve_addresses(
+        self,
+        fields_to_send: dict[str, Any],
+    ) -> None:
         """
-        # TODO: Implement HTC execution
-        raise NotImplementedError()
+        STUB: Log address resolution that would happen.
+
+        For location fields with address_id=None, we would create new addresses.
+        """
+        location_fields = ["pickup_location", "delivery_location"]
+
+        for field_name in location_fields:
+            if field_name not in fields_to_send:
+                continue
+
+            field = fields_to_send[field_name]
+            value = field.value
+
+            # Extract address_id from the value
+            address_id = None
+            company_name = None
+            address_str = None
+
+            if isinstance(value, dict):
+                address_id = value.get("address_id")
+                company_name = value.get("name")
+                address_str = value.get("address")
+            elif hasattr(value, "address_id"):
+                address_id = value.address_id
+                company_name = value.name
+                address_str = value.address
+
+            if address_id is None:
+                logger.info(
+                    f"[STUB] Would CREATE ADDRESS for {field_name}:\n"
+                    f"         Company: {company_name}\n"
+                    f"         Address: {address_str}"
+                )
+            else:
+                logger.info(
+                    f"[STUB] Address already resolved for {field_name}: ID={address_id}"
+                )
+
+    def _stub_create_order(
+        self,
+        action: PendingAction,
+        fields_to_send: dict[str, Any],
+    ) -> float:
+        """
+        STUB: Log order creation that would happen.
+
+        Returns a fake order number for logging purposes.
+        """
+        logger.info(f"[STUB] Would CREATE ORDER in HTC:")
+        logger.info(f"         Customer ID: {action.customer_id}")
+        logger.info(f"         HAWB: {action.hawb}")
+
+        # Log each field that would be sent
+        for field_name, field in fields_to_send.items():
+            if field_name == "dims":
+                dims_value = field.value
+                if isinstance(dims_value, list):
+                    logger.info(f"         {field_name}: {len(dims_value)} dimension record(s)")
+                    for i, dim in enumerate(dims_value):
+                        if isinstance(dim, dict):
+                            logger.info(
+                                f"           [{i+1}] L={dim.get('length')} x W={dim.get('width')} x H={dim.get('height')}, "
+                                f"Qty={dim.get('qty')}, Weight={dim.get('weight')}"
+                            )
+                else:
+                    logger.info(f"         {field_name}: {dims_value}")
+            elif field_name in ("pickup_location", "delivery_location"):
+                value = field.value
+                if isinstance(value, dict):
+                    logger.info(
+                        f"         {field_name}: ID={value.get('address_id')}, "
+                        f"{value.get('name')}, {value.get('address')}"
+                    )
+                else:
+                    logger.info(f"         {field_name}: {value}")
+            elif field_name in ("pickup_datetime", "delivery_datetime"):
+                value = field.value
+                if isinstance(value, dict):
+                    logger.info(
+                        f"         {field_name}: {value.get('date')} "
+                        f"{value.get('time_start')}-{value.get('time_end')}"
+                    )
+                else:
+                    logger.info(f"         {field_name}: {value}")
+            else:
+                logger.info(f"         {field_name}: {field.value}")
+
+        # Return fake order number
+        fake_order_number = 999999.0
+        logger.info(f"[STUB] Would receive new order number: {fake_order_number}")
+
+        # Log dims creation if present
+        if "dims" in fields_to_send:
+            dims_value = fields_to_send["dims"].value
+            if isinstance(dims_value, list) and len(dims_value) > 0:
+                logger.info(f"[STUB] Would CREATE {len(dims_value)} DIMS RECORDS for order {fake_order_number}")
+
+        return fake_order_number
+
+    def _stub_update_order(
+        self,
+        action: PendingAction,
+        fields_to_send: dict[str, Any],
+    ) -> None:
+        """
+        STUB: Log order update that would happen.
+        """
+        logger.info(f"[STUB] Would UPDATE ORDER in HTC:")
+        logger.info(f"         Order Number: {action.htc_order_number}")
+
+        # Log each field that would be updated
+        for field_name, field in fields_to_send.items():
+            if field_name == "dims":
+                dims_value = field.value
+                if isinstance(dims_value, list):
+                    logger.info(f"         {field_name}: REPLACE with {len(dims_value)} dimension record(s)")
+                else:
+                    logger.info(f"         {field_name}: {dims_value}")
+            elif field_name in ("pickup_location", "delivery_location"):
+                value = field.value
+                if isinstance(value, dict):
+                    logger.info(
+                        f"         {field_name}: ID={value.get('address_id')}, "
+                        f"{value.get('name')}, {value.get('address')}"
+                    )
+                else:
+                    logger.info(f"         {field_name}: {value}")
+            elif field_name in ("pickup_datetime", "delivery_datetime"):
+                value = field.value
+                if isinstance(value, dict):
+                    logger.info(
+                        f"         {field_name}: {value.get('date')} "
+                        f"{value.get('time_start')}-{value.get('time_end')}"
+                    )
+                else:
+                    logger.info(f"         {field_name}: {value}")
+            else:
+                logger.info(f"         {field_name}: {field.value}")
+
+    def _stub_create_history(
+        self,
+        action: PendingAction,
+        fields_to_send: dict[str, Any],
+        order_number: float | None,
+    ) -> None:
+        """
+        STUB: Log history record creation that would happen.
+        """
+        if action.action_type == "create":
+            logger.info(f"[STUB] Would CREATE HISTORY RECORD for order {order_number}:")
+            logger.info(f"         Status: 'ETO Generated'")
+            logger.info(f"         Status Seq: 35")
+        else:
+            field_names = list(fields_to_send.keys())
+            logger.info(f"[STUB] Would CREATE UPDATE HISTORY RECORD for order {order_number}:")
+            logger.info(f"         Updated fields: {field_names}")
+            logger.info(f"         User: ETO System")
+
+    def _stub_process_attachments(
+        self,
+        action: PendingAction,
+        order_number: float | None,
+    ) -> None:
+        """
+        STUB: Log attachment processing that would happen.
+
+        In the real implementation, this would:
+        1. Find all PDF files from contributing sources
+        2. Copy them to HTC attachment storage
+        3. Create records in HTC attachments table
+        """
+        # Get contributing sources to count PDFs
+        fields_with_sources = self.pending_action_field_repo.get_fields_with_sources_for_action(action.id)
+
+        # Count unique PDF files
+        pdf_files: set[str] = set()
+        for row in fields_with_sources:
+            pdf_filename = row.get("pdf_filename")
+            if pdf_filename and pdf_filename != "Unknown":
+                pdf_files.add(pdf_filename)
+
+        if pdf_files:
+            logger.info(f"[STUB] Would PROCESS {len(pdf_files)} ATTACHMENT(S) for order {order_number}:")
+            for pdf in pdf_files:
+                logger.info(f"         - {pdf}")
+        else:
+            logger.info(f"[STUB] No attachments to process for order {order_number}")
+
+    def _stub_send_notification_email(
+        self,
+        action: PendingAction,
+        order_number: float | None,
+    ) -> None:
+        """
+        STUB: Log notification email that would be sent.
+        """
+        logger.info(f"[STUB] Would SEND NOTIFICATION EMAIL:")
+        logger.info(f"         Order Number: {order_number}")
+        logger.info(f"         Customer ID: {action.customer_id}")
+        logger.info(f"         HAWB: {action.hawb}")
 
     def retry_failed_action(self, pending_action_id: int) -> None:
         """
