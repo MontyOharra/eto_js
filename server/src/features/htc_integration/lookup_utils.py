@@ -10,6 +10,7 @@ Provides lookup operations for HTC database entities:
 
 import json
 from dataclasses import dataclass
+from datetime import datetime
 from typing import Any, Callable
 
 from shared.logging import get_logger
@@ -649,13 +650,13 @@ class HtcLookupUtils:
                 if dims_rows:
                     dims_list: list[dict] = []
                     for dim_row in dims_rows:
+                        # Note: dim_weight (dim_row[5]) is NOT included - it's calculated at write time
                         dims_list.append({
                             "height": float(dim_row[0]) if dim_row[0] is not None else 0,
                             "length": float(dim_row[1]) if dim_row[1] is not None else 0,
                             "width": float(dim_row[2]) if dim_row[2] is not None else 0,
                             "qty": int(dim_row[3]) if dim_row[3] is not None else 1,
                             "weight": float(dim_row[4]) if dim_row[4] is not None else 0,
-                            "dim_weight": float(dim_row[5]) if dim_row[5] is not None else 0,
                         })
                     dims_json = json.dumps(dims_list)
                     logger.debug(f"Found {len(dims_list)} dims for order {order_number}")
@@ -700,4 +701,80 @@ class HtcLookupUtils:
 
         except Exception as e:
             logger.error(f"Failed to get order fields for {order_number}: {e}")
+            raise
+
+    def check_order_modified_since(
+        self,
+        order_number: float,
+        since_datetime: datetime,
+    ) -> bool:
+        """
+        Check if an order has been modified in HTC since a given datetime.
+
+        Queries the Orders Update History table (htc300_g040_t030) to see if
+        any updates were made to the order after the specified time.
+
+        Used for TOCTOU protection: if user viewed an update at time T, and
+        the order was modified in HTC after T, we need to warn them.
+
+        Args:
+            order_number: The HTC order number to check
+            since_datetime: The datetime to check against (should be in CST or
+                           will be converted - HTC stores times in CST)
+
+        Returns:
+            True if the order was modified after since_datetime, False otherwise
+        """
+        connection = self._get_connection()
+
+        try:
+            # Convert to CST if timezone-aware (HTC stores times in CST without timezone info)
+            from zoneinfo import ZoneInfo
+            cst_tz = ZoneInfo("America/Chicago")
+
+            if since_datetime.tzinfo is not None:
+                # Convert from whatever timezone to CST, then remove tzinfo for comparison
+                since_datetime_cst = since_datetime.astimezone(cst_tz).replace(tzinfo=None)
+                logger.info(
+                    f"TOCTOU: Converted {since_datetime} (UTC) to {since_datetime_cst} (CST)"
+                )
+            else:
+                # Assume already in CST if no timezone info
+                since_datetime_cst = since_datetime
+                logger.info(f"TOCTOU: Using naive datetime as-is (assumed CST): {since_datetime_cst}")
+
+            with connection.cursor() as cursor:
+                # Query the Orders Update History table
+                # Note: HTC stores datetime in CST timezone (naive, no tzinfo)
+                query = """
+                    SELECT COUNT(*)
+                    FROM [htc300_g040_t030 Orders Update History]
+                    WHERE [Orders_OrderNbr] = ?
+                      AND [Orders_UpdtDate] > ?
+                """
+                params = (order_number, since_datetime_cst)
+                logger.info(
+                    f"TOCTOU query params: order_number={order_number}, "
+                    f"since_datetime_cst={since_datetime_cst} (type={type(since_datetime_cst).__name__})"
+                )
+                cursor.execute(query, params)
+                row = cursor.fetchone()
+
+                count = int(row[0]) if row and row[0] is not None else 0
+                logger.info(
+                    f"TOCTOU query result: count={count} modifications found for "
+                    f"order {order_number} since {since_datetime_cst} (CST)"
+                )
+                if count > 0:
+                    logger.info(
+                        f"TOCTOU: Order {order_number} was modified {count} time(s) "
+                        f"since {since_datetime_cst} (CST)"
+                    )
+                    return True
+                return False
+
+        except Exception as e:
+            logger.error(
+                f"Failed to check order modification history for {order_number}: {e}"
+            )
             raise

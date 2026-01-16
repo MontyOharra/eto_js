@@ -6,7 +6,6 @@ from output executions and manual input, execution against HTC, and user interac
 """
 import json
 import logging
-import random
 from dataclasses import asdict
 from typing import Any
 
@@ -38,6 +37,7 @@ from shared.types.pending_actions import (
     ContributingSource,
     CleanupResult,
     ExecuteResult,
+    VerifyTypeResult,
     ORDER_FIELDS,
     REQUIRED_ORDER_FIELDS,
     OPTIONAL_ORDER_FIELDS,
@@ -124,15 +124,16 @@ class OrderManagementService:
         # 3b. Resolve address IDs for location fields
         order_fields = self._resolve_address_ids(order_fields)
 
-        # 3c. For updates, filter out fields that match current HTC values BEFORE
-        # creating the pending action. If no fields differ, skip entirely.
+        # 3c. For updates, identify which fields differ from current HTC values.
+        # We store ALL fields but track which ones changed for approval status.
+        changed_fields: set[str] | None = None
         if action_type == "update" and htc_order_number is not None:
-            order_fields = self._filter_unchanged_fields_for_storage(
+            order_fields, changed_fields = self._identify_changed_fields(
                 order_fields, htc_order_number
             )
             if not order_fields:
                 logger.info(
-                    f"No changed fields for update on HAWB '{output_execution.hawb}' - "
+                    f"No fields to store for update on HAWB '{output_execution.hawb}' - "
                     f"skipping pending action creation"
                 )
                 return None
@@ -157,6 +158,7 @@ class OrderManagementService:
             pending_action_id=pending_action.id,
             output_execution_id=output_execution_id,
             fields=order_fields,
+            changed_fields=changed_fields,
         )
 
         # 7. Recalculate action status based on current field state
@@ -407,45 +409,48 @@ class OrderManagementService:
 
         return order_fields
 
-    def _filter_unchanged_fields_for_storage(
+    def _identify_changed_fields(
         self,
         order_fields: dict[str, Any],
         htc_order_number: float,
-    ) -> dict[str, Any]:
+    ) -> tuple[dict[str, Any], set[str]]:
         """
-        Filter out fields that match current HTC values before storage.
+        Identify which fields differ from current HTC values.
 
-        For updates, we only want to store fields that actually differ from HTC.
-        This ensures that 'contributions' only show actual changes.
+        For updates, we store ALL contributed fields but track which ones
+        actually differ from HTC. This allows:
+        - Users to see all contributed values
+        - Changed fields to be auto-approved for update
+        - Unchanged fields to be stored but not auto-approved (user can toggle)
 
         Args:
-            order_fields: Transformed order fields to potentially store
+            order_fields: Transformed order fields to store
             htc_order_number: HTC order number to fetch current values
 
         Returns:
-            Filtered dict containing only fields that differ from HTC
+            Tuple of (all_fields, changed_field_names_set)
         """
         # Fetch current HTC values
         htc_fields = self.htc_service.get_order_fields(order_number=htc_order_number)
         if htc_fields is None:
-            logger.warning(f"Could not fetch HTC fields for order {htc_order_number}, storing all fields")
-            return order_fields
+            logger.warning(f"Could not fetch HTC fields for order {htc_order_number}, treating all as changed")
+            return order_fields, set(order_fields.keys())
 
         # Transform HTC values to match our field structure
         from features.order_management.transformers import transform_htc_values_to_order_fields
         from dataclasses import asdict
         current_htc_values = transform_htc_values_to_order_fields(asdict(htc_fields))
 
-        filtered: dict[str, Any] = {}
+        changed_fields: set[str] = set()
         location_fields = {"pickup_location", "delivery_location"}
 
         for field_name, proposed_value in order_fields.items():
             htc_value = current_htc_values.get(field_name)
 
-            # If HTC has no value for this field, it's a new value - include it
+            # If HTC has no value for this field, it's a new value - changed
             if htc_value is None:
-                logger.debug(f"Field '{field_name}': HTC has no value, including")
-                filtered[field_name] = proposed_value
+                logger.debug(f"Field '{field_name}': HTC has no value, marking as changed")
+                changed_fields.add(field_name)
                 continue
 
             # Location fields: compare by address_id only
@@ -463,20 +468,18 @@ class OrderManagementService:
                 if isinstance(htc_value, dict):
                     htc_id = htc_value.get("address_id")
 
-                # If proposed address_id is null, include (needs resolution)
+                # If proposed address_id is null, treat as changed (needs resolution)
                 if proposed_id is None:
-                    logger.debug(f"Field '{field_name}': proposed address_id is None, including")
-                    filtered[field_name] = proposed_value
+                    logger.debug(f"Field '{field_name}': proposed address_id is None, marking as changed")
+                    changed_fields.add(field_name)
                     continue
 
-                # If address_ids match, exclude
-                if proposed_id == htc_id:
-                    logger.debug(f"Field '{field_name}': address_ids match ({proposed_id}), excluding")
-                    continue
-
-                # Different address_ids - include
-                logger.debug(f"Field '{field_name}': address_ids differ ({proposed_id} vs {htc_id}), including")
-                filtered[field_name] = proposed_value
+                # If address_ids differ, mark as changed
+                if proposed_id != htc_id:
+                    logger.debug(f"Field '{field_name}': address_ids differ ({proposed_id} vs {htc_id}), marking as changed")
+                    changed_fields.add(field_name)
+                else:
+                    logger.debug(f"Field '{field_name}': address_ids match ({proposed_id}), unchanged")
                 continue
 
             # Normalize for comparison
@@ -484,12 +487,12 @@ class OrderManagementService:
             htc_normalized = self._normalize_value_for_comparison(htc_value)
 
             if proposed_normalized != htc_normalized:
-                logger.debug(f"Field '{field_name}': values differ, including")
-                filtered[field_name] = proposed_value
+                logger.debug(f"Field '{field_name}': values differ, marking as changed")
+                changed_fields.add(field_name)
             else:
-                logger.debug(f"Field '{field_name}': values match, excluding")
+                logger.debug(f"Field '{field_name}': values match, unchanged")
 
-        return filtered
+        return order_fields, changed_fields
 
     def _normalize_value_for_comparison(self, value: Any) -> str:
         """Normalize a value to a string for comparison."""
@@ -509,15 +512,25 @@ class OrderManagementService:
         pending_action_id: int,
         output_execution_id: int,
         fields: dict[str, Any],
+        changed_fields: set[str] | None = None,
     ) -> None:
         """
         Add field values to pending action, handling conflict detection.
 
         For each field:
-        - If no existing values: create with is_selected=True, is_approved_for_update=True
+        - If no existing values: create with is_selected=True
+          - For creates (changed_fields=None): is_approved_for_update=True
+          - For updates: is_approved_for_update=True only if field is in changed_fields
         - If value matches existing: skip (duplicate - no point storing same value twice)
         - If value differs: clear all selections, create with is_selected=False
           and inherit is_approved_for_update from existing values
+
+        Args:
+            pending_action_id: ID of the pending action
+            output_execution_id: ID of the output execution contributing this value
+            fields: Dict of field_name -> value to add
+            changed_fields: Set of field names that differ from HTC values (for updates).
+                           None means all fields should be auto-approved (creates).
         """
         # Get all existing fields for this action
         existing_fields = self.pending_action_field_repo.get_fields_for_action(pending_action_id)
@@ -536,8 +549,13 @@ class OrderManagementService:
             new_value_json = self._serialize_value_for_comparison(value)
 
             if not existing_for_field:
-                # No existing values - first value is auto-selected and auto-approved
-                logger.debug(f"Adding first value for field '{field_name}' (auto-selected)")
+                # No existing values - first value is auto-selected
+                # Auto-approve if: creates (changed_fields=None) OR field is in changed_fields
+                should_approve = changed_fields is None or field_name in changed_fields
+                logger.debug(
+                    f"Adding first value for field '{field_name}' "
+                    f"(auto-selected, approved={should_approve})"
+                )
                 self.pending_action_field_repo.create(
                     data=PendingActionFieldCreate(
                         pending_action_id=pending_action_id,
@@ -545,7 +563,7 @@ class OrderManagementService:
                         field_name=field_name,
                         value=value,
                         is_selected=True,
-                        is_approved_for_update=True,
+                        is_approved_for_update=should_approve,
                     )
                 )
             else:
@@ -622,19 +640,18 @@ class OrderManagementService:
                 filtered[field_name] = field_values
                 continue
 
-            # If multiple values exist (conflict), always show for user resolution
+            # If multiple values exist, always show for user to see/change selection
+            # This allows users to switch between options even if one matches HTC
             if len(field_values) > 1:
-                # Check if there's a selected value
-                selected = [fv for fv in field_values if fv.is_selected]
-                if not selected:
-                    # No selection yet - conflict, show all
-                    filtered[field_name] = field_values
-                    continue
-                # Has selection - compare selected value to HTC
-                proposed_value = selected[0].value
-            else:
-                # Single value
-                proposed_value = field_values[0].value
+                filtered[field_name] = field_values
+                continue
+
+            # Single value - compare to HTC to decide whether to show
+            # (Skip if somehow empty - shouldn't happen but be safe)
+            if len(field_values) == 0:
+                continue
+
+            proposed_value = field_values[0].value
 
             # Location fields: compare by address_id only
             if field_name in location_fields:
@@ -771,9 +788,124 @@ class OrderManagementService:
 
         return updated_action
 
+    # ========== TOCTOU Verification ==========
+
+    def verify_and_update_action_type(self, pending_action_id: int) -> VerifyTypeResult:
+        """
+        Re-check HTC and update action type if needed (TOCTOU protection).
+
+        Called:
+        - When user visits detail page (proactive refresh)
+        - Before approval (safety check)
+
+        Handles all transitions:
+        - create → update (order_created_externally)
+        - create → ambiguous (multiple orders created)
+        - update → create (order_deleted_converting_to_create)
+        - update → ambiguous (additional orders created)
+        - ambiguous → create (all orders deleted)
+        - ambiguous → update (only one order remains)
+
+        Args:
+            pending_action_id: ID of the pending action to verify
+
+        Returns:
+            VerifyTypeResult with old/new types and whether change occurred
+        """
+        # 1. Get current action
+        action = self.pending_action_repo.get_by_id(pending_action_id)
+        if action is None:
+            raise ValueError(f"Pending action {pending_action_id} not found")
+
+        old_action_type = action.action_type
+        old_htc_order_number = action.htc_order_number
+
+        # 2. Re-determine type from HTC
+        new_action_type, new_htc_order_number = self._determine_action_type(
+            customer_id=action.customer_id,
+            hawb=action.hawb,
+        )
+
+        type_changed = (
+            old_action_type != new_action_type or
+            old_htc_order_number != new_htc_order_number
+        )
+
+        if type_changed:
+            logger.info(
+                f"Action {pending_action_id} type changed: "
+                f"{old_action_type} → {new_action_type}, "
+                f"order {old_htc_order_number} → {new_htc_order_number}"
+            )
+
+            # 3. Update the action type and order number
+            self.pending_action_repo.update(
+                action_id=pending_action_id,
+                updates=PendingActionUpdate(
+                    action_type=new_action_type,
+                    htc_order_number=new_htc_order_number,
+                ),
+            )
+
+            # 4. Recalculate status (create can be incomplete, update cannot, ambiguous is always ambiguous)
+            updated_action = self._recalculate_action_status(pending_action_id)
+            new_status = updated_action.status
+
+            # 5. Broadcast change via SSE
+            order_event_manager.broadcast_sync("pending_action_updated", {
+                "id": pending_action_id,
+                "status": new_status,
+                "action_type": new_action_type,
+            })
+        else:
+            new_status = action.status
+
+        return VerifyTypeResult(
+            pending_action_id=pending_action_id,
+            type_changed=type_changed,
+            old_action_type=old_action_type,
+            new_action_type=new_action_type,
+            old_htc_order_number=old_htc_order_number,
+            new_htc_order_number=new_htc_order_number,
+            new_status=new_status,
+        )
+
+    def _get_review_reason_for_type_change(self, verify_result: VerifyTypeResult) -> str:
+        """
+        Determine the review reason based on how the action type changed.
+
+        Args:
+            verify_result: Result from verify_and_update_action_type
+
+        Returns:
+            Review reason string for the ExecuteResult
+        """
+        old_type = verify_result.old_action_type
+        new_type = verify_result.new_action_type
+
+        if old_type == "create" and new_type == "update":
+            return "order_created_externally"
+        elif old_type == "create" and new_type == "ambiguous":
+            return "ambiguous"
+        elif old_type == "update" and new_type == "create":
+            return "order_deleted_converting_to_create"
+        elif old_type == "update" and new_type == "ambiguous":
+            return "ambiguous"
+        elif old_type == "ambiguous" and new_type == "create":
+            return "order_deleted_converting_to_create"
+        elif old_type == "ambiguous" and new_type == "update":
+            return "order_created_externally"
+        else:
+            # htc_order_number changed (different order found)
+            return "htc_values_changed"
+
     # ========== Execution ==========
 
-    def approve_action(self, pending_action_id: int) -> ExecuteResult:
+    def approve_action(
+        self,
+        pending_action_id: int,
+        detail_viewed_at: datetime | None = None,
+    ) -> ExecuteResult:
         """
         Approve a pending action for execution.
 
@@ -782,6 +914,9 @@ class OrderManagementService:
 
         Args:
             pending_action_id: ID of the pending action to approve
+            detail_viewed_at: When the user first viewed the detail page (for TOCTOU check).
+                             If provided for update actions, we check if HTC was modified
+                             after this time and require review if so.
 
         Returns:
             ExecuteResult with success status and details
@@ -814,31 +949,80 @@ class OrderManagementService:
                 error_message=f"Cannot approve action with status '{action.status}'",
             )
 
-        # TEMPORARY: Random requires_review for frontend testing
-        # In the real implementation, this will be determined by TOCTOU checks
-        requires_review = random.choice([True, False])
-        if requires_review:
-            review_reason = random.choice([
-                "order_created_externally",
-                "order_deleted_converting_to_create",
-                "htc_values_changed",
-                "no_changes_remaining",
-                "ambiguous",
-            ])
+        # TOCTOU Check 1: Verify action type hasn't changed since user viewed detail page
+        # This catches scenarios where:
+        # - create → update (order_created_externally)
+        # - update → create (order_deleted_converting_to_create)
+        # - any → ambiguous (multiple orders now exist)
+        verify_result = self.verify_and_update_action_type(pending_action_id)
+
+        if verify_result.type_changed:
+            review_reason = self._get_review_reason_for_type_change(verify_result)
             logger.info(
-                f"=== MOCK REQUIRES REVIEW: Pending Action {pending_action_id} ===\n"
-                f"Reason: {review_reason}\n"
-                f"Action remains in '{action.status}' status for user review"
+                f"TOCTOU: Action {pending_action_id} type changed, requires review. "
+                f"Reason: {review_reason}"
             )
             return ExecuteResult(
                 pending_action_id=pending_action_id,
                 success=True,  # Request succeeded, but action needs review
-                action_type=action.action_type,
-                htc_order_number=action.htc_order_number,
+                action_type=verify_result.new_action_type,
+                htc_order_number=verify_result.new_htc_order_number,
                 error_message=None,
                 requires_review=True,
                 review_reason=review_reason,
             )
+
+        # Re-fetch action after verification (in case it was updated)
+        action = self.pending_action_repo.get_by_id(pending_action_id)
+        if action is None:
+            # Shouldn't happen, but handle gracefully
+            return ExecuteResult(
+                pending_action_id=pending_action_id,
+                success=False,
+                action_type="create",
+                htc_order_number=None,
+                error_message=f"Pending action {pending_action_id} not found after verification",
+            )
+
+        # TOCTOU Check 2: For updates, check if HTC order was modified since user viewed detail
+        # This catches scenarios where another user modified the order in HTC directly,
+        # and the values the user sees may be stale.
+        logger.info(
+            f"TOCTOU Check 2 inputs: action_type={action.action_type}, "
+            f"htc_order_number={action.htc_order_number}, "
+            f"detail_viewed_at={detail_viewed_at} (type={type(detail_viewed_at).__name__})"
+        )
+        if (
+            action.action_type == "update"
+            and action.htc_order_number is not None
+            and detail_viewed_at is not None
+        ):
+            logger.info("TOCTOU Check 2: All conditions met, checking HTC modification history")
+            try:
+                was_modified = self.htc_service.check_order_modified_since(
+                    order_number=action.htc_order_number,
+                    since_datetime=detail_viewed_at,
+                )
+                if was_modified:
+                    logger.info(
+                        f"TOCTOU: Order {action.htc_order_number} was modified in HTC "
+                        f"since user viewed detail at {detail_viewed_at}"
+                    )
+                    return ExecuteResult(
+                        pending_action_id=pending_action_id,
+                        success=True,  # Request succeeded, but action needs review
+                        action_type=action.action_type,
+                        htc_order_number=action.htc_order_number,
+                        error_message=None,
+                        requires_review=True,
+                        review_reason="htc_values_changed",
+                    )
+            except Exception as e:
+                # Log but don't fail the approval if the check fails
+                logger.warning(
+                    f"Failed to check HTC modification history for order "
+                    f"{action.htc_order_number}: {e}"
+                )
 
         # Get selected fields to show what would be sent
         selected_fields = self.pending_action_field_repo.get_selected_fields_for_action(pending_action_id)
@@ -1016,6 +1200,10 @@ class OrderManagementService:
 
         For updates, also fetches current HTC values for comparison display.
 
+        TOCTOU Protection: On every detail view request, we re-verify the action type
+        against HTC. This ensures the user sees the most up-to-date state (e.g., if
+        someone created the order in HTC, a "create" action becomes an "update").
+
         Args:
             action_id: ID of the pending action
 
@@ -1023,15 +1211,23 @@ class OrderManagementService:
             PendingActionDetailView with all field values and contributing sources,
             or None if action not found
         """
-        # 1. Get the pending action
+        # 1. Verify action type is still correct (TOCTOU protection)
+        # This will update the action if the type has changed
+        try:
+            self.verify_and_update_action_type(action_id)
+        except ValueError:
+            # Action not found
+            return None
+
+        # 2. Get the (potentially updated) pending action
         action = self.pending_action_repo.get_by_id(action_id)
         if action is None:
             return None
 
-        # 2. Get fields with source chain data (single JOIN query)
+        # 3. Get fields with source chain data (single JOIN query)
         fields_with_sources = self.pending_action_field_repo.get_fields_with_sources_for_action(action_id)
 
-        # 3. Build field views grouped by field_name
+        # 4. Build field views grouped by field_name
         fields: dict[str, list[PendingActionFieldView]] = {}
         for row in fields_with_sources:
             field_view = PendingActionFieldView(
@@ -1046,7 +1242,7 @@ class OrderManagementService:
                 fields[row["field_name"]] = []
             fields[row["field_name"]].append(field_view)
 
-        # 4. Build contributing sources (grouped by sub_run_id)
+        # 5. Build contributing sources (grouped by sub_run_id)
         sources_by_sub_run: dict[int, dict] = {}
         for row in fields_with_sources:
             sub_run_id = row["sub_run_id"]
@@ -1090,7 +1286,7 @@ class OrderManagementService:
         # Sort by contributed_at descending (most recent first)
         contributing_sources.sort(key=lambda s: s.contributed_at, reverse=True)
 
-        # 5. Get current HTC values for updates
+        # 6. Get current HTC values for updates
         current_htc_values: dict[str, Any] | None = None
         if action.action_type == "update" and action.htc_order_number is not None:
             htc_fields = self.htc_service.get_order_fields(
@@ -1105,7 +1301,7 @@ class OrderManagementService:
                 # Filter out fields where proposed value matches HTC value
                 fields = self._filter_unchanged_fields(fields, current_htc_values)
 
-        # 6. Build and return the detail view
+        # 7. Build and return the detail view
         return PendingActionDetailView(
             id=action.id,
             customer_id=action.customer_id,

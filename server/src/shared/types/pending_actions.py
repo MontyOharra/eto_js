@@ -57,7 +57,7 @@ OrderFieldDataType = Literal["string", "location", "dims", "datetime_range"]
 Data types for order fields:
 - string: Simple string value (1:1 mapping from output channel)
 - location: Complex JSON with address_id, name, address (resolved from company_name + address channels)
-- dims: JSON array of dimension objects with calculated dim_weight
+- dims: JSON array of dimension objects (length, width, height, qty, weight)
 - datetime_range: Date + time range from two datetime inputs (validates dates match)
 """
 
@@ -147,7 +147,7 @@ class DimObject(BaseModel):
     height: float
     qty: int
     weight: float
-    dim_weight: float  # Calculated: L*W*H/144
+    # Note: dim_weight is calculated at HTC write time, not stored here
 
 
 # =========================
@@ -409,6 +409,24 @@ class CleanupResult(BaseModel):
     fields_deleted: int           # Number of field records removed
     actions_deleted: int          # Actions fully deleted (no fields remaining)
     actions_recalculated: int     # Actions that still have fields and were recalculated
+
+
+class VerifyTypeResult(BaseModel):
+    """
+    Result of action type verification (TOCTOU check).
+
+    Returned by verify_and_update_action_type() to indicate whether
+    the action type changed since the action was created/last checked.
+    """
+    model_config = ConfigDict(frozen=True)
+
+    pending_action_id: int
+    type_changed: bool
+    old_action_type: PendingActionType
+    new_action_type: PendingActionType
+    old_htc_order_number: float | None
+    new_htc_order_number: float | None
+    new_status: PendingActionStatus
 
 
 class ExecuteResult(BaseModel):

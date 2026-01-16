@@ -24,10 +24,10 @@ FieldTransformer = Callable[[dict[str, Any]], Any]
 
 
 def transform_string_field(source_values: dict[str, Any]) -> str | None:
-    """Passthrough - returns first non-None value as string."""
+    """Returns first non-None value as uppercase string (HTC stores all caps)."""
     for value in source_values.values():
         if value is not None:
-            return str(value)
+            return str(value).upper()
     return None
 
 
@@ -56,15 +56,21 @@ def transform_location_field(source_values: dict[str, Any]) -> LocationValue | N
     if not company_name and not address:
         return None
 
+    # Uppercase string values for HTC compatibility
     return LocationValue(
         address_id=address_id,
-        name=company_name or "",
-        address=address or "",
+        name=(company_name or "").upper(),
+        address=(address or "").upper(),
     )
 
 
 def transform_dims_field(source_values: dict[str, Any]) -> list[DimObject] | None:
-    """Parses dims and calculates dim_weight for each entry."""
+    """
+    Parses dims into DimObject list.
+
+    Note: dim_weight is NOT included here - it's calculated at HTC write time.
+    This ensures consistent comparison between contributed values and HTC values.
+    """
     import json as json_module
 
     raw_dims = source_values.get("dims")
@@ -85,23 +91,14 @@ def transform_dims_field(source_values: dict[str, Any]) -> list[DimObject] | Non
     result = []
     for dim in raw_dims:
         try:
-            # Use existing dim_weight if provided, otherwise calculate
-            dim_weight = dim.get("dim_weight")
-            if dim_weight is None:
-                dim_weight = (dim["length"] * dim["width"] * dim["height"]) / 144
-
-            # Round dim_weight to 3 decimal places to avoid floating point issues
-            dim_weight = round(dim_weight, 3)
-
             result.append(DimObject(
-                length=dim["length"],
-                width=dim["width"],
-                height=dim["height"],
-                qty=dim["qty"],
-                weight=dim["weight"],
-                dim_weight=dim_weight,
+                length=float(dim["length"]),
+                width=float(dim["width"]),
+                height=float(dim["height"]),
+                qty=int(dim["qty"]),
+                weight=float(dim["weight"]),
             ))
-        except (KeyError, TypeError) as e:
+        except (KeyError, TypeError, ValueError) as e:
             logger.warning(f"Invalid dims entry, skipping: {dim} - {e}")
             continue
 

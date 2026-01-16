@@ -10,7 +10,6 @@ import {
   useSelectFieldValue,
   useApprovePendingAction,
   useRejectPendingAction,
-  usePendingUpdateDetail,
   useOrderHistory,
   useUnifiedActions,
   useMarkRead,
@@ -27,8 +26,7 @@ export const Route = createFileRoute('/dashboard/orders/')({
 });
 
 type DetailView =
-  | { type: 'order-detail'; orderId: number }
-  | { type: 'update-detail'; updateId: number }
+  | { type: 'action-detail'; actionId: number }
   | { type: 'order-history'; hawb: string }
   | null;
 
@@ -94,6 +92,9 @@ function OrdersPage() {
     reviewReason: null,
   });
 
+  // Track when user opened the detail view (for TOCTOU check on updates)
+  const [detailViewedAt, setDetailViewedAt] = useState<string | null>(null);
+
   // ============================================================================
   // Filter State
   // ============================================================================
@@ -128,19 +129,15 @@ function OrdersPage() {
     isFetching: unifiedFetching,
   } = useUnifiedActions(unifiedQueryParams);
 
-  // Detail data - Pending Orders
-  const selectedOrderId =
-    detailView?.type === 'order-detail' ? detailView.orderId : null;
-  const { data: orderDetail } = usePendingOrderDetail(selectedOrderId);
+  // Detail data - Unified action detail (works for both creates and updates)
+  // The API returns action_type which we use to decide which component to render
+  const selectedActionId =
+    detailView?.type === 'action-detail' ? detailView.actionId : null;
+  const { data: actionDetail } = usePendingOrderDetail(selectedActionId);
 
   const selectedHawb =
     detailView?.type === 'order-history' ? detailView.hawb : null;
   const { data: orderHistory } = useOrderHistory(selectedHawb);
-
-  // Detail data - Pending Updates
-  const selectedUpdateId =
-    detailView?.type === 'update-detail' ? detailView.updateId : null;
-  const { data: updateDetail } = usePendingUpdateDetail(selectedUpdateId);
 
   // Mutations
   const selectFieldValue = useSelectFieldValue();
@@ -160,30 +157,30 @@ function OrdersPage() {
     setStatusFilter('all');
   };
 
-  const handleRowClick = (type: ActionType, id: number) => {
+  const handleRowClick = (_type: ActionType, id: number) => {
     // Mark as read when clicking into detail
     markRead.mutate({ id, is_read: true });
-
-    if (type === 'create') {
-      setDetailView({ type: 'order-detail', orderId: id });
-    } else {
-      setDetailView({ type: 'update-detail', updateId: id });
-    }
+    // Track when user opened detail view (for TOCTOU check on updates)
+    setDetailViewedAt(new Date().toISOString());
+    // Use unified action-detail - the API will return the actual action_type
+    // which may differ from what was shown in the list (due to TOCTOU changes)
+    setDetailView({ type: 'action-detail', actionId: id });
   };
 
   const handleToggleRead = (_type: ActionType, id: number, isRead: boolean) => {
     markRead.mutate({ id, is_read: isRead });
   };
 
-  const handleApproveAction = (actionId: number, actionType: 'create' | 'update' = 'update') => {
+  const handleApproveAction = (actionId: number) => {
     approveAction.mutate(
-      { actionId },
+      { actionId, detailViewedAt: detailViewedAt ?? undefined },
       {
         onSuccess: (data) => {
           if (data.requires_review) {
+            // Use action_type from API response (source of truth after TOCTOU check)
             setReviewAlert({
               isOpen: true,
-              actionType,
+              actionType: data.action_type as 'create' | 'update',
               reviewReason: data.review_reason,
             });
           }
@@ -201,13 +198,13 @@ function OrdersPage() {
 
   // Note: historyId is actually the field_id (pending_action_fields.id)
   const handleConfirmUpdateField = (fieldName: string, fieldId: number) => {
-    if (!selectedUpdateId) return;
+    if (!selectedActionId) return;
 
     setConfirmingUpdateFields((prev) => new Set(prev).add(fieldName));
 
     selectFieldValue.mutate(
       {
-        actionId: selectedUpdateId,
+        actionId: selectedActionId,
         fieldId,
       },
       {
@@ -226,13 +223,13 @@ function OrdersPage() {
   const [togglingApprovalFields, setTogglingApprovalFields] = useState<Set<string>>(new Set());
 
   const handleToggleFieldApproval = (fieldName: string, isApproved: boolean) => {
-    if (!selectedUpdateId) return;
+    if (!selectedActionId) return;
 
     setTogglingApprovalFields((prev) => new Set(prev).add(fieldName));
 
     setFieldApproval.mutate(
       {
-        actionId: selectedUpdateId,
+        actionId: selectedActionId,
         fieldName,
         isApproved,
       },
@@ -250,18 +247,19 @@ function OrdersPage() {
 
   const handleBackToList = () => {
     setDetailView(null);
+    setDetailViewedAt(null);
   };
 
   const handleApprovePendingOrder = () => {
-    if (!selectedOrderId) return;
+    if (!selectedActionId || !actionDetail) return;
     approveAction.mutate(
-      { actionId: selectedOrderId },
+      { actionId: selectedActionId, detailViewedAt: detailViewedAt ?? undefined },
       {
         onSuccess: (data) => {
           if (data.requires_review) {
             setReviewAlert({
               isOpen: true,
-              actionType: 'create',
+              actionType: actionDetail.action_type as 'create' | 'update',
               reviewReason: data.review_reason,
             });
           }
@@ -271,8 +269,8 @@ function OrdersPage() {
   };
 
   const handleRejectPendingOrder = () => {
-    if (!selectedOrderId) return;
-    rejectAction.mutate({ actionId: selectedOrderId });
+    if (!selectedActionId) return;
+    rejectAction.mutate({ actionId: selectedActionId });
   };
 
   const handleViewSubRun = (subRunId: number) => {
@@ -292,14 +290,14 @@ function OrdersPage() {
 
   // Note: historyId is actually the field_id (pending_action_fields.id)
   const handleConfirmField = (fieldName: string, fieldId: number) => {
-    if (!selectedOrderId) return;
+    if (!selectedActionId) return;
 
     // Add field to confirming set
     setConfirmingFields((prev) => new Set(prev).add(fieldName));
 
     selectFieldValue.mutate(
       {
-        actionId: selectedOrderId,
+        actionId: selectedActionId,
         fieldId,
       },
       {
@@ -319,33 +317,86 @@ function OrdersPage() {
   // Render Detail Views
   // ============================================================================
 
-  if (detailView?.type === 'order-detail' && orderDetail) {
-    return (
-      <>
-        <PendingOrderDetailView
-          order={orderDetail}
-          onBack={handleBackToList}
-          onConfirmField={handleConfirmField}
-          onViewSubRun={handleViewSubRun}
-          confirmingFields={confirmingFields}
-          onApprove={handleApprovePendingOrder}
-          onReject={handleRejectPendingOrder}
-          isApproving={approveAction.isPending}
-          isRejecting={rejectAction.isPending}
-        />
-        <EtoSubRunDetailViewer
-          isOpen={viewingSubRunId !== null}
-          subRunId={viewingSubRunId}
-          onClose={handleCloseSubRunViewer}
-        />
-        <ReviewRequiredAlert
-          isOpen={reviewAlert.isOpen}
-          actionType={reviewAlert.actionType}
-          reviewReason={reviewAlert.reviewReason}
-          onClose={handleCloseReviewAlert}
-        />
-      </>
-    );
+  // Unified action detail view - delegates to create or update component based on
+  // the action_type returned from the API (which may have changed due to TOCTOU)
+  if (detailView?.type === 'action-detail' && actionDetail) {
+    // Check the action_type from the API response to decide which component to render
+    if (actionDetail.action_type === 'create') {
+      return (
+        <>
+          <PendingOrderDetailView
+            order={actionDetail}
+            onBack={handleBackToList}
+            onConfirmField={handleConfirmField}
+            onViewSubRun={handleViewSubRun}
+            confirmingFields={confirmingFields}
+            onApprove={handleApprovePendingOrder}
+            onReject={handleRejectPendingOrder}
+            isApproving={approveAction.isPending}
+            isRejecting={rejectAction.isPending}
+          />
+          <EtoSubRunDetailViewer
+            isOpen={viewingSubRunId !== null}
+            subRunId={viewingSubRunId}
+            onClose={handleCloseSubRunViewer}
+          />
+          <ReviewRequiredAlert
+            isOpen={reviewAlert.isOpen}
+            actionType={reviewAlert.actionType}
+            reviewReason={reviewAlert.reviewReason}
+            onClose={handleCloseReviewAlert}
+          />
+        </>
+      );
+    } else if (actionDetail.action_type === 'update') {
+      return (
+        <>
+          <PendingUpdateDetailView
+            update={actionDetail}
+            onBack={handleBackToList}
+            onApprove={(updateId: number) => handleApproveAction(updateId)}
+            onReject={(updateId: number) => handleRejectAction(updateId)}
+            onConfirmField={handleConfirmUpdateField}
+            onToggleFieldApproval={handleToggleFieldApproval}
+            onViewSubRun={handleViewSubRun}
+            isApproving={approveAction.isPending}
+            isRejecting={rejectAction.isPending}
+            confirmingFields={confirmingUpdateFields}
+            togglingApprovalFields={togglingApprovalFields}
+          />
+          <EtoSubRunDetailViewer
+            isOpen={viewingSubRunId !== null}
+            subRunId={viewingSubRunId}
+            onClose={handleCloseSubRunViewer}
+          />
+          <ReviewRequiredAlert
+            isOpen={reviewAlert.isOpen}
+            actionType={reviewAlert.actionType}
+            reviewReason={reviewAlert.reviewReason}
+            onClose={handleCloseReviewAlert}
+          />
+        </>
+      );
+    } else {
+      // action_type === 'ambiguous' - show a placeholder for now
+      // TODO: Create an AmbiguousActionView component
+      return (
+        <>
+          <div className="h-full flex flex-col items-center justify-center text-gray-400">
+            <div className="text-lg mb-2">Ambiguous Action</div>
+            <div className="text-sm mb-4">
+              Multiple HTC orders exist for this customer/HAWB combination.
+            </div>
+            <button
+              onClick={handleBackToList}
+              className="px-4 py-2 bg-gray-700 hover:bg-gray-600 rounded-lg text-white"
+            >
+              Back to List
+            </button>
+          </div>
+        </>
+      );
+    }
   }
 
   if (detailView?.type === 'order-history' && orderHistory) {
@@ -360,37 +411,6 @@ function OrdersPage() {
           isOpen={viewingSubRunId !== null}
           subRunId={viewingSubRunId}
           onClose={handleCloseSubRunViewer}
-        />
-      </>
-    );
-  }
-
-  if (detailView?.type === 'update-detail' && updateDetail) {
-    return (
-      <>
-        <PendingUpdateDetailView
-          update={updateDetail}
-          onBack={handleBackToList}
-          onApprove={(updateId: number) => handleApproveAction(updateId, 'update')}
-          onReject={(updateId: number) => handleRejectAction(updateId)}
-          onConfirmField={handleConfirmUpdateField}
-          onToggleFieldApproval={handleToggleFieldApproval}
-          onViewSubRun={handleViewSubRun}
-          isApproving={approveAction.isPending}
-          isRejecting={rejectAction.isPending}
-          confirmingFields={confirmingUpdateFields}
-          togglingApprovalFields={togglingApprovalFields}
-        />
-        <EtoSubRunDetailViewer
-          isOpen={viewingSubRunId !== null}
-          subRunId={viewingSubRunId}
-          onClose={handleCloseSubRunViewer}
-        />
-        <ReviewRequiredAlert
-          isOpen={reviewAlert.isOpen}
-          actionType={reviewAlert.actionType}
-          reviewReason={reviewAlert.reviewReason}
-          onClose={handleCloseReviewAlert}
         />
       </>
     );

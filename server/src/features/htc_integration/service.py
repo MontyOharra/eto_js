@@ -250,6 +250,38 @@ class HtcIntegrationService:
         """
         return self._lookup_utils.get_order_fields(order_number)
 
+    def check_order_modified_since(
+        self,
+        order_number: float,
+        since_datetime: "datetime",
+    ) -> bool:
+        """
+        Check if an order has been modified in HTC since a given datetime.
+
+        Used for TOCTOU protection on update actions: if user viewed an update
+        at time T, and the order was modified in HTC after T, we need to warn
+        them that the HTC values may have changed.
+
+        Args:
+            order_number: The HTC order number to check
+            since_datetime: The datetime to check against (when user viewed detail page)
+
+        Returns:
+            True if the order was modified after since_datetime, False otherwise
+        """
+        from datetime import datetime as dt
+        logger.info(
+            f"check_order_modified_since called: order_number={order_number}, "
+            f"since_datetime={since_datetime} (type={type(since_datetime).__name__})"
+        )
+        if isinstance(since_datetime, str):
+            # Parse ISO format string if needed
+            since_datetime = dt.fromisoformat(since_datetime.replace('Z', '+00:00'))
+            logger.info(f"Parsed string to datetime: {since_datetime}")
+        result = self._lookup_utils.check_order_modified_since(order_number, since_datetime)
+        logger.info(f"check_order_modified_since result: {result}")
+        return result
+
     # ==================== Address Operations ====================
     # Delegated to HtcAddressUtils
 

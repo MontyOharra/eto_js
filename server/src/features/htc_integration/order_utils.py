@@ -934,7 +934,8 @@ class HtcOrderUtils:
 
         Args:
             order_number: The HTC order number
-            dims: List of dim objects, each with: height, length, width, qty, weight, dim_weight
+            dims: List of dim objects, each with: height, length, width, qty, weight.
+                  dim_weight is optional and will be calculated (L*W*H/144) if not provided.
 
         Returns:
             Number of dim records created

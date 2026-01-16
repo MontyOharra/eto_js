@@ -175,7 +175,11 @@ class CreateMockOutputResponse(BaseModel):
 
 class ApproveActionRequest(BaseModel):
     """Request for POST /pending-actions/{id}/approve."""
-    pass  # No additional data needed for now
+    # For update actions: when the user first viewed the detail page.
+    # Used for TOCTOU check - if HTC order was modified after this time,
+    # we warn the user that values may have changed.
+    # Optional - only needed for update actions.
+    detail_viewed_at: datetime | None = None
 
 
 class ApproveActionResponse(BaseModel):

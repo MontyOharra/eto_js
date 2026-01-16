@@ -229,12 +229,19 @@ export function useSetFieldApproval() {
       return response.data;
     },
     onSuccess: (_data, variables) => {
-      // Invalidate detail queries
+      // Invalidate all detail query patterns for compatibility
       queryClient.invalidateQueries({
         queryKey: orderManagementQueryKeys.pendingActionDetail(variables.actionId),
       });
       queryClient.invalidateQueries({
+        queryKey: orderManagementQueryKeys.pendingOrderDetail(variables.actionId),
+      });
+      queryClient.invalidateQueries({
         queryKey: orderManagementQueryKeys.pendingUpdateDetail(variables.actionId),
+      });
+      // Also invalidate the list in case status changed
+      queryClient.invalidateQueries({
+        queryKey: orderManagementQueryKeys.pendingActions(),
       });
     },
   });
@@ -268,12 +275,14 @@ export function useApprovePendingAction() {
   return useMutation({
     mutationFn: async ({
       actionId,
+      detailViewedAt,
     }: {
       actionId: number;
+      detailViewedAt?: string; // ISO timestamp of when user viewed detail page
     }): Promise<ApproveActionResponse> => {
       const response = await apiClient.post(
         `/api/pending-actions/${actionId}/approve`,
-        {}
+        { detail_viewed_at: detailViewedAt }
       );
       return response.data;
     },

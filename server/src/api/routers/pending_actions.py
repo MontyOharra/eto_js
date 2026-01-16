@@ -390,9 +390,16 @@ async def approve_action(
     remains in its current status. The frontend should show the review_reason
     to the user and refresh the detail view.
     """
-    logger.debug(f"Approve pending action {action_id}")
+    logger.info(
+        f"Approve pending action {action_id}: "
+        f"detail_viewed_at={request.detail_viewed_at} "
+        f"(type={type(request.detail_viewed_at).__name__ if request.detail_viewed_at else 'None'})"
+    )
 
-    result = service.approve_action(action_id)
+    result = service.approve_action(
+        pending_action_id=action_id,
+        detail_viewed_at=request.detail_viewed_at,
+    )
 
     # Determine new_status and message based on result
     if result.requires_review:
