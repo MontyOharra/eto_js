@@ -914,8 +914,8 @@ class OrderManagementService:
         """
         Approve a pending action for execution.
 
-        For now, this sets the status to 'completed' and logs what would be sent to HTC.
-        Future: Will actually execute against HTC via execute_action().
+        Validates the action can be approved, then delegates to execute_action()
+        for the actual execution flow (currently stub with logging).
 
         Args:
             pending_action_id: ID of the pending action to approve
@@ -954,11 +954,48 @@ class OrderManagementService:
                 error_message=f"Cannot approve action with status '{action.status}'",
             )
 
-        # TOCTOU Check 1: Verify action type hasn't changed since user viewed detail page
-        # This catches scenarios where:
-        # - create → update (order_created_externally)
-        # - update → create (order_deleted_converting_to_create)
-        # - any → ambiguous (multiple orders now exist)
+        # Delegate to execute_action for the full execution flow
+        return self.execute_action(
+            pending_action_id=pending_action_id,
+            detail_viewed_at=detail_viewed_at,
+        )
+
+    def execute_action(
+        self,
+        pending_action_id: int,
+        detail_viewed_at: datetime | None = None,
+    ) -> ExecuteResult:
+        """
+        Execute pending action against HTC (create or update order).
+
+        Re-checks HTC state before executing (TOCTOU protection).
+        For creates: sends all selected fields.
+        For updates: sends only selected AND approved fields.
+
+        Args:
+            pending_action_id: ID of the pending action to execute
+            detail_viewed_at: When the user first viewed the detail page (for TOCTOU check)
+
+        Returns:
+            ExecuteResult with success status and details
+        """
+        logger.info(f"Executing pending action {pending_action_id}")
+
+        # Get the action
+        action = self.pending_action_repo.get_by_id(pending_action_id)
+        if action is None:
+            logger.warning(f"Cannot execute: pending action {pending_action_id} not found")
+            return ExecuteResult(
+                pending_action_id=pending_action_id,
+                success=False,
+                action_type="create",
+                htc_order_number=None,
+                error_message=f"Pending action {pending_action_id} not found",
+            )
+
+        # ================================================================
+        # STEP 1: TOCTOU CHECK - Verify action type hasn't changed
+        # ================================================================
         verify_result = self.verify_and_update_action_type(pending_action_id)
 
         if verify_result.type_changed:
@@ -969,7 +1006,7 @@ class OrderManagementService:
             )
             return ExecuteResult(
                 pending_action_id=pending_action_id,
-                success=True,  # Request succeeded, but action needs review
+                success=True,
                 action_type=verify_result.new_action_type,
                 htc_order_number=verify_result.new_htc_order_number,
                 error_message=None,
@@ -977,10 +1014,9 @@ class OrderManagementService:
                 review_reason=review_reason,
             )
 
-        # Re-fetch action after verification (in case it was updated)
+        # Re-fetch action after verification (may have been updated)
         action = self.pending_action_repo.get_by_id(pending_action_id)
         if action is None:
-            # Shouldn't happen, but handle gracefully
             return ExecuteResult(
                 pending_action_id=pending_action_id,
                 success=False,
@@ -989,20 +1025,14 @@ class OrderManagementService:
                 error_message=f"Pending action {pending_action_id} not found after verification",
             )
 
-        # TOCTOU Check 2: For updates, check if HTC order was modified since user viewed detail
-        # This catches scenarios where another user modified the order in HTC directly,
-        # and the values the user sees may be stale.
-        logger.info(
-            f"TOCTOU Check 2 inputs: action_type={action.action_type}, "
-            f"htc_order_number={action.htc_order_number}, "
-            f"detail_viewed_at={detail_viewed_at} (type={type(detail_viewed_at).__name__})"
-        )
+        # ================================================================
+        # STEP 2: TOCTOU CHECK - For updates, check if HTC modified since viewing
+        # ================================================================
         if (
             action.action_type == "update"
             and action.htc_order_number is not None
             and detail_viewed_at is not None
         ):
-            logger.info("TOCTOU Check 2: All conditions met, checking HTC modification history")
             try:
                 was_modified = self.htc_service.check_order_modified_since(
                     order_number=action.htc_order_number,
@@ -1015,7 +1045,7 @@ class OrderManagementService:
                     )
                     return ExecuteResult(
                         pending_action_id=pending_action_id,
-                        success=True,  # Request succeeded, but action needs review
+                        success=True,
                         action_type=action.action_type,
                         htc_order_number=action.htc_order_number,
                         error_message=None,
@@ -1023,7 +1053,6 @@ class OrderManagementService:
                         review_reason="htc_values_changed",
                     )
             except Exception as e:
-                # Log but don't fail the approval if the check fails
                 logger.warning(
                     f"Failed to check HTC modification history for order "
                     f"{action.htc_order_number}: {e}"
@@ -1280,6 +1309,7 @@ class OrderManagementService:
             pending_action_id=pending_action_id,
             success=True,
             action_type=action.action_type,
+            htc_order_number=order_number,
             htc_order_number=order_number,
             error_message=None,
         )
