@@ -276,13 +276,15 @@ export function useApprovePendingAction() {
     mutationFn: async ({
       actionId,
       detailViewedAt,
+      approverUserId,
     }: {
       actionId: number;
       detailViewedAt?: string; // ISO timestamp of when user viewed detail page
+      approverUserId?: string; // User ID of approver for audit trail
     }): Promise<ApproveActionResponse> => {
       const response = await apiClient.post(
         `/api/pending-actions/${actionId}/approve`,
-        { detail_viewed_at: detailViewedAt }
+        { detail_viewed_at: detailViewedAt, approver_user_id: approverUserId }
       );
       return response.data;
     },

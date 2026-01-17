@@ -181,6 +181,10 @@ class ApproveActionRequest(BaseModel):
     # Optional - only needed for update actions.
     detail_viewed_at: datetime | None = None
 
+    # User ID of the approver for audit trail (stored in HTC update history)
+    # Optional - only needed for update actions.
+    approver_user_id: str | None = None
+
 
 class ApproveActionResponse(BaseModel):
     """Response for POST /pending-actions/{id}/approve."""

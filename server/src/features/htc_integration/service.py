@@ -24,6 +24,7 @@ from shared.exceptions import OutputExecutionError
 from shared.config.database import get_htc_apps_dir
 from shared.config.storage import get_storage_configuration
 from shared.database.access_connection import AccessConnectionManager, AccessConnection
+from shared.types.pending_actions import DimObject
 
 from features.htc_integration.lookup_utils import (
     HtcLookupUtils,
@@ -439,15 +440,17 @@ class HtcIntegrationService:
         hawb: str,
         pickup_location_id: float,
         delivery_location_id: float,
+        pickup_date: str,
         pickup_time_start: str,
         pickup_time_end: str,
+        delivery_date: str,
         delivery_time_start: str,
         delivery_time_end: str,
         mawb: str | None = None,
         pickup_notes: str | None = None,
         delivery_notes: str | None = None,
         order_notes: str | None = None,
-        dims: list[dict[str, Any]] | None = None,
+        dims: list[DimObject] | None = None,
     ) -> float:
         """
         Create an HTC order from pre-resolved data.
@@ -475,15 +478,17 @@ class HtcIntegrationService:
             hawb: House Air Waybill number
             pickup_location_id: Pre-resolved pickup address ID (from find_or_create_address)
             delivery_location_id: Pre-resolved delivery address ID (from find_or_create_address)
-            pickup_time_start: Pickup start datetime (e.g., "2025-12-15 09:00")
-            pickup_time_end: Pickup end datetime
-            delivery_time_start: Delivery start datetime
-            delivery_time_end: Delivery end datetime
+            pickup_date: Pickup date (e.g., "2025-12-15")
+            pickup_time_start: Pickup start time (e.g., "09:00")
+            pickup_time_end: Pickup end time (e.g., "17:00")
+            delivery_date: Delivery date (e.g., "2025-12-15")
+            delivery_time_start: Delivery start time (e.g., "09:00")
+            delivery_time_end: Delivery end time (e.g., "17:00")
             mawb: Optional Master Air Waybill number
             pickup_notes: Optional pickup notes
             delivery_notes: Optional delivery notes
             order_notes: Optional general order notes
-            dims: Optional list of dimension objects (each with height, length, width, qty, weight)
+            dims: Optional list of DimObject (each with height, length, width, qty, weight)
 
         Returns:
             The new HTC order number
@@ -545,13 +550,7 @@ class HtcIntegrationService:
         )
         logger.debug(f"Determined order type: {order_type}")
 
-        # --- Step 5: Parse dates and times ---
-        pu_date, pu_time_start_parsed = self._order_utils.parse_datetime_string(pickup_time_start)
-        _, pu_time_end_parsed = self._order_utils.parse_datetime_string(pickup_time_end)
-        del_date, del_time_start_parsed = self._order_utils.parse_datetime_string(delivery_time_start)
-        _, del_time_end_parsed = self._order_utils.parse_datetime_string(delivery_time_end)
-
-        # --- Step 6: Prepare all field values ---
+        # --- Step 5: Prepare all field values ---
         prepared_data = PreparedOrderData(
             # Order type
             order_type=order_type,
@@ -561,14 +560,14 @@ class HtcIntegrationService:
             hawb=hawb or "",
             mawb=mawb or "",
             order_notes=order_notes or "",
-            pu_date=pu_date,
-            pu_time_start=pu_time_start_parsed,
-            pu_time_end=pu_time_end_parsed,
+            pu_date=pickup_date,
+            pu_time_start=pickup_time_start,
+            pu_time_end=pickup_time_end,
             pu_address_id=pickup_location_id,
             pu_notes=pickup_notes or "",
-            del_date=del_date,
-            del_time_start=del_time_start_parsed,
-            del_time_end=del_time_end_parsed,
+            del_date=delivery_date,
+            del_time_start=delivery_time_start,
+            del_time_end=delivery_time_end,
             del_address_id=delivery_location_id,
             del_notes=delivery_notes or "",
 
@@ -666,28 +665,29 @@ class HtcIntegrationService:
         order_number: float,
         pickup_location_id: float | None = None,
         delivery_location_id: float | None = None,
+        pickup_date: str | None = None,
         pickup_time_start: str | None = None,
         pickup_time_end: str | None = None,
+        delivery_date: str | None = None,
         delivery_time_start: str | None = None,
         delivery_time_end: str | None = None,
         mawb: str | None = None,
         pickup_notes: str | None = None,
         delivery_notes: str | None = None,
         order_notes: str | None = None,
-        dims: list[dict[str, Any]] | None = None,
+        dims: list[DimObject] | None = None,
         approver_username: str | None = None,
-        old_values: dict[str, Any] | None = None,
-        new_values: dict[str, Any] | None = None,
     ) -> list[str]:
         """
         Update an existing HTC order with new field values.
 
         This orchestrator handles the complexity of updating an order:
         - Address fields: Looks up full address info and updates all related columns
-        - DateTime fields: Parses and splits into date + time components
+        - DateTime fields: Updates date and time components directly
         - Simple fields: Direct updates (notes, mawb)
 
         After updates, recalculates order type if addresses changed.
+        Automatically calculates old/new values for audit trail.
 
         Note:
             Address resolution (find_or_create_address) must be done by the caller
@@ -698,18 +698,18 @@ class HtcIntegrationService:
             order_number: The HTC order number to update
             pickup_location_id: Pre-resolved pickup address ID (from find_or_create_address)
             delivery_location_id: Pre-resolved delivery address ID (from find_or_create_address)
-            pickup_time_start: New pickup start datetime (ISO format)
-            pickup_time_end: New pickup end datetime (ISO format)
-            delivery_time_start: New delivery start datetime (ISO format)
-            delivery_time_end: New delivery end datetime (ISO format)
+            pickup_date: New pickup date (e.g., "2025-12-15")
+            pickup_time_start: New pickup start time (e.g., "09:00")
+            pickup_time_end: New pickup end time (e.g., "17:00")
+            delivery_date: New delivery date (e.g., "2025-12-15")
+            delivery_time_start: New delivery start time (e.g., "09:00")
+            delivery_time_end: New delivery end time (e.g., "17:00")
             mawb: New MAWB value
             pickup_notes: New pickup notes
             delivery_notes: New delivery notes
             order_notes: New order notes
-            dims: New dimensions list (replaces existing dims)
+            dims: New list of DimObject (replaces existing dims)
             approver_username: Staff_Login of user who approved (for audit trail)
-            old_values: Dict of field_name -> old value (before update) for audit trail
-            new_values: Dict of field_name -> new value (after update) for audit trail
 
         Returns:
             List of field names that were updated
@@ -718,6 +718,16 @@ class HtcIntegrationService:
             OutputExecutionError: If update fails
         """
         logger.info(f"Updating HTC order {order_number}")
+
+        # ================================================================
+        # FETCH CURRENT VALUES FOR AUDIT TRAIL
+        # ================================================================
+        current_fields = self._lookup_utils.get_order_fields(order_number)
+        if current_fields is None:
+            raise OutputExecutionError(f"Order {order_number} not found")
+
+        old_values: dict[str, Any] = {}
+        new_values: dict[str, Any] = {}
 
         # ================================================================
         # UPPERCASE ALL STRING FIELDS FOR HTC DATABASE
@@ -745,6 +755,10 @@ class HtcIntegrationService:
                 raise OutputExecutionError(f"Failed to get pickup address info for ID {pickup_location_id}")
 
             pu_aci_letter = self._lookup_utils.get_aci_letter(pu_addr_info.aci_id)
+
+            # Track old/new values for audit
+            old_values["pickup_location"] = f"{current_fields.pickup_company} - {current_fields.pickup_location}"
+            new_values["pickup_location"] = f"{pu_addr_info.company} - {pu_addr_info.formatted_location}"
 
             # Add all pickup address columns to update
             htc_updates["M_PUID"] = pickup_location_id
@@ -775,6 +789,10 @@ class HtcIntegrationService:
 
             del_aci_letter = self._lookup_utils.get_aci_letter(del_addr_info.aci_id)
 
+            # Track old/new values for audit
+            old_values["delivery_location"] = f"{current_fields.delivery_company} - {current_fields.delivery_location}"
+            new_values["delivery_location"] = f"{del_addr_info.company} - {del_addr_info.formatted_location}"
+
             # Add all delivery address columns to update
             htc_updates["M_DelID"] = delivery_location_id
             htc_updates["M_DelCo"] = del_addr_info.company
@@ -796,47 +814,77 @@ class HtcIntegrationService:
         # ================================================================
         # PICKUP DATETIME HANDLING
         # ================================================================
+        pickup_datetime_updated = False
+        if pickup_date is not None:
+            htc_updates["M_PUDate"] = pickup_date
+            pickup_datetime_updated = True
+
         if pickup_time_start is not None:
-            pu_date, pu_time_start_parsed = self._order_utils.parse_datetime_string(pickup_time_start)
-            htc_updates["M_PUDate"] = pu_date
-            htc_updates["M_PUTimeStart"] = pu_time_start_parsed
-            updated_fields.append("pickup_time_start")
+            htc_updates["M_PUTimeStart"] = pickup_time_start
+            pickup_datetime_updated = True
 
         if pickup_time_end is not None:
-            _, pu_time_end_parsed = self._order_utils.parse_datetime_string(pickup_time_end)
-            htc_updates["M_PUTimeEnd"] = pu_time_end_parsed
-            updated_fields.append("pickup_time_end")
+            htc_updates["M_PUTimeEnd"] = pickup_time_end
+            pickup_datetime_updated = True
+
+        if pickup_datetime_updated:
+            updated_fields.append("pickup_datetime")
+            # Track old/new values for audit
+            old_values["pickup_datetime"] = f"{current_fields.pickup_date} {current_fields.pickup_time_start}-{current_fields.pickup_time_end}"
+            new_pickup_date = pickup_date or current_fields.pickup_date
+            new_pickup_time_start = pickup_time_start or current_fields.pickup_time_start
+            new_pickup_time_end = pickup_time_end or current_fields.pickup_time_end
+            new_values["pickup_datetime"] = f"{new_pickup_date} {new_pickup_time_start}-{new_pickup_time_end}"
 
         # ================================================================
         # DELIVERY DATETIME HANDLING
         # ================================================================
+        delivery_datetime_updated = False
+        if delivery_date is not None:
+            htc_updates["M_DelDate"] = delivery_date
+            delivery_datetime_updated = True
+
         if delivery_time_start is not None:
-            del_date, del_time_start_parsed = self._order_utils.parse_datetime_string(delivery_time_start)
-            htc_updates["M_DelDate"] = del_date
-            htc_updates["M_DelTimeStart"] = del_time_start_parsed
-            updated_fields.append("delivery_time_start")
+            htc_updates["M_DelTimeStart"] = delivery_time_start
+            delivery_datetime_updated = True
 
         if delivery_time_end is not None:
-            _, del_time_end_parsed = self._order_utils.parse_datetime_string(delivery_time_end)
-            htc_updates["M_DelTimeEnd"] = del_time_end_parsed
-            updated_fields.append("delivery_time_end")
+            htc_updates["M_DelTimeEnd"] = delivery_time_end
+            delivery_datetime_updated = True
+
+        if delivery_datetime_updated:
+            updated_fields.append("delivery_datetime")
+            # Track old/new values for audit
+            old_values["delivery_datetime"] = f"{current_fields.delivery_date} {current_fields.delivery_time_start}-{current_fields.delivery_time_end}"
+            new_delivery_date = delivery_date or current_fields.delivery_date
+            new_delivery_time_start = delivery_time_start or current_fields.delivery_time_start
+            new_delivery_time_end = delivery_time_end or current_fields.delivery_time_end
+            new_values["delivery_datetime"] = f"{new_delivery_date} {new_delivery_time_start}-{new_delivery_time_end}"
 
         # ================================================================
         # SIMPLE FIELD HANDLING
         # ================================================================
         if mawb is not None:
+            old_values["mawb"] = current_fields.mawb or ""
+            new_values["mawb"] = mawb
             htc_updates["M_MAWB"] = mawb
             updated_fields.append("mawb")
 
         if pickup_notes is not None:
+            old_values["pickup_notes"] = current_fields.pickup_notes or ""
+            new_values["pickup_notes"] = pickup_notes
             htc_updates["M_PUNotes"] = pickup_notes
             updated_fields.append("pickup_notes")
 
         if delivery_notes is not None:
+            old_values["delivery_notes"] = current_fields.delivery_notes or ""
+            new_values["delivery_notes"] = delivery_notes
             htc_updates["M_DelNotes"] = delivery_notes
             updated_fields.append("delivery_notes")
 
         if order_notes is not None:
+            old_values["order_notes"] = current_fields.order_notes or ""
+            new_values["order_notes"] = order_notes
             htc_updates["M_OrderNotes"] = order_notes
             updated_fields.append("order_notes")
 
@@ -844,6 +892,9 @@ class HtcIntegrationService:
         # DIMENSIONS HANDLING (replace strategy)
         # ================================================================
         if dims is not None:
+            # Track old/new values for audit (simplified - just note that dims were replaced)
+            old_values["dims"] = "(previous dims)"
+            new_values["dims"] = f"{len(dims)} dimension(s)"
             self._order_utils.replace_dims_records(order_number, dims)
             updated_fields.append("dims")
 
@@ -894,8 +945,8 @@ class HtcIntegrationService:
             self._order_utils.create_update_history(
                 order_number=order_number,
                 updated_fields=updated_fields,
-                old_values=old_values or {},
-                new_values=new_values or {},
+                old_values=old_values,
+                new_values=new_values,
                 user_lid=approver_username,
             )
 

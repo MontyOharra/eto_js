@@ -173,7 +173,11 @@ function OrdersPage() {
 
   const handleApproveAction = (actionId: number) => {
     approveAction.mutate(
-      { actionId, detailViewedAt: detailViewedAt ?? undefined },
+      {
+        actionId,
+        detailViewedAt: detailViewedAt ?? undefined,
+        approverUserId: session?.user.username,
+      },
       {
         onSuccess: (data) => {
           if (data.requires_review) {
@@ -253,7 +257,11 @@ function OrdersPage() {
   const handleApprovePendingOrder = () => {
     if (!selectedActionId || !actionDetail) return;
     approveAction.mutate(
-      { actionId: selectedActionId, detailViewedAt: detailViewedAt ?? undefined },
+      {
+        actionId: selectedActionId,
+        detailViewedAt: detailViewedAt ?? undefined,
+        approverUserId: session?.user.username,
+      },
       {
         onSuccess: (data) => {
           if (data.requires_review) {

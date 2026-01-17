@@ -17,6 +17,7 @@ from typing import Any, Callable
 
 from shared.logging import get_logger
 from shared.exceptions import OutputExecutionError
+from shared.types.pending_actions import DimObject
 
 logger = get_logger(__name__)
 
@@ -927,15 +928,15 @@ class HtcOrderUtils:
     def create_dims_records(
         self,
         order_number: float,
-        dims: list[dict[str, Any]],
+        dims: list[DimObject],
     ) -> int:
         """
         Create dimension records for an order in HTC300_G040_T012A Open Order Dims.
 
         Args:
             order_number: The HTC order number
-            dims: List of dim objects, each with: height, length, width, qty, weight.
-                  dim_weight is optional and will be calculated (L*W*H/144) if not provided.
+            dims: List of DimObject, each with: height, length, width, qty, weight.
+                  dim_weight is calculated at write time (L*W*H/144).
 
         Returns:
             Number of dim records created
@@ -953,16 +954,13 @@ class HtcOrderUtils:
         try:
             with connection.cursor() as cursor:
                 for dim_id, dim in enumerate(dims, start=1):
-                    height = float(dim.get('height', 0))
-                    length = float(dim.get('length', 0))
-                    width = float(dim.get('width', 0))
-                    qty = int(dim.get('qty', 1))
-                    weight = float(dim.get('weight', 0))
-                    # Use provided dim_weight or calculate: L * W * H / 144
-                    dim_weight = dim.get('dim_weight')
-                    if dim_weight is None:
-                        dim_weight = (length * width * height) / 144.0
-                    dim_weight = float(dim_weight)
+                    height = dim.height
+                    length = dim.length
+                    width = dim.width
+                    qty = dim.qty
+                    weight = dim.weight
+                    # Calculate dim_weight: L * W * H / 144
+                    dim_weight = (length * width * height) / 144.0
 
                     cursor.execute("""
                         INSERT INTO [HTC300_G040_T012A Open Order Dims]
@@ -1025,7 +1023,7 @@ class HtcOrderUtils:
     def replace_dims_records(
         self,
         order_number: float,
-        dims: list[dict[str, Any]],
+        dims: list[DimObject],
     ) -> int:
         """
         Replace all dimension records for an order.
@@ -1034,7 +1032,7 @@ class HtcOrderUtils:
 
         Args:
             order_number: The HTC order number
-            dims: List of dim objects to create
+            dims: List of DimObject to create
 
         Returns:
             Number of new dim records created

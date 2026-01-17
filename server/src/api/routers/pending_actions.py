@@ -393,12 +393,14 @@ async def approve_action(
     logger.info(
         f"Approve pending action {action_id}: "
         f"detail_viewed_at={request.detail_viewed_at} "
-        f"(type={type(request.detail_viewed_at).__name__ if request.detail_viewed_at else 'None'})"
+        f"(type={type(request.detail_viewed_at).__name__ if request.detail_viewed_at else 'None'}), "
+        f"approver_user_id={request.approver_user_id}"
     )
 
     result = service.approve_action(
         pending_action_id=action_id,
         detail_viewed_at=request.detail_viewed_at,
+        approver_user_id=request.approver_user_id,
     )
 
     # Determine new_status and message based on result
