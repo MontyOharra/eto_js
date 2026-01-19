@@ -176,6 +176,28 @@ class DatetimeRangeError(Exception):
 
 
 # =========================
+# Execution Result Types
+# =========================
+
+class ExecutionResult(BaseModel):
+    """
+    Snapshot of what happened when a pending action was executed.
+
+    Stored as JSON on the pending_action record after successful execution.
+    Allows viewing the details of completed actions (what changed from/to).
+    """
+    model_config = ConfigDict(frozen=True)
+
+    action_type: PendingActionType  # "create" or "update"
+    executed_at: datetime
+    approver_user_id: str | None
+    htc_order_number: float | None  # For creates: newly created order #
+    fields_updated: list[str]  # List of field names that were set/changed
+    old_values: dict[str, Any] | None  # None for creates, previous values for updates
+    new_values: dict[str, Any]  # Values that were sent to HTC
+
+
+# =========================
 # Pending Action Types
 # =========================
 
@@ -212,6 +234,7 @@ class PendingActionUpdate(BaseModel):
     error_at: datetime | None = None
     is_read: bool | None = None
     last_processed_at: datetime | None = None
+    execution_result: ExecutionResult | None = None  # Set on successful execution
 
 
 class PendingAction(BaseModel):
@@ -236,6 +259,7 @@ class PendingAction(BaseModel):
     created_at: datetime
     updated_at: datetime
     last_processed_at: datetime | None
+    execution_result: ExecutionResult | None  # Set after successful execution
 
 
 # =========================
@@ -266,9 +290,11 @@ class PendingActionFieldUpdate(BaseModel):
     Primarily used for:
     - Setting is_selected during conflict resolution
     - Setting is_approved_for_update for partial updates
+    - Updating value (e.g., refreshing location address_ids)
     """
     is_selected: bool | None = None
     is_approved_for_update: bool | None = None
+    value: Any | None = None
 
 
 class PendingActionField(BaseModel):
@@ -330,6 +356,7 @@ class PendingActionListView(BaseModel):
     optional_fields_total: int  # len(OPTIONAL_ORDER_FIELDS) - for display like "1/4"
     field_names: list[str]  # List of field names being updated (useful for updates display)
     conflict_count: int
+    error_message: str | None  # Error message for failed actions
     is_read: bool
     created_at: datetime
     updated_at: datetime
@@ -392,6 +419,10 @@ class PendingActionDetailView(BaseModel):
     # Current HTC values for updates (None for creates)
     # Used to show "Current → Proposed" comparison in update detail view
     current_htc_values: dict[str, Any] | None
+
+    # Execution result snapshot (for completed actions)
+    # Shows what values were changed when the action was executed
+    execution_result: ExecutionResult | None
 
 
 # =========================

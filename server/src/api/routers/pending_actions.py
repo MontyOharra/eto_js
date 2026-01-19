@@ -18,6 +18,7 @@ from api.schemas.pending_actions import (
     PendingActionFieldItem,
     ContributingSourceItem,
     FieldMetadataItem,
+    ExecutionResultSchema,
     SetReadStatusRequest,
     SetReadStatusResponse,
     CreateMockOutputRequest,
@@ -187,6 +188,7 @@ async def list_pending_actions(
             optional_fields_total=item.optional_fields_total,
             field_names=item.field_names,
             conflict_count=item.conflict_count,
+            error_message=item.error_message,
             is_read=item.is_read,
             created_at=item.created_at,
             updated_at=item.updated_at,
@@ -322,6 +324,19 @@ async def get_pending_action_detail(
         for field_def in ORDER_FIELDS.values()
     }
 
+    # Convert execution_result if present
+    api_execution_result = None
+    if detail.execution_result:
+        api_execution_result = ExecutionResultSchema(
+            action_type=detail.execution_result.action_type,
+            executed_at=detail.execution_result.executed_at,
+            approver_user_id=detail.execution_result.approver_user_id,
+            htc_order_number=detail.execution_result.htc_order_number,
+            fields_updated=detail.execution_result.fields_updated,
+            old_values=detail.execution_result.old_values,
+            new_values=detail.execution_result.new_values,
+        )
+
     return GetPendingActionDetailResponse(
         id=detail.id,
         customer_id=detail.customer_id,
@@ -345,6 +360,7 @@ async def get_pending_action_detail(
         field_metadata=api_field_metadata,
         contributing_sources=api_sources,
         current_htc_values=detail.current_htc_values,
+        execution_result=api_execution_result,
     )
 
 

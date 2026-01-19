@@ -435,12 +435,46 @@ export function PendingUpdateDetailView({
 
   // Transform API fields to internal format, showing ALL fields from metadata
   // (not just fields with values). This ensures empty/missing fields are visible.
+  // For completed actions, use execution_result to show what actually changed.
   const transformedFields = useMemo((): PendingUpdateFieldDetail[] => {
     const result: PendingUpdateFieldDetail[] = [];
+    const metadata = update.field_metadata ?? {};
+
+    // For completed actions with execution_result, show the snapshot of what changed
+    if (update.status === 'completed' && update.execution_result) {
+      const execResult = update.execution_result;
+      const oldValues = execResult.old_values ?? {};
+      const newValues = execResult.new_values ?? {};
+
+      // Only show fields that were actually updated
+      for (const fieldName of execResult.fields_updated) {
+        const fieldMeta = metadata[fieldName];
+        if (!fieldMeta) continue;
+
+        result.push({
+          name: fieldName,
+          label: fieldMeta.label,
+          data_type: fieldMeta.data_type,
+          current_value: oldValues[fieldName] ?? null,
+          proposed_value: newValues[fieldName] ?? null,
+          state: 'set', // No conflicts for completed actions
+          display_order: fieldMeta.display_order,
+          conflict_options: null,
+          source: null,
+          sub_run_id: null,
+          is_approved_for_update: true,
+        });
+      }
+
+      // Sort by display_order
+      result.sort((a, b) => a.display_order - b.display_order);
+      return result;
+    }
+
+    // For non-completed actions, use the normal logic
     const currentHtcValues = update.current_htc_values ?? {};
 
     // Iterate over ALL fields defined in metadata (not just fields with values)
-    const metadata = update.field_metadata ?? {};
     for (const [fieldName, fieldMeta] of Object.entries(metadata)) {
       const label = fieldMeta.label;
       const displayOrder = fieldMeta.display_order;
@@ -520,7 +554,7 @@ export function PendingUpdateDetailView({
     result.sort((a, b) => a.display_order - b.display_order);
 
     return result;
-  }, [update.fields, update.field_metadata, update.current_htc_values, update.updated_at]);
+  }, [update.fields, update.field_metadata, update.current_htc_values, update.updated_at, update.status, update.execution_result]);
 
   const handleConflictSelect = (fieldName: string, option: ConflictOption) => {
     setLocalSelections((prev) => ({
@@ -547,6 +581,8 @@ export function PendingUpdateDetailView({
 
   // Can edit if status allows changes (not completed/rejected/processing)
   const canEdit = update.status === 'incomplete' || update.status === 'ready' || update.status === 'conflict';
+  // Can retry only if update is failed
+  const canRetry = update.status === 'failed';
   const hasConflicts = conflictCount > 0;
 
   // Get status display label
@@ -649,6 +685,17 @@ export function PendingUpdateDetailView({
                   {isApproving ? 'Approving...' : 'Approve'}
                 </button>
               </>
+            )}
+
+            {/* Retry Button - only when failed */}
+            {canRetry && (
+              <button
+                onClick={() => onApprove(update.id)}
+                disabled={isApproving}
+                className="px-4 py-1.5 rounded-lg bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors text-sm"
+              >
+                {isApproving ? 'Retrying...' : 'Retry'}
+              </button>
             )}
           </div>
         </div>

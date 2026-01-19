@@ -730,6 +730,25 @@ class HtcIntegrationService:
         new_values: dict[str, Any] = {}
 
         # ================================================================
+        # HELPERS TO PARSE COMBINED DATETIME STRINGS
+        # ================================================================
+        # HtcOrderFields stores datetime as combined ISO strings "YYYY-MM-DDTHH:MM:00"
+        # We need to extract date and time parts for audit trail comparison
+        def _extract_date(combined: str | None) -> str | None:
+            """Extract date portion (YYYY-MM-DD) from combined datetime string."""
+            if not combined or "T" not in combined:
+                return None
+            return combined.split("T")[0]
+
+        def _extract_time(combined: str | None) -> str | None:
+            """Extract time portion (HH:MM) from combined datetime string."""
+            if not combined or "T" not in combined:
+                return None
+            time_part = combined.split("T")[1]
+            # Strip seconds if present (e.g., "09:00:00" -> "09:00")
+            return time_part[:5] if len(time_part) >= 5 else time_part
+
+        # ================================================================
         # UPPERCASE ALL STRING FIELDS FOR HTC DATABASE
         # ================================================================
         mawb = _uppercase_str(mawb)
@@ -757,7 +776,7 @@ class HtcIntegrationService:
             pu_aci_letter = self._lookup_utils.get_aci_letter(pu_addr_info.aci_id)
 
             # Track old/new values for audit
-            old_values["pickup_location"] = f"{current_fields.pickup_company} - {current_fields.pickup_location}"
+            old_values["pickup_location"] = f"{current_fields.pickup_company_name} - {current_fields.pickup_address}"
             new_values["pickup_location"] = f"{pu_addr_info.company} - {pu_addr_info.formatted_location}"
 
             # Add all pickup address columns to update
@@ -790,7 +809,7 @@ class HtcIntegrationService:
             del_aci_letter = self._lookup_utils.get_aci_letter(del_addr_info.aci_id)
 
             # Track old/new values for audit
-            old_values["delivery_location"] = f"{current_fields.delivery_company} - {current_fields.delivery_location}"
+            old_values["delivery_location"] = f"{current_fields.delivery_company_name} - {current_fields.delivery_address}"
             new_values["delivery_location"] = f"{del_addr_info.company} - {del_addr_info.formatted_location}"
 
             # Add all delivery address columns to update
@@ -830,10 +849,14 @@ class HtcIntegrationService:
         if pickup_datetime_updated:
             updated_fields.append("pickup_datetime")
             # Track old/new values for audit
-            old_values["pickup_datetime"] = f"{current_fields.pickup_date} {current_fields.pickup_time_start}-{current_fields.pickup_time_end}"
-            new_pickup_date = pickup_date or current_fields.pickup_date
-            new_pickup_time_start = pickup_time_start or current_fields.pickup_time_start
-            new_pickup_time_end = pickup_time_end or current_fields.pickup_time_end
+            # Extract date/time from combined datetime strings in HtcOrderFields
+            old_pu_date = _extract_date(current_fields.pickup_time_start)
+            old_pu_time_start = _extract_time(current_fields.pickup_time_start)
+            old_pu_time_end = _extract_time(current_fields.pickup_time_end)
+            old_values["pickup_datetime"] = f"{old_pu_date} {old_pu_time_start}-{old_pu_time_end}"
+            new_pickup_date = pickup_date or old_pu_date
+            new_pickup_time_start = pickup_time_start or old_pu_time_start
+            new_pickup_time_end = pickup_time_end or old_pu_time_end
             new_values["pickup_datetime"] = f"{new_pickup_date} {new_pickup_time_start}-{new_pickup_time_end}"
 
         # ================================================================
@@ -855,10 +878,14 @@ class HtcIntegrationService:
         if delivery_datetime_updated:
             updated_fields.append("delivery_datetime")
             # Track old/new values for audit
-            old_values["delivery_datetime"] = f"{current_fields.delivery_date} {current_fields.delivery_time_start}-{current_fields.delivery_time_end}"
-            new_delivery_date = delivery_date or current_fields.delivery_date
-            new_delivery_time_start = delivery_time_start or current_fields.delivery_time_start
-            new_delivery_time_end = delivery_time_end or current_fields.delivery_time_end
+            # Extract date/time from combined datetime strings in HtcOrderFields
+            old_del_date = _extract_date(current_fields.delivery_time_start)
+            old_del_time_start = _extract_time(current_fields.delivery_time_start)
+            old_del_time_end = _extract_time(current_fields.delivery_time_end)
+            old_values["delivery_datetime"] = f"{old_del_date} {old_del_time_start}-{old_del_time_end}"
+            new_delivery_date = delivery_date or old_del_date
+            new_delivery_time_start = delivery_time_start or old_del_time_start
+            new_delivery_time_end = delivery_time_end or old_del_time_end
             new_values["delivery_datetime"] = f"{new_delivery_date} {new_delivery_time_start}-{new_delivery_time_end}"
 
         # ================================================================

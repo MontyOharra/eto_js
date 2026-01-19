@@ -389,11 +389,42 @@ export function PendingOrderDetailView({
 
   // Transform API fields to component format, showing ALL fields from metadata
   // (not just fields with values). This ensures empty/missing fields are visible.
+  // For completed actions, use execution_result to show what was actually created.
   const transformedFields = useMemo((): FieldDetail[] => {
     const result: FieldDetail[] = [];
-
-    // Iterate over ALL fields defined in metadata (not just fields with values)
     const metadata = order.field_metadata ?? {};
+
+    // For completed actions with execution_result, show the snapshot of what was created
+    if (order.status === 'completed' && order.execution_result) {
+      const execResult = order.execution_result;
+      const newValues = execResult.new_values ?? {};
+
+      // Show all fields that were set during creation
+      for (const fieldName of execResult.fields_updated) {
+        const fieldMeta = metadata[fieldName];
+        if (!fieldMeta) continue;
+
+        result.push({
+          name: fieldName,
+          label: fieldMeta.label,
+          data_type: fieldMeta.data_type,
+          value: newValues[fieldName] ?? null,
+          state: 'set', // No conflicts for completed actions
+          required: fieldMeta.required,
+          display_order: fieldMeta.display_order,
+          conflict_options: null,
+          source: null,
+          sub_run_id: null,
+        });
+      }
+
+      // Sort by display_order
+      result.sort((a, b) => a.display_order - b.display_order);
+      return result;
+    }
+
+    // For non-completed actions, use the normal logic
+    // Iterate over ALL fields defined in metadata (not just fields with values)
     for (const [fieldName, fieldMeta] of Object.entries(metadata)) {
       const label = fieldMeta.label;
       const required = fieldMeta.required;
@@ -466,7 +497,7 @@ export function PendingOrderDetailView({
     result.sort((a, b) => a.display_order - b.display_order);
 
     return result;
-  }, [order.fields, order.field_metadata, order.updated_at]);
+  }, [order.fields, order.field_metadata, order.updated_at, order.status, order.execution_result]);
 
   const handleConflictSelect = (fieldName: string, option: ConflictOption) => {
     setLocalSelections((prev) => ({
@@ -525,6 +556,8 @@ export function PendingOrderDetailView({
 
   // Can approve/reject only if order is ready
   const canApproveReject = order.status === 'ready';
+  // Can retry only if order is failed
+  const canRetry = order.status === 'failed';
 
   return (
     <div className="h-full flex flex-col overflow-hidden bg-gray-900">
@@ -610,6 +643,17 @@ export function PendingOrderDetailView({
                   {isApproving ? 'Creating...' : 'Approve'}
                 </button>
               </>
+            )}
+
+            {/* Retry Button - only when failed */}
+            {canRetry && (
+              <button
+                onClick={onApprove}
+                disabled={isApproving}
+                className="px-4 py-1.5 rounded-lg bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors text-sm"
+              >
+                {isApproving ? 'Retrying...' : 'Retry'}
+              </button>
             )}
           </div>
         </div>

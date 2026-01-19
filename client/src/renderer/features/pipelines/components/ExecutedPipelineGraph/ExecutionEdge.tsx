@@ -65,14 +65,14 @@ const isDimObject = (value: any): boolean => {
   );
 };
 
-// Format a single dim object as "qty - HxLxW @weightlbs"
+// Format a single dim object as "qty - LxWxH @weightlbs"
 const formatDim = (dim: any): string => {
   const h = dim.height ?? 0;
   const l = dim.length ?? 0;
   const w = dim.width ?? 0;
   const qty = dim.qty ?? 1;
   const weight = dim.weight ?? 0;
-  return `${qty} - ${h}x${l}x${w} @${weight}lbs`;
+  return `${qty} - ${l}x${w}x${h} @${weight}lbs`;
 };
 
 const formatValue = (value: any, truncate: boolean = true): string => {

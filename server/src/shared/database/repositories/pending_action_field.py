@@ -141,6 +141,9 @@ class PendingActionFieldRepository(BaseRepository[PendingActionFieldModel]):
             # Update only fields that were explicitly set
             for field_name in updates.model_fields_set:
                 value = getattr(updates, field_name)
+                # Special handling for 'value' field - needs JSON serialization
+                if field_name == "value":
+                    value = self._serialize_value(value)
                 setattr(model, field_name, value)
 
             session.flush()

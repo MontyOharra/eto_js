@@ -293,6 +293,7 @@ function StatusInfoCell({ row }: CellContext<UnifiedActionListItem, unknown>) {
 
   const requiredComplete = data.required_fields_present >= data.required_fields_total;
   const isUpdate = data.action_type === 'update';
+  const isFailed = data.status === 'failed';
 
   return (
     <div className={`flex flex-wrap items-center gap-2 ${textOpacity}`}>
@@ -305,45 +306,65 @@ function StatusInfoCell({ row }: CellContext<UnifiedActionListItem, unknown>) {
         {data.status}
       </span>
 
-      {/* Conflict count - right after status */}
-      {data.conflict_count > 0 && (
-        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium border bg-yellow-500/20 text-yellow-400 border-yellow-500/30">
-          <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+      {/* For failed status: show error message instead of normal info */}
+      {isFailed && data.error_message && (
+        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs font-medium border bg-red-500/20 text-red-400 border-red-500/30 max-w-md truncate">
+          <svg className="w-3 h-3 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path
               strokeLinecap="round"
               strokeLinejoin="round"
               strokeWidth={2}
-              d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"
+              d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
             />
           </svg>
-          {data.conflict_count}
+          <span className="truncate">{data.error_message}</span>
         </span>
       )}
 
-      {/* For updates: show comma-separated field names */}
-      {isUpdate && data.field_names.length > 0 && (
-        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium border bg-blue-500/20 text-blue-400 border-blue-500/30">
-          {data.field_names.map(formatFieldName).join(', ')}
-        </span>
-      )}
-
-      {/* For creates: show required/optional field counts */}
-      {!isUpdate && (
+      {/* Only show normal info if not failed */}
+      {!isFailed && (
         <>
-          <span
-            className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium border ${
-              requiredComplete
-                ? 'bg-blue-500/20 text-blue-400 border-blue-500/30'
-                : 'bg-orange-500/20 text-orange-400 border-orange-500/30'
-            }`}
-          >
-            {data.required_fields_present}/{data.required_fields_total} Required
-          </span>
-
-          {data.optional_fields_present > 0 && (
-            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium border bg-gray-500/20 text-gray-400 border-gray-500/30">
-              {data.optional_fields_present}/{data.optional_fields_total} Optional
+          {/* Conflict count - right after status */}
+          {data.conflict_count > 0 && (
+            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium border bg-yellow-500/20 text-yellow-400 border-yellow-500/30">
+              <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={2}
+                  d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"
+                />
+              </svg>
+              {data.conflict_count}
             </span>
+          )}
+
+          {/* For updates: show comma-separated field names */}
+          {isUpdate && data.field_names.length > 0 && (
+            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium border bg-blue-500/20 text-blue-400 border-blue-500/30">
+              {data.field_names.map(formatFieldName).join(', ')}
+            </span>
+          )}
+
+          {/* For creates: show required/optional field counts */}
+          {!isUpdate && (
+            <>
+              <span
+                className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium border ${
+                  requiredComplete
+                    ? 'bg-blue-500/20 text-blue-400 border-blue-500/30'
+                    : 'bg-orange-500/20 text-orange-400 border-orange-500/30'
+                }`}
+              >
+                {data.required_fields_present}/{data.required_fields_total} Required
+              </span>
+
+              {data.optional_fields_present > 0 && (
+                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium border bg-gray-500/20 text-gray-400 border-gray-500/30">
+                  {data.optional_fields_present}/{data.optional_fields_total} Optional
+                </span>
+              )}
+            </>
           )}
         </>
       )}

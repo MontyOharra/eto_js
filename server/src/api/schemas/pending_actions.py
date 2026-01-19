@@ -34,6 +34,7 @@ class PendingActionListItem(BaseModel):
     optional_fields_total: int
     field_names: list[str]  # List of field names (for updates, shown as comma-separated)
     conflict_count: int
+    error_message: str | None  # Error message for failed actions
     is_read: bool
     created_at: datetime
     updated_at: datetime
@@ -95,6 +96,21 @@ class FieldMetadataItem(BaseModel):
     display_order: int     # Order in which to display the field
 
 
+class ExecutionResultSchema(BaseModel):
+    """
+    Snapshot of what happened when a pending action was executed.
+
+    For completed actions, this shows the old/new values that were changed.
+    """
+    action_type: PendingActionType  # "create" or "update"
+    executed_at: datetime
+    approver_user_id: str | None
+    htc_order_number: float | None
+    fields_updated: list[str]  # List of field names that were set/changed
+    old_values: dict[str, Any] | None  # None for creates
+    new_values: dict[str, Any]
+
+
 class GetPendingActionDetailResponse(BaseModel):
     """Response for GET /pending-actions/{id}."""
     # Core action data
@@ -128,6 +144,9 @@ class GetPendingActionDetailResponse(BaseModel):
 
     # Current HTC values for updates (None for creates)
     current_htc_values: dict[str, Any] | None
+
+    # Execution result snapshot (for completed actions)
+    execution_result: ExecutionResultSchema | None
 
 
 # =============================================================================

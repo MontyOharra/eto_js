@@ -6,10 +6,10 @@ from output executions and manual input, execution against HTC, and user interac
 """
 import json
 import logging
+import threading
 from dataclasses import asdict
-from typing import Any
-
 from datetime import datetime, timezone
+from typing import Any, TYPE_CHECKING
 
 from shared.database import DatabaseConnectionManager
 from shared.database.repositories.pending_action import PendingActionRepository
@@ -18,6 +18,11 @@ from shared.database.repositories.eto_sub_run_output_execution import EtoSubRunO
 from shared.database.repositories.eto_run import EtoRunRepository
 from shared.database.repositories.eto_sub_run import EtoSubRunRepository
 from shared.database.repositories.pdf_file import PdfFileRepository
+from shared.database.repositories.email import EmailRepository
+from shared.database.repositories.system_settings import SystemSettingsRepository
+
+if TYPE_CHECKING:
+    from features.email.service import EmailService
 
 from shared.types.eto_runs import EtoRunCreate, EtoRunUpdate
 from shared.types.eto_sub_runs import EtoSubRunCreate, EtoSubRunUpdate
@@ -29,6 +34,7 @@ from shared.types.pending_actions import (
     PendingActionCreate,
     PendingActionUpdate,
     PendingActionFieldCreate,
+    PendingActionFieldUpdate,
     PendingActionType,
     PendingActionStatus,
     PendingActionListView,
@@ -37,6 +43,7 @@ from shared.types.pending_actions import (
     ContributingSource,
     CleanupResult,
     ExecuteResult,
+    ExecutionResult,
     VerifyTypeResult,
     ORDER_FIELDS,
     REQUIRED_ORDER_FIELDS,
@@ -80,7 +87,13 @@ class OrderManagementService:
         connection_manager: DatabaseConnectionManager,
         htc_integration_service: HtcIntegrationService,
     ) -> None:
-        """Initialize service with dependencies."""
+        """
+        Initialize service with dependencies.
+
+        Args:
+            connection_manager: Database connection manager for ETO database
+            htc_integration_service: Service for HTC database operations
+        """
         self.connection_manager = connection_manager
         self.htc_service = htc_integration_service
 
@@ -89,10 +102,32 @@ class OrderManagementService:
         self.pending_action_field_repo = PendingActionFieldRepository(connection_manager=connection_manager)
         self.output_execution_repo = EtoSubRunOutputExecutionRepository(connection_manager=connection_manager)
 
-        # Additional repositories for mock data creation
+        # Additional repositories for mock data creation and email tracing
         self.eto_run_repo = EtoRunRepository(connection_manager=connection_manager)
         self.eto_sub_run_repo = EtoSubRunRepository(connection_manager=connection_manager)
         self.pdf_file_repo = PdfFileRepository(connection_manager=connection_manager)
+        self._email_repo = EmailRepository(connection_manager=connection_manager)
+        self._system_settings_repo = SystemSettingsRepository(connection_manager=connection_manager)
+
+        # Locks for preventing race conditions when creating pending actions
+        # Key: (customer_id, hawb) -> Lock
+        # Prevents duplicate actions when multiple sub-runs for same order process concurrently
+        self._action_locks: dict[tuple[int, str], threading.Lock] = {}
+        self._action_locks_lock = threading.Lock()  # Protects the _action_locks dict itself
+
+    def _get_email_service(self) -> "EmailService | None":
+        """
+        Lazily get the email service from ServiceContainer.
+
+        Uses lazy resolution to avoid circular dependency at initialization time:
+        email → eto_runs → order_management → email
+        """
+        try:
+            from shared.services.service_container import ServiceContainer
+            return ServiceContainer.get('email')
+        except Exception as e:
+            logger.warning(f"Could not get email service: {e}")
+            return None
 
     # ========== Main Entry Point ==========
 
@@ -225,6 +260,19 @@ class OrderManagementService:
             )
             return ("ambiguous", None)
 
+    def _get_action_lock(self, customer_id: int, hawb: str) -> threading.Lock:
+        """
+        Get or create a lock for a specific (customer_id, hawb) pair.
+
+        Used to prevent race conditions when multiple sub-runs for the same
+        order are processed concurrently.
+        """
+        key = (customer_id, hawb)
+        with self._action_locks_lock:
+            if key not in self._action_locks:
+                self._action_locks[key] = threading.Lock()
+            return self._action_locks[key]
+
     def _get_or_create_pending_action(
         self,
         customer_id: int,
@@ -237,49 +285,55 @@ class OrderManagementService:
 
         If found, may update action_type/htc_order_number if they changed
         (e.g., order created in HTC since last check).
+
+        Uses per-(customer_id, hawb) locking to prevent race conditions when
+        multiple sub-runs for the same order are processed concurrently.
         """
-        # Try to find existing active action
-        existing = self.pending_action_repo.get_active_by_customer_hawb(
-            customer_id=customer_id,
-            hawb=hawb,
-        )
-
-        if existing is not None:
-            # Check if we need to update action_type or htc_order_number
-            needs_update = (
-                existing.action_type != action_type or
-                existing.htc_order_number != htc_order_number
-            )
-
-            if needs_update:
-                logger.debug(
-                    f"Updating pending action {existing.id}: "
-                    f"action_type {existing.action_type} -> {action_type}, "
-                    f"htc_order_number {existing.htc_order_number} -> {htc_order_number}"
-                )
-                return self.pending_action_repo.update(
-                    action_id=existing.id,
-                    updates=PendingActionUpdate(
-                        action_type=action_type,
-                        htc_order_number=htc_order_number,
-                    ),
-                )
-
-            return existing
-
-        # Create new pending action
-        logger.debug(
-            f"Creating new pending action for customer {customer_id}, "
-            f"HAWB '{hawb}', action_type={action_type}"
-        )
-        return self.pending_action_repo.create(
-            data=PendingActionCreate(
+        # Use lock to prevent duplicate action creation from concurrent sub-runs
+        lock = self._get_action_lock(customer_id, hawb)
+        with lock:
+            # Try to find existing active action
+            existing = self.pending_action_repo.get_active_by_customer_hawb(
                 customer_id=customer_id,
                 hawb=hawb,
-                action_type=action_type,
-                htc_order_number=htc_order_number,
-            ),
-        )
+            )
+
+            if existing is not None:
+                # Check if we need to update action_type or htc_order_number
+                needs_update = (
+                    existing.action_type != action_type or
+                    existing.htc_order_number != htc_order_number
+                )
+
+                if needs_update:
+                    logger.debug(
+                        f"Updating pending action {existing.id}: "
+                        f"action_type {existing.action_type} -> {action_type}, "
+                        f"htc_order_number {existing.htc_order_number} -> {htc_order_number}"
+                    )
+                    return self.pending_action_repo.update(
+                        action_id=existing.id,
+                        updates=PendingActionUpdate(
+                            action_type=action_type,
+                            htc_order_number=htc_order_number,
+                        ),
+                    )
+
+                return existing
+
+            # Create new pending action
+            logger.debug(
+                f"Creating new pending action for customer {customer_id}, "
+                f"HAWB '{hawb}', action_type={action_type}"
+            )
+            return self.pending_action_repo.create(
+                data=PendingActionCreate(
+                    customer_id=customer_id,
+                    hawb=hawb,
+                    action_type=action_type,
+                    htc_order_number=htc_order_number,
+                ),
+            )
 
     def _transform_output_to_fields(
         self,
@@ -903,6 +957,102 @@ class OrderManagementService:
             # htc_order_number changed (different order found)
             return "htc_values_changed"
 
+    def _refresh_location_address_ids(self, pending_action_id: int) -> bool:
+        """
+        Re-check and update location field address_ids that may have been resolved.
+
+        When a pending action is created, location fields (pickup_location, delivery_location)
+        may have address_id=None if the address didn't exist in HTC at that time.
+        Later, the address may be created (by another order or manually in HTC).
+
+        This method re-checks location fields with null address_ids and updates them
+        if the address now exists in HTC.
+
+        Called when viewing detail page (similar to TOCTOU verification for action type).
+
+        Args:
+            pending_action_id: ID of the pending action to refresh
+
+        Returns:
+            True if any address_ids were updated, False otherwise
+        """
+        location_fields = ["pickup_location", "delivery_location"]
+        any_updated = False
+
+        # Get all fields for this action
+        fields = self.pending_action_field_repo.get_fields_for_action(pending_action_id)
+
+        for field in fields:
+            if field.field_name not in location_fields:
+                continue
+
+            # Parse the location value
+            location_value = field.value
+            if location_value is None:
+                continue
+
+            # Handle both dict and object forms
+            if isinstance(location_value, dict):
+                address_id = location_value.get("address_id")
+                address = location_value.get("address")
+                name = location_value.get("name")
+            elif hasattr(location_value, "address_id"):
+                address_id = location_value.address_id
+                address = location_value.address
+                name = location_value.name
+            else:
+                continue
+
+            # Skip if already has an address_id
+            if address_id is not None:
+                continue
+
+            # Skip if no address to look up
+            if not address:
+                continue
+
+            # Try to find the address in HTC
+            resolved_id = self.htc_service.find_address_id(address)
+            if resolved_id is None:
+                continue
+
+            # Address was found! Update the field value with resolved address_id
+            logger.info(
+                f"Refreshed {field.field_name} address_id for action {pending_action_id}: "
+                f"resolved to {resolved_id}"
+            )
+
+            # Get canonical address data from HTC
+            addr_info = self.htc_service.get_address_info(resolved_id)
+            if addr_info:
+                # Use standardized data from the address table
+                formatted_address = addr_info.addr_ln1
+                if addr_info.addr_ln2:
+                    formatted_address = f"{addr_info.addr_ln1} {addr_info.addr_ln2}"
+                formatted_address = f"{formatted_address}, {addr_info.city}, {addr_info.state} {addr_info.zip_code}"
+
+                new_value = LocationValue(
+                    address_id=int(resolved_id),
+                    name=addr_info.company,
+                    address=formatted_address,
+                )
+            else:
+                # Fallback: just set the ID, keep original name/address
+                new_value = LocationValue(
+                    address_id=int(resolved_id),
+                    name=name or "",
+                    address=address,
+                )
+
+            # Update the field with the new value
+            self.pending_action_field_repo.update(
+                field_id=field.id,
+                updates=PendingActionFieldUpdate(value=new_value.model_dump()),
+            )
+            any_updated = True
+
+        return any_updated
+
     # ========== Execution ==========
 
     def approve_action(
@@ -940,11 +1090,12 @@ class OrderManagementService:
                 error_message=f"Pending action {pending_action_id} not found",
             )
 
-        # Check status is valid for approval
-        if action.status not in ("ready", "incomplete", "conflict"):
+        # Check status is valid for approval/retry
+        # "failed" is allowed for retry attempts
+        if action.status not in ("ready", "incomplete", "conflict", "failed"):
             logger.warning(
                 f"Cannot approve: pending action {pending_action_id} status is "
-                f"'{action.status}', expected 'ready', 'incomplete', or 'conflict'"
+                f"'{action.status}', expected 'ready', 'incomplete', 'conflict', or 'failed'"
             )
             return ExecuteResult(
                 pending_action_id=pending_action_id,
@@ -954,11 +1105,422 @@ class OrderManagementService:
                 error_message=f"Cannot approve action with status '{action.status}'",
             )
 
-        # Delegate to execute_action for the full execution flow
-        return self.execute_action(
+        # Delegate to execute_action_unified for the full execution flow
+        return self.execute_action_unified(
             pending_action_id=pending_action_id,
             detail_viewed_at=detail_viewed_at,
+            approver_user_id=approver_user_id,
         )
+
+    def execute_action_unified(
+        self,
+        pending_action_id: int,
+        detail_viewed_at: datetime | None = None,
+        approver_user_id: str | None = None,
+    ) -> ExecuteResult:
+        """
+        Execute pending action against HTC (create or update order).
+
+        Unified method that combines TOCTOU checks and actual execution.
+
+        Flow:
+        1. TOCTOU Step 1: Verify action type hasn't changed (Create↔Update)
+        2. TOCTOU Step 2: For updates, check if HTC modified since user viewed detail
+        3. Set status to "processing"
+        4. Get fields to send (all selected for creates, approved only for updates)
+        5. Extract typed field values and execute against HTC
+        6. Phase 4: Post-execution (attachments)
+        7. Set status to "completed" or "failed"
+
+        Args:
+            pending_action_id: ID of the pending action to execute
+            detail_viewed_at: When user first viewed detail page (for TOCTOU check)
+            approver_user_id: User ID of the approver (for audit trail in updates)
+
+        Returns:
+            ExecuteResult with success status and details
+        """
+        logger.info(f"Executing pending action {pending_action_id}")
+
+        # Get the action
+        action = self.pending_action_repo.get_by_id(pending_action_id)
+        if action is None:
+            logger.warning(f"Cannot execute: pending action {pending_action_id} not found")
+            return ExecuteResult(
+                pending_action_id=pending_action_id,
+                success=False,
+                action_type="create",
+                htc_order_number=None,
+                error_message=f"Pending action {pending_action_id} not found",
+            )
+
+        # ================================================================
+        # TOCTOU STEP 1: Verify action type hasn't changed
+        # ================================================================
+        verify_result = self.verify_and_update_action_type(pending_action_id)
+
+        if verify_result.type_changed:
+            review_reason = self._get_review_reason_for_type_change(verify_result)
+            logger.info(
+                f"TOCTOU: Action {pending_action_id} type changed, requires review. "
+                f"Reason: {review_reason}"
+            )
+            return ExecuteResult(
+                pending_action_id=pending_action_id,
+                success=True,
+                action_type=verify_result.new_action_type,
+                htc_order_number=verify_result.new_htc_order_number,
+                error_message=None,
+                requires_review=True,
+                review_reason=review_reason,
+            )
+
+        # Re-fetch action after verification (may have been updated)
+        action = self.pending_action_repo.get_by_id(pending_action_id)
+        if action is None:
+            return ExecuteResult(
+                pending_action_id=pending_action_id,
+                success=False,
+                action_type="create",
+                htc_order_number=None,
+                error_message=f"Pending action {pending_action_id} not found after verification",
+            )
+
+        # ================================================================
+        # TOCTOU STEP 2: For updates, check if HTC modified since viewing
+        # ================================================================
+        if (
+            action.action_type == "update"
+            and action.htc_order_number is not None
+            and detail_viewed_at is not None
+        ):
+            try:
+                was_modified = self.htc_service.check_order_modified_since(
+                    order_number=action.htc_order_number,
+                    since_datetime=detail_viewed_at,
+                )
+                if was_modified:
+                    logger.info(
+                        f"TOCTOU: Order {action.htc_order_number} was modified in HTC "
+                        f"since user viewed detail at {detail_viewed_at}"
+                    )
+                    return ExecuteResult(
+                        pending_action_id=pending_action_id,
+                        success=True,
+                        action_type=action.action_type,
+                        htc_order_number=action.htc_order_number,
+                        error_message=None,
+                        requires_review=True,
+                        review_reason="htc_values_changed",
+                    )
+            except Exception as e:
+                logger.warning(
+                    f"Failed to check HTC modification history for order "
+                    f"{action.htc_order_number}: {e}"
+                )
+
+        # ================================================================
+        # EXECUTION: All TOCTOU checks passed - proceed with execution
+        # ================================================================
+
+        try:
+            # Set status to "processing"
+            self.pending_action_repo.update(
+                pending_action_id,
+                PendingActionUpdate(status="processing", last_processed_at=datetime.now(timezone.utc)),
+            )
+
+            # Broadcast processing status
+            order_event_manager.broadcast_sync("pending_action_updated", {
+                "id": pending_action_id,
+                "status": "processing",
+                "action_type": action.action_type,
+            })
+
+            # Get fields to send
+            selected_fields = self.pending_action_field_repo.get_selected_fields_for_action(pending_action_id)
+            if action.action_type == "update":
+                fields_to_send = {
+                    name: field for name, field in selected_fields.items()
+                    if field.is_approved_for_update
+                }
+            else:
+                fields_to_send = selected_fields
+
+            logger.info(f"Fields to send: {list(fields_to_send.keys())}")
+            # Extract typed field values from fields_to_send
+            # Location fields -> LocationValue
+            pickup_location: LocationValue | None = None
+            if "pickup_location" in fields_to_send:
+                val = fields_to_send["pickup_location"].value
+                if isinstance(val, dict):
+                    pickup_location = LocationValue(**val)
+                elif isinstance(val, LocationValue):
+                    pickup_location = val
+
+            delivery_location: LocationValue | None = None
+            if "delivery_location" in fields_to_send:
+                val = fields_to_send["delivery_location"].value
+                if isinstance(val, dict):
+                    delivery_location = LocationValue(**val)
+                elif isinstance(val, LocationValue):
+                    delivery_location = val
+
+            # Datetime fields -> DatetimeRangeValue
+            pickup_datetime: DatetimeRangeValue | None = None
+            if "pickup_datetime" in fields_to_send:
+                val = fields_to_send["pickup_datetime"].value
+                if isinstance(val, dict):
+                    pickup_datetime = DatetimeRangeValue(**val)
+                elif isinstance(val, DatetimeRangeValue):
+                    pickup_datetime = val
+
+            delivery_datetime: DatetimeRangeValue | None = None
+            if "delivery_datetime" in fields_to_send:
+                val = fields_to_send["delivery_datetime"].value
+                if isinstance(val, dict):
+                    delivery_datetime = DatetimeRangeValue(**val)
+                elif isinstance(val, DatetimeRangeValue):
+                    delivery_datetime = val
+
+            # String fields
+            pickup_notes: str | None = None
+            if "pickup_notes" in fields_to_send:
+                pickup_notes = fields_to_send["pickup_notes"].value
+
+            delivery_notes: str | None = None
+            if "delivery_notes" in fields_to_send:
+                delivery_notes = fields_to_send["delivery_notes"].value
+
+            mawb: str | None = None
+            if "mawb" in fields_to_send:
+                mawb = fields_to_send["mawb"].value
+
+            order_notes: str | None = None
+            if "order_notes" in fields_to_send:
+                order_notes = fields_to_send["order_notes"].value
+
+            # Dims field -> list[DimObject]
+            dims: list[DimObject] | None = None
+            if "dims" in fields_to_send:
+                val = fields_to_send["dims"].value
+                if isinstance(val, list):
+                    dims = [
+                        DimObject(**d) if isinstance(d, dict) else d
+                        for d in val
+                    ]
+
+            # Build new_values dict for execution result snapshot
+            # Store structured objects (as dicts) so frontend can render with same formatting
+            exec_new_values: dict[str, Any] = {}
+            if pickup_location:
+                exec_new_values["pickup_location"] = pickup_location.model_dump()
+            if pickup_datetime:
+                exec_new_values["pickup_datetime"] = pickup_datetime.model_dump()
+            if delivery_location:
+                exec_new_values["delivery_location"] = delivery_location.model_dump()
+            if delivery_datetime:
+                exec_new_values["delivery_datetime"] = delivery_datetime.model_dump()
+            if mawb is not None:
+                exec_new_values["mawb"] = mawb
+            if pickup_notes is not None:
+                exec_new_values["pickup_notes"] = pickup_notes
+            if delivery_notes is not None:
+                exec_new_values["delivery_notes"] = delivery_notes
+            if order_notes is not None:
+                exec_new_values["order_notes"] = order_notes
+            if dims is not None:
+                exec_new_values["dims"] = [d.model_dump() if hasattr(d, 'model_dump') else d for d in dims]
+
+            # For updates, capture old values from HTC before executing
+            # Use same structured format as new_values for consistent rendering
+            exec_old_values: dict[str, Any] | None = None
+            if action.action_type == "update" and action.htc_order_number is not None:
+                try:
+                    current_htc = self.htc_service.get_order_fields(action.htc_order_number)
+                    if current_htc:
+                        exec_old_values = {}
+                        if "pickup_location" in exec_new_values and current_htc.pickup_company_name:
+                            exec_old_values["pickup_location"] = {
+                                "address_id": int(current_htc.pickup_address_id) if current_htc.pickup_address_id else None,
+                                "name": current_htc.pickup_company_name,
+                                "address": current_htc.pickup_address or "",
+                            }
+                        if "pickup_datetime" in exec_new_values and current_htc.pickup_time_start:
+                            # Parse the combined datetime string (format: "YYYY-MM-DDTHH:MM:00")
+                            pu_date = current_htc.pickup_time_start.split("T")[0] if "T" in (current_htc.pickup_time_start or "") else ""
+                            pu_start = current_htc.pickup_time_start.split("T")[1][:5] if "T" in (current_htc.pickup_time_start or "") else ""
+                            pu_end = current_htc.pickup_time_end.split("T")[1][:5] if current_htc.pickup_time_end and "T" in current_htc.pickup_time_end else ""
+                            exec_old_values["pickup_datetime"] = {
+                                "date": pu_date,
+                                "time_start": pu_start,
+                                "time_end": pu_end,
+                            }
+                        if "delivery_location" in exec_new_values and current_htc.delivery_company_name:
+                            exec_old_values["delivery_location"] = {
+                                "address_id": int(current_htc.delivery_address_id) if current_htc.delivery_address_id else None,
+                                "name": current_htc.delivery_company_name,
+                                "address": current_htc.delivery_address or "",
+                            }
+                        if "delivery_datetime" in exec_new_values and current_htc.delivery_time_start:
+                            # Parse the combined datetime string (format: "YYYY-MM-DDTHH:MM:00")
+                            del_date = current_htc.delivery_time_start.split("T")[0] if "T" in (current_htc.delivery_time_start or "") else ""
+                            del_start = current_htc.delivery_time_start.split("T")[1][:5] if "T" in (current_htc.delivery_time_start or "") else ""
+                            del_end = current_htc.delivery_time_end.split("T")[1][:5] if current_htc.delivery_time_end and "T" in current_htc.delivery_time_end else ""
+                            exec_old_values["delivery_datetime"] = {
+                                "date": del_date,
+                                "time_start": del_start,
+                                "time_end": del_end,
+                            }
+                        if "mawb" in exec_new_values:
+                            exec_old_values["mawb"] = current_htc.mawb or ""
+                        if "pickup_notes" in exec_new_values:
+                            exec_old_values["pickup_notes"] = current_htc.pickup_notes or ""
+                        if "delivery_notes" in exec_new_values:
+                            exec_old_values["delivery_notes"] = current_htc.delivery_notes or ""
+                        if "order_notes" in exec_new_values:
+                            exec_old_values["order_notes"] = current_htc.order_notes or ""
+                        if "dims" in exec_new_values:
+                            exec_old_values["dims"] = current_htc.dims or []
+                except Exception as e:
+                    logger.warning(f"Could not fetch old HTC values for audit: {e}")
+
+            # Execute based on action type
+            if action.action_type == "create":
+                # Validate required fields for create
+                if pickup_location is None:
+                    raise ValueError("Missing required field: pickup_location")
+                if delivery_location is None:
+                    raise ValueError("Missing required field: delivery_location")
+                if pickup_datetime is None:
+                    raise ValueError("Missing required field: pickup_datetime")
+                if delivery_datetime is None:
+                    raise ValueError("Missing required field: delivery_datetime")
+
+                order_number = self._execute_create(
+                    action=action,
+                    pickup_location=pickup_location,
+                    pickup_datetime=pickup_datetime,
+                    delivery_location=delivery_location,
+                    delivery_datetime=delivery_datetime,
+                    pickup_notes=pickup_notes,
+                    delivery_notes=delivery_notes,
+                    mawb=mawb,
+                    order_notes=order_notes,
+                    dims=dims,
+                )
+            else:
+                # Update - all fields optional
+                self._execute_update(
+                    action=action,
+                    pickup_location=pickup_location,
+                    pickup_datetime=pickup_datetime,
+                    delivery_location=delivery_location,
+                    delivery_datetime=delivery_datetime,
+                    pickup_notes=pickup_notes,
+                    delivery_notes=delivery_notes,
+                    mawb=mawb,
+                    order_notes=order_notes,
+                    dims=dims,
+                    approver_user_id=approver_user_id,
+                )
+                order_number = action.htc_order_number
+
+            # Phase 4: Post-execution - process attachments
+            if order_number is not None:
+                try:
+                    pdf_sources = self._get_pdf_sources_for_action(pending_action_id)
+                    if pdf_sources:
+                        attachment_results = self.htc_service.process_attachments(
+                            order_number=order_number,
+                            customer_id=action.customer_id,
+                            hawb=action.hawb,
+                            pdf_sources=pdf_sources,
+                        )
+                        successful = sum(1 for r in attachment_results if r.success)
+                        logger.info(
+                            f"Processed {successful}/{len(attachment_results)} attachments "
+                            f"for order {int(order_number)}"
+                        )
+                except Exception as attach_error:
+                    # Log but don't fail - order was created/updated successfully
+                    logger.error(
+                        f"Failed to process attachments for order {int(order_number)}: {attach_error}"
+                    )
+
+            # Phase 4b: Email notifications (for creates only)
+            if action.action_type == "create" and order_number is not None:
+                self._send_order_created_notification(pending_action_id, order_number)
+
+        except Exception as e:
+            # Failure - mark as failed so user can retry
+            logger.error(f"Failed to execute pending action {pending_action_id}: {e}")
+            error_time = datetime.now(timezone.utc)
+            self.pending_action_repo.update(
+                pending_action_id,
+                PendingActionUpdate(
+                    status="failed",
+                    error_message=str(e),
+                    error_at=error_time,
+                    last_processed_at=error_time,
+                ),
+            )
+
+            # Broadcast failure status
+            order_event_manager.broadcast_sync("pending_action_updated", {
+                "id": pending_action_id,
+                "status": "failed",
+                "action_type": action.action_type,
+            })
+
+            return ExecuteResult(
+                pending_action_id=pending_action_id,
+                success=False,
+                action_type=action.action_type,
+                htc_order_number=action.htc_order_number,
+                error_message=str(e),
+            )
+
+        # Success - build execution result snapshot and mark as completed
+        execution_time = datetime.now(timezone.utc)
+        execution_result = ExecutionResult(
+            action_type=action.action_type,
+            executed_at=execution_time,
+            approver_user_id=approver_user_id,
+            htc_order_number=order_number,
+            fields_updated=list(exec_new_values.keys()),
+            old_values=exec_old_values,
+            new_values=exec_new_values,
+        )
+
+        self.pending_action_repo.update(
+            pending_action_id,
+            PendingActionUpdate(
+                status="completed",
+                htc_order_number=order_number,
+                last_processed_at=execution_time,
+                execution_result=execution_result,
+            ),
+        )
+
+        # Broadcast success status
+        order_event_manager.broadcast_sync("pending_action_updated", {
+            "id": pending_action_id,
+            "status": "completed",
+            "action_type": action.action_type,
+        })
+
+        logger.info(f"Successfully executed pending action {pending_action_id}")
+
+        return ExecuteResult(
+            pending_action_id=pending_action_id,
+            success=True,
+            action_type=action.action_type,
+            htc_order_number=order_number,
+            error_message=None,
+        )
+
+    # ========== DEPRECATED: Old execute_action methods (to be removed after testing) ==========
 
     def execute_action(
         self,
@@ -1254,19 +1816,21 @@ class OrderManagementService:
                         f"Failed to process attachments for order {int(order_number)}: {attach_error}"
                     )
 
-            # TODO Phase 4b: Email notifications (for creates only)
-            # if action.action_type == "create":
-            #     self._send_confirmation_email(action, order_number)
+            # Phase 4b: Email notifications (for creates only)
+            if action.action_type == "create" and order_number is not None:
+                self._send_order_created_notification(pending_action_id, order_number)
 
         except Exception as e:
             # Failure - mark as failed so user can retry
             logger.error(f"Failed to execute pending action {pending_action_id}: {e}")
+            error_time = datetime.now(timezone.utc)
             self.pending_action_repo.update(
                 pending_action_id,
                 PendingActionUpdate(
                     status="failed",
                     error_message=str(e),
-                    last_processed_at=datetime.now(timezone.utc),
+                    error_at=error_time,
+                    last_processed_at=error_time,
                 ),
             )
 
@@ -1309,7 +1873,6 @@ class OrderManagementService:
             pending_action_id=pending_action_id,
             success=True,
             action_type=action.action_type,
-            htc_order_number=order_number,
             htc_order_number=order_number,
             error_message=None,
         )
@@ -1510,7 +2073,7 @@ class OrderManagementService:
             List of PdfSource objects with PDF file info (deduplicated by pdf_file_id)
         """
         # Get all fields for this action
-        fields = self.pending_action_field_repo.get_by_pending_action_id(pending_action_id)
+        fields = self.pending_action_field_repo.get_fields_for_action(pending_action_id)
 
         # Get unique output_execution_ids (excluding None for user-provided values)
         output_execution_ids = set(
@@ -1630,6 +2193,7 @@ class OrderManagementService:
                 optional_fields_total=item.optional_fields_total,
                 field_names=item.field_names,
                 conflict_count=item.conflict_count,
+                error_message=item.error_message,
                 is_read=item.is_read,
                 created_at=item.created_at,
                 updated_at=item.updated_at,
@@ -1662,9 +2226,17 @@ class OrderManagementService:
 
         For updates, also fetches current HTC values for comparison display.
 
-        TOCTOU Protection: On every detail view request, we re-verify the action type
-        against HTC. This ensures the user sees the most up-to-date state (e.g., if
-        someone created the order in HTC, a "create" action becomes an "update").
+        TOCTOU Protection: On every detail view request for non-terminal actions,
+        we re-verify the action type against HTC. This ensures the user sees the
+        most up-to-date state (e.g., if someone created the order in HTC, a "create"
+        action becomes an "update").
+
+        Address Refresh: For non-terminal actions, we also re-check location fields
+        with null address_ids to see if those addresses now exist in HTC.
+
+        Terminal State Protection: Completed, rejected, and failed actions are
+        immutable - no TOCTOU or address refresh is performed. They represent
+        historical records of what happened.
 
         Args:
             action_id: ID of the pending action
@@ -1673,18 +2245,28 @@ class OrderManagementService:
             PendingActionDetailView with all field values and contributing sources,
             or None if action not found
         """
-        # 1. Verify action type is still correct (TOCTOU protection)
-        # This will update the action if the type has changed
-        try:
-            self.verify_and_update_action_type(action_id)
-        except ValueError:
-            # Action not found
-            return None
-
-        # 2. Get the (potentially updated) pending action
+        # 1. Get the action first to check terminal state
         action = self.pending_action_repo.get_by_id(action_id)
         if action is None:
             return None
+
+        # 2. For non-terminal actions, refresh location address_ids and verify action type
+        terminal_statuses = ("completed", "rejected", "failed")
+        if action.status not in terminal_statuses:
+            # 2a. Refresh location address_ids (may have been resolved since creation)
+            self._refresh_location_address_ids(action_id)
+
+            # 2b. Verify action type is still correct (TOCTOU protection)
+            try:
+                self.verify_and_update_action_type(action_id)
+            except ValueError:
+                # Action not found (shouldn't happen, but be safe)
+                return None
+
+            # 2c. Re-fetch action after potential updates
+            action = self.pending_action_repo.get_by_id(action_id)
+            if action is None:
+                return None
 
         # 3. Get fields with source chain data (single JOIN query)
         fields_with_sources = self.pending_action_field_repo.get_fields_with_sources_for_action(action_id)
@@ -1786,6 +2368,7 @@ class OrderManagementService:
             fields=fields,
             contributing_sources=contributing_sources,
             current_htc_values=current_htc_values,
+            execution_result=action.execution_result,
         )
 
     # ========== Mock Data Creation ==========
@@ -2312,3 +2895,255 @@ class OrderManagementService:
                 })
 
         return terminal_actions
+
+    # ========== Email Notifications ==========
+
+    def _get_contributing_email_details(self, pending_action_id: int) -> dict[str, datetime]:
+        """
+        Get sender email addresses and their received dates from all sources
+        that contributed to this pending action.
+
+        Data path: pending_action_fields → output_execution → sub_run → run → email
+
+        Only returns addresses from email sources (not manual uploads which have
+        no source_email_id).
+
+        Args:
+            pending_action_id: ID of the pending action
+
+        Returns:
+            Dict mapping email address to received_date (may be empty if all
+            sources were manual uploads)
+        """
+        # Get all fields for this action to find unique output_execution_ids
+        fields = self.pending_action_field_repo.get_fields_for_action(pending_action_id)
+
+        # Collect unique output_execution_ids (excluding None for user-provided values)
+        output_execution_ids = set(
+            f.output_execution_id for f in fields
+            if f.output_execution_id is not None
+        )
+
+        if not output_execution_ids:
+            return {}
+
+        email_details: dict[str, datetime] = {}
+
+        for output_exec_id in output_execution_ids:
+            # Get output execution to find sub_run_id
+            output_exec = self.output_execution_repo.get_by_id(output_exec_id)
+            if not output_exec:
+                continue
+
+            # Get sub_run to find eto_run_id
+            sub_run = self.eto_sub_run_repo.get_by_id(output_exec.sub_run_id)
+            if not sub_run:
+                continue
+
+            # Get run to find source_email_id
+            run = self.eto_run_repo.get_by_id(sub_run.eto_run_id)
+            if not run or not run.source_email_id:
+                # Manual upload - no email to send
+                continue
+
+            # Get email record for sender info
+            email = self._email_repo.get_by_id(run.source_email_id)
+            if email and email.sender_email and email.received_date:
+                # Keep the most recent date if multiple emails from same sender
+                if (
+                    email.sender_email not in email_details or
+                    email.received_date > email_details[email.sender_email]
+                ):
+                    email_details[email.sender_email] = email.received_date
+
+        return email_details
+
+    def _build_order_created_email(
+        self,
+        action: PendingAction,
+        htc_order_number: float,
+        email_received_date: datetime,
+    ) -> tuple[str, str, str]:
+        """
+        Build email subject and body for order creation notification.
+
+        Args:
+            action: The pending action that was executed
+            htc_order_number: The HTC order number
+            email_received_date: The date/time the source email was received
+
+        Returns:
+            Tuple of (subject, plain_text_body, html_body)
+        """
+        order_num = int(htc_order_number)
+        subject = f"HTC Order Created - #{order_num} - {action.hawb}"
+
+        # Convert email received date from UTC to CST for display
+        from zoneinfo import ZoneInfo
+        cst_tz = ZoneInfo("America/Chicago")
+        if email_received_date.tzinfo is None:
+            # Assume naive datetime is UTC
+            email_received_date = email_received_date.replace(tzinfo=timezone.utc)
+        email_received_cst = email_received_date.astimezone(cst_tz)
+        formatted_date = email_received_cst.strftime("%B %d, %Y at %I:%M %p CST")
+
+        # Get customer name for the email
+        customer_name = self.htc_service.get_customer_name(action.customer_id)
+        customer_display = customer_name or f"Customer #{action.customer_id}"
+
+        # Build plain text body
+        lines = [
+            f"An order has been created from your email received on {formatted_date}.",
+            f"Thank you for your business.",
+            "",
+            "Order Details:",
+            f"  HTC Order Number: #{order_num}",
+            f"  HAWB: {action.hawb}",
+            f"  Customer: {customer_display}",
+            "",
+            "This is an automated notification from the Harrah Email-To-Order system.",
+        ]
+
+        plain_body = "\n".join(lines)
+
+        # Build HTML body
+        html_body = f"""
+<html>
+<body style="font-family: Arial, sans-serif; line-height: 1.6; color: #333;">
+    <h2 style="color: #2c5282;">HTC Order Created</h2>
+    <p>An order has been created from your email received on <strong>{formatted_date}</strong>.</p>
+    <p>Thank you for your business.</p>
+
+    <table style="border-collapse: collapse; margin: 20px 0;">
+        <tr>
+            <td style="padding: 8px; font-weight: bold;">HTC Order Number:</td>
+            <td style="padding: 8px;">#{order_num}</td>
+        </tr>
+        <tr>
+            <td style="padding: 8px; font-weight: bold;">HAWB:</td>
+            <td style="padding: 8px;">{action.hawb}</td>
+        </tr>
+        <tr>
+            <td style="padding: 8px; font-weight: bold;">Customer:</td>
+            <td style="padding: 8px;">{customer_display}</td>
+        </tr>
+    </table>
+
+    <p style="color: #666; font-size: 12px; margin-top: 30px;">
+        This is an automated notification from the Harrah Email-To-Order system.
+    </p>
+</body>
+</html>
+"""
+
+        return subject, plain_body, html_body
+
+    def _send_order_notification(
+        self,
+        recipient_email: str,
+        subject: str,
+        body: str,
+        body_html: str,
+    ) -> bool:
+        """
+        Send notification email to a recipient.
+
+        Uses system setting 'email.default_sender_account_id' for sender.
+        Logs errors but does not raise - email failure should not block order processing.
+
+        Args:
+            recipient_email: Recipient email address
+            subject: Email subject
+            body: Plain text email body
+            body_html: HTML email body
+
+        Returns:
+            True if email sent successfully, False otherwise
+        """
+        email_service = self._get_email_service()
+        if not email_service:
+            logger.debug("Email service not available - skipping notification")
+            return False
+
+        # Get sender account from system settings
+        sender_account_id_str = self._system_settings_repo.get("email.default_sender_account_id")
+        if not sender_account_id_str:
+            logger.warning("No default sender account configured - skipping email notification")
+            return False
+
+        try:
+            sender_account_id = int(sender_account_id_str)
+        except ValueError:
+            logger.error(f"Invalid sender account ID in settings: {sender_account_id_str}")
+            return False
+
+        try:
+            result = email_service.send_email(
+                account_id=sender_account_id,
+                to_address=recipient_email,
+                subject=subject,
+                body=body,
+                body_html=body_html,
+            )
+            if result.success:
+                logger.info(f"Sent order notification email to {recipient_email}")
+                return True
+            else:
+                logger.warning(f"Failed to send notification to {recipient_email}: {result.message}")
+                return False
+        except Exception as e:
+            logger.error(f"Error sending notification to {recipient_email}: {e}")
+            return False
+
+    def _send_order_created_notification(
+        self,
+        pending_action_id: int,
+        htc_order_number: float,
+    ) -> None:
+        """
+        Send email notification for a newly created order.
+
+        Sends personalized emails to each recipient with their specific email date.
+        Only sends to email sources - manual uploads do not receive notifications.
+
+        Args:
+            pending_action_id: ID of the pending action
+            htc_order_number: The HTC order number that was created
+        """
+        try:
+            # Get recipient emails with their received dates
+            email_details = self._get_contributing_email_details(pending_action_id)
+            if not email_details:
+                logger.debug(
+                    f"No email recipients for pending action {pending_action_id} - "
+                    "skipping notification (likely manual upload)"
+                )
+                return
+
+            # Get pending action details
+            action = self.pending_action_repo.get_by_id(pending_action_id)
+            if not action:
+                logger.warning(f"Cannot send notification: pending action {pending_action_id} not found")
+                return
+
+            # Build and send personalized email for each recipient
+            sent_count = 0
+            for recipient_email, received_date in email_details.items():
+                subject, body, body_html = self._build_order_created_email(
+                    action, htc_order_number, received_date
+                )
+                if self._send_order_notification(recipient_email, subject, body, body_html):
+                    sent_count += 1
+
+            if sent_count > 0:
+                logger.info(
+                    f"Sent {sent_count} order created notification(s) for "
+                    f"pending action {pending_action_id}"
+                )
+
+        except Exception as e:
+            # Log but don't fail - email notification should not block order processing
+            logger.error(
+                f"Failed to send order created notification for pending action "
+                f"{pending_action_id}: {e}"
+            )

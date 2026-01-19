@@ -3,6 +3,7 @@ Pending Action Repository
 
 Repository for pending_actions table with CRUD operations and specialized queries.
 """
+import json
 import logging
 from datetime import datetime
 
@@ -17,6 +18,7 @@ from shared.types.pending_actions import (
     PendingActionUpdate,
     PendingActionListView,
     PendingActionStatus,
+    ExecutionResult,
     REQUIRED_ORDER_FIELDS,
     OPTIONAL_ORDER_FIELDS,
 )
@@ -46,6 +48,15 @@ class PendingActionRepository(BaseRepository[PendingActionModel]):
 
     def _model_to_domain(self, model: PendingActionModel) -> PendingAction:
         """Convert ORM model to PendingAction dataclass."""
+        # Parse execution_result JSON if present
+        execution_result = None
+        if model.execution_result:
+            try:
+                result_data = json.loads(model.execution_result)
+                execution_result = ExecutionResult(**result_data)
+            except (json.JSONDecodeError, TypeError) as e:
+                logger.warning(f"Failed to parse execution_result for action {model.id}: {e}")
+
         return PendingAction(
             id=model.id,
             customer_id=model.customer_id,
@@ -62,6 +73,7 @@ class PendingActionRepository(BaseRepository[PendingActionModel]):
             created_at=model.created_at,
             updated_at=model.updated_at,
             last_processed_at=model.last_processed_at,
+            execution_result=execution_result,
         )
 
     # ========== CRUD Operations ==========
@@ -137,6 +149,9 @@ class PendingActionRepository(BaseRepository[PendingActionModel]):
             # Update only fields that were explicitly set
             for field_name in updates.model_fields_set:
                 value = getattr(updates, field_name)
+                # Serialize execution_result to JSON string for storage
+                if field_name == "execution_result" and value is not None:
+                    value = value.model_dump_json()
                 setattr(model, field_name, value)
 
             session.flush()
@@ -319,6 +334,7 @@ class PendingActionRepository(BaseRepository[PendingActionModel]):
                     optional_fields_total=len(OPTIONAL_ORDER_FIELDS),
                     field_names=field_names_by_action.get(model.id, []),
                     conflict_count=model.conflict_count,
+                    error_message=model.error_message,
                     is_read=model.is_read,
                     created_at=model.created_at,
                     updated_at=model.updated_at,

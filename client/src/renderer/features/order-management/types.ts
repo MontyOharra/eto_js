@@ -376,6 +376,7 @@ export interface PendingActionListItem {
   optional_fields_total: number;
   field_names: string[];  // List of field names being updated
   conflict_count: number;
+  error_message: string | null;  // Error message for failed actions
   is_read: boolean;
   created_at: string;
   updated_at: string;
@@ -447,6 +448,20 @@ export interface FieldMetadataItem {
 }
 
 /**
+ * Execution result snapshot for completed actions.
+ * Shows what values were changed when the action was executed.
+ */
+export interface ExecutionResult {
+  action_type: ActionType;
+  executed_at: string;
+  approver_user_id: string | null;
+  htc_order_number: number | null;
+  fields_updated: string[];
+  old_values: Record<string, unknown> | null;  // null for creates
+  new_values: Record<string, unknown>;
+}
+
+/**
  * Full pending action detail (for both creates and updates)
  */
 export interface PendingActionDetail {
@@ -480,6 +495,9 @@ export interface PendingActionDetail {
 
   /** Current HTC values for updates (null for creates) */
   current_htc_values: Record<string, unknown> | null;
+
+  /** Execution result snapshot (for completed actions) */
+  execution_result: ExecutionResult | null;
 }
 
 // Backward compatibility aliases

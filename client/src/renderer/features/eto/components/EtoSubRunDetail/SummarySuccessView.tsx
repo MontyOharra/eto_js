@@ -57,7 +57,7 @@ function isDimObject(value: unknown): boolean {
 }
 
 /**
- * Format a single dim object as "qty - HxLxW @weightlbs"
+ * Format a single dim object as "qty - LxWxH @weightlbs"
  */
 function formatDim(dim: Record<string, unknown>): string {
   const h = dim.height ?? 0;
@@ -65,7 +65,7 @@ function formatDim(dim: Record<string, unknown>): string {
   const w = dim.width ?? 0;
   const qty = dim.qty ?? 1;
   const weight = dim.weight ?? 0;
-  return `${qty} - ${h}x${l}x${w} @${weight}lbs`;
+  return `${qty} - ${l}x${w}x${h} @${weight}lbs`;
 }
 
 /**

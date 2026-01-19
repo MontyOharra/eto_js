@@ -960,6 +960,10 @@ class PendingActionModel(BaseModel):
     # last_processed_at: Updated on actual processing (not read/unread toggle)
     last_processed_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
 
+    # Execution result snapshot (JSON) - stores what happened when action was executed
+    # Contains: action_type, executed_at, approver_user_id, htc_order_number, fields_updated, old_values, new_values
+    execution_result: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+
     # Relationships
     fields: Mapped[List["PendingActionFieldModel"]] = relationship(
         back_populates="pending_action", cascade="all, delete-orphan"
