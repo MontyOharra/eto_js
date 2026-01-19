@@ -175,6 +175,12 @@ async def eto_run_events_stream(request: Request):
                 try:
                     # Wait for next event (blocks until event available)
                     event = await client_queue.get()
+
+                    # Check for shutdown signal
+                    if event.get("type") == "shutdown":
+                        logger.debug("SSE received shutdown signal")
+                        return
+
                     yield f"data: {json.dumps(event)}\n\n"
                 except asyncio.CancelledError:
                     # Server shutting down - exit cleanly

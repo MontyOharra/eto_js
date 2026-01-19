@@ -81,6 +81,12 @@ async def pending_action_events_stream(request: Request):
             while True:
                 try:
                     event = await client_queue.get()
+
+                    # Check for shutdown signal
+                    if event.get("type") == "shutdown":
+                        logger.debug("Order SSE received shutdown signal")
+                        return
+
                     yield f"data: {json.dumps(event)}\n\n"
                 except asyncio.CancelledError:
                     return

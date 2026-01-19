@@ -2,6 +2,7 @@
 Transformation Pipeline Server - FastAPI Application
 Node-based pipeline system with Dask execution
 """
+import asyncio
 import os
 import sys
 from typing import Any
@@ -231,9 +232,20 @@ async def cleanup_services() -> None:
     global _main_connection, _access_connection_manager
 
     try:
-        # Note: SSE connections are handled by uvicorn's task cancellation.
-        # The SSE generators handle CancelledError gracefully and unregister.
-        # Clients are responsible for detecting disconnection and reconnecting.
+        # Shutdown SSE connections first - signal all clients to disconnect gracefully
+        # This must happen before other services shutdown to allow clean disconnection
+        try:
+            from shared.events.eto_events import eto_event_manager
+            from shared.events.order_events import order_event_manager
+
+            await eto_event_manager.shutdown()
+            await order_event_manager.shutdown()
+
+            # Give SSE generators a moment to process shutdown signal and exit
+            await asyncio.sleep(0.5)
+            logger.info("SSE connections signaled to shutdown")
+        except Exception as e:
+            logger.warning(f"Error shutting down SSE connections: {e}")
 
         if ServiceContainer.is_initialized():
             # Stop email service pollers

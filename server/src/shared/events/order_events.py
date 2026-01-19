@@ -131,6 +131,26 @@ class OrderEventManager:
         """Get number of connected SSE clients"""
         return len(self._clients)
 
+    async def shutdown(self) -> None:
+        """
+        Signal all SSE clients to disconnect gracefully.
+        Sends a special shutdown event that tells generators to exit.
+        """
+        if not self._clients:
+            return
+
+        logger.info(f"Shutting down {len(self._clients)} order SSE client(s)")
+
+        shutdown_event = {"type": "shutdown", "data": {}}
+
+        for client_queue in list(self._clients):
+            try:
+                client_queue.put_nowait(shutdown_event)
+            except asyncio.QueueFull:
+                pass
+            except Exception as e:
+                logger.warning(f"Error sending shutdown to order client: {e}")
+
 
 # Global singleton instance
 order_event_manager = OrderEventManager()
