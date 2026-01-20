@@ -2,6 +2,30 @@
 
 This document tracks planned features with implementation checklists. Each feature has a detailed plan document in `docs/plans/`.
 
+## Progress Tracker
+
+| # | Item | Complexity | Plan | Implement | Test |
+|---|------|:----------:|:----:|:---------:|:----:|
+| 1 | Template Draft Saving | 4 | [x] | [ ] | [ ] |
+| 2 | New Pipeline Modules (Math + LLM) | 3 | [x] | [ ] | [ ] |
+| 3 | Address Parsing Error Handling | 2 | [ ] | [ ] | [ ] |
+| 4 | Address Matching with Company Name | 3 | [ ] | [ ] | [ ] |
+| 5 | Extraction Field Rename Syncs to Pipeline | 2 | [ ] | [ ] | [ ] |
+| 6 | Browse Template Matches / Set New Base | 3 | [ ] | [ ] | [ ] |
+| 7 | Conditional Error/Halt Module | 1 | [ ] | [ ] | [ ] |
+| 8 | Extraction Field ↔ Pipeline Hover Highlighting | 2 | [ ] | [ ] | [ ] |
+| 9 | Summary Page Rework | 3 | [ ] | [ ] | [ ] |
+| 10 | Extraction Field Popup Overflow Fix | 1 | [ ] | [ ] | [ ] |
+| 11 | ETO Page: Group Runs by Email | 5 | [ ] | [ ] | [ ] |
+| 12 | Navigate from Order Management to ETO | 1 | [ ] | [ ] | [ ] |
+| 13 | Improved Attachment Handling | 3 | [ ] | [ ] | [ ] |
+| 14 | Email Filter Rules: NOT/Negation | 2 | [ ] | [ ] | [ ] |
+| 15 | Create Template from Existing | 4 | [ ] | [ ] | [ ] |
+| 16 | HTC Time Format Parsing | 2 | [ ] | [ ] | [ ] |
+| 17 | Sub-Run Modal: View Template Button | 1 | [ ] | [ ] | [ ] |
+
+**Complexity Scale:** 1 = Quick fix, 2 = Simple, 3 = Medium, 4 = Complex, 5 = Major rework
+
 ---
 
 ## 1. Template Draft Saving
