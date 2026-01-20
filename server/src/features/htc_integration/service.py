@@ -13,11 +13,11 @@ Architecture:
     - HtcLookupUtils: Customer, address, and order lookups
     - HtcAddressUtils: Address parsing, normalization, and creation
     - HtcOrderUtils: Order number generation, creation, and updates
-    - HtcOrderWorker: Background worker for creating HTC orders from pending orders
 """
 
 from typing import Any
 import json
+from datetime import datetime
 
 from shared.logging import get_logger
 from shared.exceptions import OutputExecutionError
@@ -254,7 +254,7 @@ class HtcIntegrationService:
     def check_order_modified_since(
         self,
         order_number: float,
-        since_datetime: "datetime",
+        since_datetime: datetime | str,
     ) -> bool:
         """
         Check if an order has been modified in HTC since a given datetime.
