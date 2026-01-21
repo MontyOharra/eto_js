@@ -2,6 +2,19 @@
 
 This file tracks session history for continuity across conversations.
 
+## 2026-01-21 - TODO Planning Session
+
+**File:** `2026-01-21-session.md`
+
+**Summary:**
+- Created detailed plans for #13 (Improved Attachment Handling) and #15 (Create Template from Existing)
+- All Priority 1 items now have plans
+- Started planning #11 (ETO Page: Group Runs by Email) - questions documented
+
+**Next Steps:**
+- Continue planning #11 - answer the clarifying questions about email grouping UI
+- Plan #18 - Manual Field Entry for Pending Actions
+
 ## 2026-01-13 - Order Management Styling & Backend Fixes
 
 **File:** `2026-01-13-order-management-session.md`

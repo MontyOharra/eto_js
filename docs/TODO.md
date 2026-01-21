@@ -4,27 +4,30 @@ This document tracks planned features with implementation checklists. Each featu
 
 ## Progress Tracker
 
-| # | Item | Complexity | Plan | Implement | Test |
-|---|------|:----------:|:----:|:---------:|:----:|
-| 1 | Template Draft Saving | 4 | [x] | [ ] | [ ] |
-| 2 | New Pipeline Modules (Math + LLM) | 3 | [x] | [ ] | [ ] |
-| 3 | Address Parsing Error Handling | 2 | [ ] | [ ] | [ ] |
-| 4 | Address Matching with Company Name | 3 | [ ] | [ ] | [ ] |
-| 5 | Extraction Field Rename Syncs to Pipeline | 2 | [ ] | [ ] | [ ] |
-| 6 | Browse Template Matches / Set New Base | 3 | [ ] | [ ] | [ ] |
-| 7 | Conditional Error/Halt Module | 1 | [ ] | [ ] | [ ] |
-| 8 | Extraction Field ↔ Pipeline Hover Highlighting | 2 | [ ] | [ ] | [ ] |
-| 9 | Summary Page Rework | 3 | [ ] | [ ] | [ ] |
-| 10 | Extraction Field Popup Overflow Fix | 1 | [ ] | [ ] | [ ] |
-| 11 | ETO Page: Group Runs by Email | 5 | [ ] | [ ] | [ ] |
-| 12 | Navigate from Order Management to ETO | 1 | [ ] | [ ] | [ ] |
-| 13 | Improved Attachment Handling | 3 | [ ] | [ ] | [ ] |
-| 14 | Email Filter Rules: NOT/Negation | 2 | [ ] | [ ] | [ ] |
-| 15 | Create Template from Existing | 4 | [ ] | [ ] | [ ] |
-| 16 | HTC Time Format Parsing | 2 | [ ] | [ ] | [ ] |
-| 17 | Sub-Run Modal: View Template Button | 1 | [ ] | [ ] | [ ] |
+| # | Item | Priority | Complexity | Plan | Implement | Test |
+|---|------|:--------:|:----------:|:----:|:---------:|:----:|
+| 3 | Field Processing Error Handling (Decoupled) | 1 | 4 | [x] | [ ] | [ ] |
+| 13 | Improved Attachment Handling | 1 | 3 | [x] | [ ] | [ ] |
+| 15 | Create Template from Existing | 1 | 4 | [x] | [ ] | [ ] |
+| 19 | Merge Adjacent PDF Text Boxes | 1 | 2 | [x] | [ ] | [ ] |
+| 9 | Summary Page Rework | 2 | 3 | [x] | [ ] | [ ] |
+| 11 | ETO Page: Group Runs by Email | 2 | 5 | [ ] | [ ] | [ ] |
+| 12 | Navigate from Order Management to ETO | 2 | 1 | [x] | [ ] | [ ] |
+| 16 | HTC Time Format Parsing | 2 | 2 | [x] | [ ] | [ ] |
+| 18 | Manual Field Entry for Pending Actions | 2 | 3 | [ ] | [ ] | [ ] |
+| 1 | Template Draft Saving | 3 | 4 | [x] | [ ] | [ ] |
+| 6 | Browse Template Matches / Set New Base | 3 | 3 | [x] | [ ] | [ ] |
+| 14 | Email Filter Rules: NOT/Negation | 3 | 2 | [x] | [ ] | [ ] |
+| 17 | Sub-Run Modal: View Template Button | 4 | 1 | [x] | [ ] | [ ] |
+| 2 | New Pipeline Modules (Math + LLM) | 5 | 3 | [x] | [ ] | [ ] |
+| 4 | Address Matching with Company Name | 5 | 3 | [x] | [ ] | [ ] |
+| 5 | Extraction Field Rename Syncs to Pipeline | 5 | 2 | [x] | [ ] | [ ] |
+| 7 | Conditional Error/Halt Module | 5 | 2 | [x] | [ ] | [ ] |
+| 8 | Extraction Field ↔ Pipeline Hover Highlighting | 5 | 2 | [x] | [ ] | [ ] |
+| 10 | Extraction Field Popup Overflow Fix | 5 | 1 | [x] | [ ] | [ ] |
 
-**Complexity Scale:** 1 = Quick fix, 2 = Simple, 3 = Medium, 4 = Complex, 5 = Major rework
+**Priority:** 1 = Critical, 2 = High, 3 = Medium, 4 = Low, 5 = Nice to have
+**Complexity:** 1 = Quick fix, 2 = Simple, 3 = Medium, 4 = Complex, 5 = Major rework
 
 ---
 
@@ -97,15 +100,31 @@ This document tracks planned features with implementation checklists. Each featu
 
 ---
 
-## 3. Address Parsing Error Handling (Bug Fix)
+## 3. Field Processing Error Handling (Decoupled Architecture)
 
-**Summary:** Address parsing errors (e.g., usaddress library finds ambiguous data like two cities) currently fail the entire sub-run, making all extracted data unprocessable. Should handle errors gracefully so other fields remain usable and the user doesn't have to manually rebuild everything.
+**Plan:** [`docs/plans/field-processing-error-handling.md`](./plans/field-processing-error-handling.md)
 
-- [ ] Identify where address parsing failures cause sub-run failure
-- [ ] Implement graceful error handling for address parsing
-- [ ] Allow sub-run to continue with other fields when address parsing fails
-- [ ] Surface address parsing errors to user for manual resolution
-- [ ] Test with malformed/ambiguous address inputs
+**Summary:** Decouple field transformation from ETO sub-run success. Process each output channel field independently - failures recorded per-field rather than failing the entire sub-run. Includes cascading fallback (usaddress → LLM) for address parsing.
+
+**Key Changes:**
+- ETO sub-run succeeds once raw output data is stored
+- Order management processes each field independently (never raises)
+- Failed fields stored with status="failed" and error message
+- LLM fallback for address parsing when usaddress fails
+
+**Database:**
+- [ ] Add `processing_status`, `processing_error`, `raw_value` columns to `pending_action_fields`
+- [ ] Create migration, update types
+
+**Backend:**
+- [ ] Update ETO service to not fail sub-run on order management errors
+- [ ] Refactor `process_output_execution()` to never raise, handle per-field
+- [ ] Implement cascading address resolution (usaddress → LLM fallback)
+
+**API/Frontend:**
+- [ ] Update API schemas with processing status fields
+- [ ] Display field processing errors in UI
+- [ ] Consider retry/manual fix UI for failed fields
 
 ---
 
@@ -113,22 +132,35 @@ This document tracks planned features with implementation checklists. Each featu
 
 **Summary:** When matching output address channels to database addresses, multiple similar addresses may exist. Currently picks the first match arbitrarily. Should use company name matching as a tiebreaker to select the best address when multiple candidates exist.
 
-- [ ] Identify address matching logic in HTC integration
-- [ ] Add company name comparison when multiple address matches found
-- [ ] Implement scoring/ranking for address + company name similarity
-- [ ] Select best match based on combined address + company score
-- [ ] Test with multiple similar addresses and varying company names
+**Current flow:**
+- `find_address_by_text(street, city, state, zip)` queries by location, returns first street match
+- `company_name` available at `find_or_create_address()` but not passed down
+- Database has `FavCompany` field on address records
+
+**Fix approach:**
+- Pass `company_name` down to matching function
+- When multiple street matches found: use fuzzy/similarity algorithm on company names
+- Return address with highest company name similarity score
+- If only one match or no company provided: current behavior unchanged
+
+- [ ] Add `company_name: str | None` parameter to `find_address_by_text()`
+- [ ] Implement fuzzy string similarity for company name matching (e.g., Levenshtein, token set ratio)
+- [ ] When multiple matches: score each by company similarity, return best
+- [ ] Pass company_name through from `find_or_create_address()`
+- [ ] Test with multiple addresses at same location, different companies
 
 ---
 
 ## 5. Extraction Field Rename Syncs to Pipeline (Bug Fix)
 
-**Summary:** In the template builder, renaming an extraction field doesn't update the pipeline entry points that reference that field name. This breaks the pipeline. Renaming should propagate to pipeline entry points automatically.
+**Summary:** In the template builder, renaming an extraction field doesn't update the pipeline entry points that reference that field name. This breaks the pipeline. Currently requires deleting and recreating the field with the new name, which is annoying.
 
-- [ ] Identify where extraction field renames occur in template builder
-- [ ] Identify pipeline entry point data structure (references field names)
-- [ ] Implement rename propagation from extraction fields to pipeline entry points
-- [ ] Test renaming fields and verifying pipeline remains valid
+**Fix:** When extraction field is renamed, propagate the name change to corresponding pipeline entry point.
+
+- [ ] Find where extraction field rename occurs in frontend
+- [ ] Find pipeline entry point data structure that references field names
+- [ ] On rename: update pipeline state to use new field name
+- [ ] Test renaming fields and verify pipeline remains connected
 
 ---
 
@@ -136,15 +168,31 @@ This document tracks planned features with implementation checklists. Each featu
 
 **Summary:** Template viewing page should allow browsing PDFs that have matched to that template. If a more complete example is found (e.g., a form with 3 piece/weight rows instead of 1), user can set it as the new base PDF and create a new template version from it. Helps handle discovering more complete form variants through actual usage.
 
-- [ ] Add UI to browse PDFs matched to a template (query by template_version_id)
-- [ ] Display match thumbnails/previews for quick comparison
-- [ ] Add "Use as new base" action on a matched PDF
-- [ ] Flow: selecting new base opens template builder with that PDF pre-loaded
-- [ ] Create new template version with updated extraction fields/pipeline
+**Data available:** `EtoSubRunModel.template_version_id` links matches to templates. Can query all PDFs that matched a template version with their extracted data, status, etc.
+
+**"Use as new base" workflow:**
+- PDF matched because signature objects are compatible
+- Opens template builder with: new PDF as workspace + current version's signature objects, extraction fields, pipeline as starting point
+- User adds new extraction fields for extra data, extends pipeline if needed
+- Saves as new template version
+
+**Backend:**
+- [ ] Add repository method `get_by_template_version_id()` in EtoSubRunRepository
+- [ ] Add service method to get matched PDFs with metadata
+- [ ] Add API endpoint `GET /pdf-templates/versions/{id}/matched-pdfs`
+
+**Frontend:**
+- [ ] Add "Matched PDFs" section/tab to template detail page
+- [ ] Display thumbnails/previews with match date, status, extracted data summary
+- [ ] Add "Use as new base" button on each matched PDF
+- [ ] Open template builder with selected PDF + current template data loaded
+- [ ] Save flow creates new version with new source_pdf_id
 
 ---
 
 ## 7. Conditional Error/Halt Module
+
+**Plan:** [`docs/plans/conditional-error-module.md`](./plans/conditional-error-module.md)
 
 **Summary:** New pipeline module that conditionally throws an error to halt sub-run processing. Takes a boolean input - if true, throws an error with a configurable message from the config. No outputs. Acts as a guard to prevent data from being sent out when something is wrong.
 
@@ -174,22 +222,41 @@ This document tracks planned features with implementation checklists. Each featu
 
 **Summary:** Rework the summary page layout in sub run viewer and template testing step to improve readability and make the information presentation clearer.
 
-- [ ] Review current summary page layout and identify pain points
-- [ ] Design improved layout for better readability
-- [ ] Implement updated summary view in sub run viewer
-- [ ] Implement updated summary view in template testing step
+**Main issues:**
+- Output channel display order is alphabetical (e.g., delivery_end before delivery_start) - should be logical/custom order
+- Field colors don't have consistent meaning or rhyme/reason
+- Specifics to be worked out during implementation
+
+- [ ] Define logical display order for output channels (group by category: identification, pickup, delivery, cargo, etc.)
+- [ ] Define consistent color scheme with meaning
+- [ ] Implement custom ordering in summary view
+- [ ] Apply to both sub run viewer and template testing step
 - [ ] Ensure consistency between both views
 
 ---
 
 ## 10. Extraction Field Popup Overflow Fix
 
-**Summary:** In the executed pipeline viewer, hovering over extraction fields shows a popup with extracted text. Long text gets cut off at the PDF edge. Fix by either (A) wrapping text at PDF boundary, or (B) rendering popup as higher-level overlay in component tree so it can extend beyond PDF bounds.
+**Summary:** In the executed pipeline viewer, hovering over extraction fields shows a popup with extracted text. Long text gets cut off at the PDF edge.
 
+**Approach Options:**
+
+**(A) Text wrapping + auto-shift (Recommended start):**
+- Wrap text at PDF boundary
+- Auto-shift popup position when too close to edge (e.g., if field is pixels from right edge, shift popup left so text has room to wrap reasonably instead of one letter per line)
+- Simpler to implement
+
+**(B) Higher-level overlay:**
+- Render popup as higher-level component in tree so it can extend beyond PDF bounds
+- More complicated, may be harder to solve properly
+- Consider as fallback if (A) doesn't work well
+
+**Checklist:**
 - [ ] Identify extraction field popup component
-- [ ] Choose approach: text wrap vs higher-level overlay
-- [ ] Implement fix so long text is fully visible
-- [ ] Test with various text lengths and field positions (edge cases near PDF borders)
+- [ ] Implement text wrapping within popup
+- [ ] Implement edge detection and auto-shift logic
+- [ ] Test with various text lengths and field positions near all edges
+- [ ] If (A) insufficient, evaluate (B) approach
 
 ---
 
@@ -226,26 +293,28 @@ This document tracks planned features with implementation checklists. Each featu
 
 ---
 
-## 13. Improved Attachment Handling for Non-Data Forms
+## 13. Improved Attachment Handling
 
-**Summary:** Some forms need to be attached to orders even if they don't contain useful processing data. Two approaches:
+**Plan:** [`docs/plans/improved-attachment-handling.md`](./plans/improved-attachment-handling.md)
 
-**(A) Quick approach - Email-based attachments:**
-Instead of attaching only PDFs from contributing sub-runs, get all unique source emails from those sub-runs and attach ALL PDFs from those emails. Catches forms that didn't contribute data but were part of the same email.
+**Summary:** Change attachment logic to capture ALL PDFs from source emails, not just the ones that contributed extracted data. This ensures forms like BOLs, PODs, and commercial invoices get attached even if they didn't have data extracted.
 
-**(B) Robust approach - Attachment-only templates:**
-New template type for forms that have no extractable data but contain a HAWB. These would match to pending actions by HAWB for attachment purposes only, without contributing field data.
+**Key Change:** Instead of tracing `pending_action_fields → output_execution → sub_run → run → pdf_file`, trace to the `source_email_id` and collect ALL PDFs from that email.
 
-**Checklist (A - Email-based):**
-- [ ] Modify attachment logic to collect unique source emails from contributing sub-runs
-- [ ] Query all PDFs associated with those emails
-- [ ] Attach all PDFs (not just contributing ones)
+### Backend
 
-**Checklist (B - Attachment-only templates):**
-- [ ] Add new template type/flag for "attachment-only"
-- [ ] Define minimal extraction (HAWB only) for matching
-- [ ] Link matched attachment-only sub-runs to pending actions
-- [ ] Include in attachment processing without contributing field data
+- [ ] Add `get_by_source_email_id()` method to `EtoRunRepository`
+- [ ] Update `_get_pdf_sources_for_action()` to collect all PDFs from source emails
+- [ ] Add fallback for manual uploads (no source_email_id)
+- [ ] Update logging to show email count + PDF count
+
+### Testing
+
+- [ ] Test with email that has 1 PDF (baseline)
+- [ ] Test with email that has multiple PDFs, only some matched templates
+- [ ] Test with manual upload (should work as before)
+- [ ] Test with multiple emails contributing to same action
+- [ ] Verify HTC receives all expected attachments
 
 ---
 
@@ -253,30 +322,66 @@ New template type for forms that have no extractable data but contain a HAWB. Th
 
 **Summary:** Email ingestion config filter rules currently only support positive matching (e.g., "sender contains X"). Add negation option for each filter field so users can exclude emails matching certain criteria (e.g., "sender does NOT contain X").
 
-- [ ] Update filter rule data structure to include negation flag
-- [ ] Update filter rule UI to toggle between "contains" / "does not contain" (or similar)
-- [ ] Update filter evaluation logic to handle negated rules
-- [ ] Apply to all filter fields (sender, subject, etc.)
-- [ ] Test combined positive and negative filters
+**Approach:** Add `negate: bool = False` toggle to FilterRule type (not new operations like "not_contains"). Cleaner, backwards compatible, applies to all operations.
+
+**Note:** Current OR logic means negated rules work for simple exclusion but not complex "include X but not Y" scenarios. AND logic could be future enhancement.
+
+**Backend:**
+- [ ] Add `negate: bool = False` to FilterRule in `shared/types/email_ingestion_configs.py`
+- [ ] Update `check_filter_rule()` in `features/email/utils/filter_rules.py` to invert result when negate=True
+
+**Frontend:**
+- [ ] Add negate toggle to filter rule UI
+- [ ] Display "does not contain" / "does not equal" etc. when negated
+- [ ] Test with various positive and negative filter combinations
 
 ---
 
 ## 15. Create New Template from Existing Template
 
-**Summary:** Allow creating a new template using an existing template as a starting point (distinct from versioning - this creates a fully separate template). Useful for similar forms with common elements (e.g., same header, different body).
+**Plan:** [`docs/plans/create-template-from-existing.md`](./plans/create-template-from-existing.md)
 
-**Behavior when loading source template onto new PDF:**
-- **Signature objects**: Check if each object exists on the new PDF. Keep if found, discard if not.
-- **Extraction fields**: Load exactly as-is from source template
-- **Pipeline**: Load exactly as-is from source template
+**Summary:** Allow creating a new template using an existing template as a starting point (distinct from versioning - this creates a fully separate template). Opens a separate modal over the template builder where users can browse templates, preview their structure, and copy over signature objects, extraction fields, and pipeline.
 
-- [ ] Add UI to select source template when building new template
-- [ ] Implement signature object matching between source template and new PDF
-- [ ] Keep matched signature objects, discard unmatched
-- [ ] Load extraction fields from source template
-- [ ] Load pipeline definition from source template
-- [ ] Handle edge cases (no matching objects, all objects match, etc.)
-- [ ] User proceeds with normal template building flow from there
+**Key Points:**
+- Separate modal overlays template builder (not embedded in builder flow)
+- Left panel: filterable template list; Right panel: PDF preview with objects overlaid
+- Toggle to view source PDF or new PDF with applied objects
+- Read-only pipeline viewer
+- Uses each template's current version
+- Signature objects: only selected if they exist on new PDF (uses existing matching logic)
+- Extraction fields and pipeline: copied exactly as-is
+
+### Backend
+- [ ] Verify existing API provides template structure data (sig objects, fields, pipeline)
+- [ ] If needed, add endpoint for template structure
+- [ ] Ensure signature object matching logic is accessible/reusable
+
+### Frontend - Template Builder Integration
+- [ ] Add "Copy from Existing Template" button after step 1 (page selection)
+- [ ] Wire button to open copy modal
+- [ ] Implement state update when copy is performed
+
+### Frontend - Template Copy Modal
+- [ ] Create modal component (left/right panel layout)
+- [ ] Implement template list with filtering (like main templates page)
+- [ ] Implement PDF preview with signature object + extraction field overlays
+- [ ] Implement source/new PDF toggle
+- [ ] Implement read-only pipeline viewer
+- [ ] Implement "Copy Structure" action
+
+### Frontend - State Update Logic
+- [ ] Implement signature object matching against new PDF
+- [ ] Update selectedSignatureObjects based on matches
+- [ ] Deep copy extraction fields from source template
+- [ ] Deep copy pipeline definition from source template
+
+### Testing
+- [ ] Test with template that has matching signature objects
+- [ ] Test with template that has NO matching signature objects
+- [ ] Test extraction field and pipeline copying
+- [ ] Test toggle between source/new PDF views
+- [ ] Test modal close without copying (no side effects)
 
 ---
 
@@ -284,9 +389,11 @@ New template type for forms that have no extractable data but contain a HAWB. Th
 
 **Summary:** The HTC Access database stores times in multiple inconsistent formats/regex styles. This causes errors when displaying old times or comparing them to new times in update-type pending actions. Need robust time parsing that handles all Access time format variations.
 
+**Note:** Specific formats to be cataloged during implementation by examining production database.
+
 - [ ] Identify where HTC time values are read/parsed
-- [ ] Catalog the various time formats found in Access database
-- [ ] Implement flexible time parser that handles all known formats
+- [ ] Query production database to catalog all time format variations
+- [ ] Implement flexible time parser that handles all discovered formats
 - [ ] Add fallback/error handling for unknown formats
 - [ ] Test with various time format samples from production data
 
@@ -299,6 +406,39 @@ New template type for forms that have no extractable data but contain a HAWB. Th
 - [ ] Add "View Template" button to sub-run detail modal
 - [ ] Navigate to template detail/edit page
 - [ ] Handle case where template was deleted or sub-run has no matched template
+
+---
+
+## 18. Manual Field Entry for Pending Actions
+
+**Summary:** Allow users to manually add or edit field values on pending actions. Useful for correcting extraction errors, filling in missing data, or providing values when automated processing fails. The database schema already supports user-provided values (`output_execution_id = NULL`), but the service layer and frontend need to be built out.
+
+**Use Cases:**
+- Fix incorrect extracted data
+- Provide value when field processing failed
+- Add data that wasn't on the original form
+- Override automated values with manual corrections
+
+- [ ] Implement service method for setting user-provided field values
+- [ ] Add API endpoint for manual field entry
+- [ ] Build frontend UI for adding/editing field values
+- [ ] Integrate with existing conflict resolution system
+- [ ] Handle validation of manually entered values
+- [ ] Test manual entry alongside automated extraction
+
+---
+
+## 19. Merge Adjacent PDF Text Boxes (Bug Fix)
+
+**Summary:** Some PDFs have text fragmented into multiple adjacent boxes (e.g., `[O][r][de][r]` instead of `[Order]`) due to how the sender built the PDF. If text boxes share a horizontal border (are touching), they should be merged into a single continuous text box during PDF object extraction.
+
+**Detection:** Two text boxes should merge if they share a horizontal border (right edge of box A touches left edge of box B, and vertical positions overlap).
+
+- [ ] Identify where PDF objects are extracted (likely pdfplumber processing)
+- [ ] Implement horizontal adjacency detection for text boxes
+- [ ] Merge adjacent boxes: combine text, extend bbox to cover both
+- [ ] Handle chains of multiple adjacent boxes (A-B-C should become one)
+- [ ] Test with PDFs that have fragmented text objects
 
 ---
 
