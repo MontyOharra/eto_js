@@ -57,7 +57,7 @@ Then **discuss the plan** before implementation begins.
 | 3 | Field Processing Error Handling (Decoupled) | 1 | 4 | [x] | [ ] | [ ] |
 | 13 | Improved Attachment Handling | 1 | 3 | [x] | [ ] | [ ] |
 | 15 | Create Template from Existing | 1 | 4 | [x] | [ ] | [ ] |
-| 19 | Merge Adjacent PDF Text Boxes | 1 | 2 | [x] | [ ] | [ ] |
+| 19 | Merge Adjacent PDF Text Boxes | 1 | 2 | [x] | [x] | [x] |
 | 9 | Summary Page Rework | 2 | 3 | [x] | [ ] | [ ] |
 | 11 | ETO Page: Group Runs by Email | 1 | 5 | [x] | [ ] | [ ] |
 | 12 | Navigate from Order Management to ETO | 2 | 1 | [x] | [ ] | [ ] |
@@ -545,11 +545,11 @@ Then **discuss the plan** before implementation begins.
 
 **Detection:** Two text boxes should merge if they share a horizontal border (right edge of box A touches left edge of box B, and vertical positions overlap).
 
-- [ ] Identify where PDF objects are extracted (likely pdfplumber processing)
-- [ ] Implement horizontal adjacency detection for text boxes
-- [ ] Merge adjacent boxes: combine text, extend bbox to cover both
-- [ ] Handle chains of multiple adjacent boxes (A-B-C should become one)
-- [ ] Test with PDFs that have fragmented text objects
+- [x] Identify where PDF objects are extracted (likely pdfplumber processing)
+- [x] Implement horizontal adjacency detection for text boxes
+- [x] Merge adjacent boxes: combine text, extend bbox to cover both
+- [x] Handle chains of multiple adjacent boxes (A-B-C should become one)
+- [x] Test with PDFs that have fragmented text objects
 
 ---
 
