@@ -11,10 +11,10 @@ This document tracks planned features with implementation checklists. Each featu
 | 15 | Create Template from Existing | 1 | 4 | [x] | [ ] | [ ] |
 | 19 | Merge Adjacent PDF Text Boxes | 1 | 2 | [x] | [ ] | [ ] |
 | 9 | Summary Page Rework | 2 | 3 | [x] | [ ] | [ ] |
-| 11 | ETO Page: Group Runs by Email | 2 | 5 | [ ] | [ ] | [ ] |
+| 11 | ETO Page: Group Runs by Email | 1 | 5 | [x] | [ ] | [ ] |
 | 12 | Navigate from Order Management to ETO | 2 | 1 | [x] | [ ] | [ ] |
 | 16 | HTC Time Format Parsing | 2 | 2 | [x] | [ ] | [ ] |
-| 18 | Manual Field Entry for Pending Actions | 2 | 3 | [ ] | [ ] | [ ] |
+| 18 | Manual Field Entry for Pending Actions | 2 | 3 | [x] | [ ] | [ ] |
 | 1 | Template Draft Saving | 3 | 4 | [x] | [ ] | [ ] |
 | 6 | Browse Template Matches / Set New Base | 3 | 3 | [x] | [ ] | [ ] |
 | 14 | Email Filter Rules: NOT/Negation | 3 | 2 | [x] | [ ] | [ ] |
@@ -25,6 +25,7 @@ This document tracks planned features with implementation checklists. Each featu
 | 7 | Conditional Error/Halt Module | 5 | 2 | [x] | [ ] | [ ] |
 | 8 | Extraction Field ↔ Pipeline Hover Highlighting | 5 | 2 | [x] | [ ] | [ ] |
 | 10 | Extraction Field Popup Overflow Fix | 5 | 1 | [x] | [ ] | [ ] |
+| 20 | ETO Bulk Actions | 3 | 2 | [x] | [ ] | [ ] |
 
 **Priority:** 1 = Critical, 2 = High, 3 = Medium, 4 = Low, 5 = Nice to have
 **Complexity:** 1 = Quick fix, 2 = Simple, 3 = Medium, 4 = Complex, 5 = Major rework
@@ -260,26 +261,50 @@ This document tracks planned features with implementation checklists. Each featu
 
 ---
 
-## 11. ETO Page: Group Runs by Email (Major Rework)
+## 11. ETO Page: Group Runs by Email
 
-**Summary:** Restructure the main ETO page to group runs by source email. Each row represents an email (with summary info), expandable to show all PDF runs from that email. Allows users to easily see "all these sub-runs came from one email." This is a significant change affecting filtering, dashboard layout, and data presentation.
+**Plan:** [`docs/plans/eto-email-grouping.md`](./plans/eto-email-grouping.md)
 
-**Considerations for detailed planning:**
-- Current: each row = one ETO run (one PDF)
-- Proposed: each row = one email, expandable to show child runs
-- How to handle manual/non-email runs (no email source)?
-- Filtering changes: filter by email metadata vs run metadata
-- Dashboard stats: aggregate by email or by run?
-- Status rollup: how to show email-level status when runs have mixed statuses?
+**Summary:** Visually group ETO runs by their source email. Multi-run emails get a header row with child run rows indented beneath. Single-run emails and manual uploads display as standalone rows (no header). Filtering still applies to runs, but returns all sibling runs from matching emails. No data model changes.
 
-**Checklist:**
-- [ ] Design new data structure/API for email-grouped view
-- [ ] Handle non-email runs (manual uploads, etc.)
-- [ ] Implement email row with summary info (sender, subject, date, run count, status rollup)
-- [ ] Implement expandable section showing child runs
-- [ ] Rework filtering to support email-level and run-level filters
-- [ ] Update dashboard/stats presentation
-- [ ] Ensure performance with large email/run counts
+**Key Decisions:**
+- Multi-run emails: Header row (sender, subject, date, PDF count) + indented run rows
+- Single-run emails / manual uploads: Standalone row, no header
+- Filters apply to runs, but return all siblings from matching emails
+- Pagination by source count (each email = 1, each manual upload = 1)
+- Sorting: MAX of time fields for email groups; `pdf_filename` sort removed
+- Runs within groups: always sorted by `last_processed_at` DESC
+- Headers are non-interactive, always expanded
+- Run rows unchanged (all existing fields preserved, slight left indent in groups)
+
+### Backend
+
+- [ ] Update `EtoRunRepository.list()` to return sibling runs from matching emails
+- [ ] Add `source_email_id` and `email_run_count` to `EtoRunListView`
+- [ ] Update pagination to count by source instead of by run
+- [ ] Update sorting to use MAX for time-based fields at email level
+- [ ] Remove `pdf_filename` sort option
+- [ ] Ensure runs within groups sorted by `last_processed_at` DESC
+- [ ] Update API schema with new fields
+
+### Frontend
+
+- [ ] Create `EtoEmailHeaderRow` component (sender, subject, date, PDF count)
+- [ ] Update `EtoRunsTable` to group runs by `source_email_id`
+- [ ] Render header + indented runs for multi-run groups
+- [ ] Render standalone row for single-run groups (no header)
+- [ ] Add left padding to grouped run rows
+- [ ] Update pagination display text
+
+### Testing
+
+- [ ] Test email with single PDF (no header)
+- [ ] Test email with multiple PDFs (header + grouped runs)
+- [ ] Test manual upload (no header)
+- [ ] Test filtering - verify sibling runs included
+- [ ] Test pagination by source count
+- [ ] Test all sort options
+- [ ] Test mixed page (emails + manual uploads)
 
 ---
 
@@ -411,20 +436,58 @@ This document tracks planned features with implementation checklists. Each featu
 
 ## 18. Manual Field Entry for Pending Actions
 
-**Summary:** Allow users to manually add or edit field values on pending actions. Useful for correcting extraction errors, filling in missing data, or providing values when automated processing fails. The database schema already supports user-provided values (`output_execution_id = NULL`), but the service layer and frontend need to be built out.
+**Plan:** [`docs/plans/manual-field-entry.md`](./plans/manual-field-entry.md)
 
-**Use Cases:**
-- Fix incorrect extracted data
-- Provide value when field processing failed
-- Add data that wasn't on the original form
-- Override automated values with manual corrections
+**Summary:** Allow users to manually add field values to pending actions. Manual entries are treated identically to extracted values - they create a new field option, trigger conflict resolution if values already exist, and become auto-selected. Works for any order field on any action type (create/update).
 
-- [ ] Implement service method for setting user-provided field values
-- [ ] Add API endpoint for manual field entry
-- [ ] Build frontend UI for adding/editing field values
-- [ ] Integrate with existing conflict resolution system
-- [ ] Handle validation of manually entered values
-- [ ] Test manual entry alongside automated extraction
+**Key Decisions:**
+- Manual entry = another extraction source (same conflict behavior)
+- User-provided values stored with `output_execution_id = NULL`
+- "Add Field" button → field picker (all fields) → type-specific input UI
+- Field types: simple text (inline), address (modal with HTC search + create), datetime (date + start/end time), dims (variable rows form)
+- Design must be extensible for future field types
+- `customer_id` and `hawb` not editable (from templates)
+
+### Backend
+
+- [ ] Implement `set_user_value()` in `OrderManagementService`
+- [ ] Add field type validation logic
+- [ ] Add `POST /pending-actions/{id}/fields` endpoint
+- [ ] Add request/response schemas
+- [ ] Handle address creation in HTC (for new addresses)
+- [ ] Test conflict behavior with existing values
+- [ ] Test status recalculation after adding field
+
+### Frontend - Core
+
+- [ ] Add "Add Field" button to pending action detail view
+- [ ] Create `AddFieldModal` component (field picker showing all fields)
+- [ ] Implement field type → input component mapping (extensible)
+- [ ] Create `useAddFieldValue` API hook
+- [ ] Wire up submit flow to invalidate/refresh pending action data
+
+### Frontend - Input Components
+
+- [ ] Create `TextFieldInput` component
+- [ ] Create `DateTimeFieldInput` component (date + start/end time, same day)
+- [ ] Create `AddressSelectionModal` component
+  - [ ] HTC address search
+  - [ ] Results display
+  - [ ] Create new address form
+- [ ] Create `DimsEntryForm` component
+  - [ ] Dynamic row add/remove
+  - [ ] Row inputs: qty, length, width, height, weight
+  - [ ] Validation (at least one row)
+
+### Testing
+
+- [ ] Test adding field to action with no existing values
+- [ ] Test adding field that already has values (conflict behavior)
+- [ ] Test each field type input
+- [ ] Test address search and creation
+- [ ] Test dims form with multiple rows
+- [ ] Test status transitions (incomplete → ready)
+- [ ] Test with both create and update action types
 
 ---
 
@@ -439,6 +502,64 @@ This document tracks planned features with implementation checklists. Each featu
 - [ ] Merge adjacent boxes: combine text, extend bbox to cover both
 - [ ] Handle chains of multiple adjacent boxes (A-B-C should become one)
 - [ ] Test with PDFs that have fragmented text objects
+
+---
+
+## 20. ETO Bulk Actions
+
+**Plan:** [`docs/plans/eto-bulk-actions.md`](./plans/eto-bulk-actions.md)
+
+**Summary:** Add bulk action UI to the ETO page. Backend already supports bulk reprocess, skip, and delete operations. Frontend needs selection UI and action buttons.
+
+**Key Decisions:**
+- Checkbox on each row + "Select all" checkbox in header
+- Action buttons at top of list, next to "Upload PDF" button
+- Buttons become active when runs selected, show valid count (e.g., "Delete (3 of 5)")
+- "Select all" selects only loaded/visible rows
+- Confirmation dialogs for skip and delete (not reprocess)
+- No checkbox on email headers (after #11) - only individual runs
+
+**Backend (Already Exists):**
+- `POST /eto-runs/reprocess` - any status
+- `POST /eto-runs/skip` - only failure/needs_template
+- `DELETE /eto-runs` - only skipped
+
+### Frontend - Selection
+
+- [ ] Add selection state management (Set of selected IDs)
+- [ ] Add checkbox column to `EtoRunsTable`
+- [ ] Implement row checkbox (toggle individual)
+- [ ] Implement header checkbox (select all visible)
+- [ ] Handle indeterminate state (some selected)
+- [ ] Clear selection after page change or filter change
+
+### Frontend - Action Buttons
+
+- [ ] Add bulk action buttons next to "Upload PDF" button
+- [ ] Calculate valid counts for each action based on selected run statuses
+- [ ] Display counts on buttons when > 0 valid
+- [ ] Disable buttons when no valid runs for that action
+
+### Frontend - Confirmation & Execution
+
+- [ ] Create confirmation dialog for Skip action
+- [ ] Create confirmation dialog for Delete action
+- [ ] Implement `useBulkReprocess` hook
+- [ ] Implement `useBulkSkip` hook
+- [ ] Implement `useBulkDelete` hook
+- [ ] Clear selection after successful action
+- [ ] Show success toast after action completes
+
+### Testing
+
+- [ ] Test selecting individual runs
+- [ ] Test select all / deselect all
+- [ ] Test action button states with mixed statuses
+- [ ] Test reprocess action (no confirmation)
+- [ ] Test skip action with confirmation
+- [ ] Test delete action with confirmation
+- [ ] Test that invalid runs are excluded from action
+- [ ] Test selection clears after action
 
 ---
 
