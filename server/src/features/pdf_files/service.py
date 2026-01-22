@@ -651,13 +651,19 @@ class PdfFilesService:
             lines_before_merge = len(graphic_lines)
             graphic_lines = self._merge_collinear_lines(graphic_lines, tolerance=2.0)
 
+            # Merge horizontally adjacent text words into single words
+            # This consolidates fragmented text boxes (e.g., [O][r][de][r] → [Order])
+            words_before_merge = len(text_words)
+            text_words = self._merge_adjacent_text_words(text_words, tolerance=0.5)
+
             total_objects = (
                 len(text_words) + len(graphic_rects) +
                 len(graphic_lines) + len(graphic_curves) + len(images) + len(tables)
             )
             logger.debug(
                 f"Extracted {total_objects} objects from {filename} "
-                f"({len(pdf.pages)} pages, lines: {lines_before_merge} → {len(graphic_lines)} after merge)"
+                f"({len(pdf.pages)} pages, lines: {lines_before_merge} → {len(graphic_lines)} after merge, "
+                f"words: {words_before_merge} → {len(text_words)} after merge)"
             )
 
             # Return typed container
@@ -1058,3 +1064,146 @@ class PdfFilesService:
         ))
 
         return merged
+
+    def _merge_adjacent_text_words(
+        self,
+        words: list[TextWord],
+        tolerance: float = 0.5
+    ) -> list[TextWord]:
+        """
+        Merge horizontally adjacent text words into single words.
+
+        Some PDFs fragment text into multiple adjacent boxes (e.g., [O][r][de][r]
+        instead of [Order]). This merges them when they share a horizontal border.
+
+        Only merges words that:
+        1. Are on the same page
+        2. Have matching vertical positions (y0 and y1 within tolerance)
+        3. Have matching fontname and fontsize
+        4. Are horizontally touching (x1 of word A == x0 of word B within tolerance)
+
+        Args:
+            words: List of TextWord objects to merge
+            tolerance: Coordinate tolerance for edge matching (floating-point precision)
+
+        Returns:
+            List of merged TextWord objects
+        """
+        if not words:
+            return []
+
+        # Group words by page
+        words_by_page: dict[int, list[TextWord]] = defaultdict(list)
+        for word in words:
+            words_by_page[word.page].append(word)
+
+        merged_words: list[TextWord] = []
+
+        for page_num, page_words in words_by_page.items():
+            # Group words by (y0, y1, fontname, fontsize) - must all match to merge
+            groups: dict[tuple[float, float, str, float], list[TextWord]] = defaultdict(list)
+
+            for word in page_words:
+                x0, y0, x1, y1 = word.bbox
+                # Round y coordinates for grouping (floating-point tolerance)
+                key = (
+                    round(y0 / tolerance) * tolerance,
+                    round(y1 / tolerance) * tolerance,
+                    word.fontname,
+                    round(word.fontsize / tolerance) * tolerance
+                )
+                groups[key].append(word)
+
+            # Process each group
+            for group_key, group_words in groups.items():
+                merged_group = self._merge_horizontal_word_chain(group_words, tolerance)
+                merged_words.extend(merged_group)
+
+        logger.debug(
+            f"Text word merging: {len(words)} input words → {len(merged_words)} merged words"
+        )
+
+        return merged_words
+
+    def _merge_horizontal_word_chain(
+        self,
+        words: list[TextWord],
+        tolerance: float
+    ) -> list[TextWord]:
+        """
+        Merge horizontally adjacent words within a single group.
+
+        Words in the input list already have matching (y0, y1, fontname, fontsize).
+        This finds chains where x1 of one word touches x0 of the next.
+
+        Args:
+            words: Words with matching vertical position and font
+            tolerance: Coordinate tolerance for edge touching
+
+        Returns:
+            List of merged words
+        """
+        if len(words) <= 1:
+            return list(words)
+
+        # Sort by x0 (left to right)
+        sorted_words = sorted(words, key=lambda w: w.bbox[0])
+
+        merged: list[TextWord] = []
+        current_chain: list[TextWord] = [sorted_words[0]]
+
+        for i in range(1, len(sorted_words)):
+            prev_word = current_chain[-1]
+            curr_word = sorted_words[i]
+
+            # Check if curr_word's left edge touches prev_word's right edge
+            prev_x1 = prev_word.bbox[2]  # right edge of previous
+            curr_x0 = curr_word.bbox[0]  # left edge of current
+
+            if abs(curr_x0 - prev_x1) <= tolerance:
+                # Adjacent - add to chain
+                current_chain.append(curr_word)
+            else:
+                # Gap - finalize current chain and start new one
+                merged.append(self._combine_word_chain(current_chain))
+                current_chain = [curr_word]
+
+        # Finalize last chain
+        merged.append(self._combine_word_chain(current_chain))
+
+        return merged
+
+    def _combine_word_chain(self, chain: list[TextWord]) -> TextWord:
+        """
+        Combine a chain of adjacent words into a single TextWord.
+
+        Args:
+            chain: List of adjacent TextWord objects (already sorted left-to-right)
+
+        Returns:
+            Single merged TextWord
+        """
+        if len(chain) == 1:
+            return chain[0]
+
+        first = chain[0]
+        last = chain[-1]
+
+        # Combine text (no separator - they were fragmented from a single word)
+        combined_text = ''.join(w.text for w in chain)
+
+        # Extend bbox horizontally
+        new_bbox = (
+            first.bbox[0],  # x0 from first
+            first.bbox[1],  # y0 from first (all should match)
+            last.bbox[2],   # x1 from last
+            first.bbox[3]   # y1 from first (all should match)
+        )
+
+        return TextWord(
+            page=first.page,
+            bbox=new_bbox,
+            text=combined_text,
+            fontname=first.fontname,
+            fontsize=first.fontsize
+        )

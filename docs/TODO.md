@@ -2,6 +2,54 @@
 
 This document tracks planned features with implementation checklists. Each feature has a detailed plan document in `docs/plans/`.
 
+---
+
+## Quick Start - Feature Development Workflow
+
+### 1. Branch Setup
+
+Before starting any feature work:
+
+1. **Ensure you are on `dev` branch:** `git checkout dev && git pull`
+2. **Create feature branch:** `git checkout -b feature/{feature-name}`
+3. **Push to remote:** `git push -u origin feature/{feature-name}`
+
+**Merge strategy:**
+- Feature branch → `dev`: After implementation AND testing complete
+- `dev` can accumulate multiple completed feature branches
+- `dev` → `master`: Only after all features in dev are conflict-free and pass final integration testing
+- Single feature shortcut: If only one feature in dev, can merge directly to master after testing
+
+### 2. Before Writing Code
+
+For each feature, review in order:
+
+1. **Summary** - Quick overview in the Progress Tracker section below
+2. **Detailed checklist** - Full breakdown in the numbered section for the feature
+3. **Plan document** - Referenced at top of each feature section (e.g., `docs/plans/{feature}.md`)
+
+Then **discuss the plan** before implementation begins.
+
+### 3. Complexity Considerations
+
+**Simple features:** Everything is fully planned with specific code references. Can proceed after brief review.
+
+**Complex features:** Require detailed discussion before implementation.
+
+### 4. Database & Type Changes
+
+**Avoid if possible:** Changes to database schema or persistence-level types should be avoided when feasible.
+
+**If changes are necessary, discuss:**
+- Data integrity implications
+- Migration strategy for existing data
+- For complex JSON columns (e.g., `pipeline_state` with deeply nested structures tied to backend typing):
+  - Option A: Migrate existing data to new format
+  - Option B: Implement backward compatibility in code
+- Test migration on copy of production data before applying
+
+---
+
 ## Progress Tracker
 
 | # | Item | Priority | Complexity | Plan | Implement | Test |
