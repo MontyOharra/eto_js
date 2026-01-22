@@ -79,11 +79,11 @@ This document tracks planned features with implementation checklists. Each featu
 
 ### Math Modules (Add, Subtract, Multiply, Divide)
 
-- [ ] Create `math_add.py` - sum all inputs
-- [ ] Create `math_subtract.py` - subtract inputs in order
-- [ ] Create `math_multiply.py` - product of all inputs
-- [ ] Create `math_divide.py` - divide inputs in order (with zero-check)
-- [ ] All modules: 2-unlimited inputs, 1 float output
+- [x] Create `math_add.py` - sum all inputs
+- [x] Create `math_subtract.py` - subtract inputs in order
+- [x] Create `math_multiply.py` - product of all inputs
+- [x] Create `math_divide.py` - divide inputs in order (with zero-check)
+- [x] All modules: 2-unlimited inputs, 1 float output
 - [ ] Test with various input counts and types
 
 ### LLM Processor Module
