@@ -9,8 +9,43 @@ REM Change to the directory where this script is located
 cd /d "%~dp0"
 
 echo ============================================================
-echo   Database Reset Script
+echo   DATABASE RESET SCRIPT - DESTRUCTIVE OPERATION
 echo ============================================================
+echo.
+echo WARNING: This will permanently delete:
+echo   - All logs
+echo   - All stored files (PDFs, attachments, etc.)
+echo   - The entire database (all tables, all data)
+echo.
+echo ============================================================
+echo.
+
+REM First confirmation
+set /p confirm1="Are you sure you want to reset the entire server? (yes/no): "
+if /i not "%confirm1%"=="yes" (
+    echo.
+    echo Reset cancelled.
+    pause
+    exit /b 0
+)
+
+echo.
+echo ============================================================
+echo   FINAL WARNING - THIS CANNOT BE UNDONE
+echo ============================================================
+echo.
+echo Type exactly: yes i do
+echo.
+set /p confirm2="I REALLY DO WANT TO DESTROY EVERYTHING: "
+if not "%confirm2%"=="yes i do" (
+    echo.
+    echo Reset cancelled. You must type exactly "yes i do" to confirm.
+    pause
+    exit /b 0
+)
+
+echo.
+echo Proceeding with reset...
 echo.
 
 REM Step 1: Clear logs and storage
