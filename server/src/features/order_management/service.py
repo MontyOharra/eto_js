@@ -1705,9 +1705,15 @@ class OrderManagementService:
 
     def _get_pdf_sources_for_action(self, pending_action_id: int) -> list[PdfSource]:
         """
-        Get PDF file information from all sub-runs that contributed to this pending action.
+        Get PDF file information from all emails that contributed to this pending action.
 
-        Data path: pending_action_fields → output_execution → eto_sub_run → eto_run → pdf_file
+        Changed from previous behavior: Now returns ALL PDFs from contributing emails,
+        not just the ones that had data extracted. This ensures forms like BOLs, PODs,
+        etc. get attached even if they didn't match a template.
+
+        Data path:
+          pending_action_fields → output_execution → sub_run → run → source_email
+          → ALL runs with that email → ALL pdf_files
 
         Args:
             pending_action_id: ID of the pending action
@@ -1723,38 +1729,62 @@ class OrderManagementService:
             f.output_execution_id for f in fields if f.output_execution_id is not None
         )
 
-        # Track seen pdf_file_ids to avoid duplicates
+        # Collect unique source_email_ids and pdf_file_ids from runs without source emails
+        source_email_ids: set[int] = set()
+        manual_pdf_ids: set[int] = set()  # PDFs from manual uploads (no source_email_id)
+
+        for output_execution_id in output_execution_ids:
+            output_execution = self.output_execution_repo.get_by_id(output_execution_id)
+            if not output_execution:
+                continue
+
+            sub_run = self.eto_sub_run_repo.get_by_id(output_execution.sub_run_id)
+            if not sub_run:
+                continue
+
+            run = self.eto_run_repo.get_by_id(sub_run.eto_run_id)
+            if not run:
+                continue
+
+            if run.source_email_id:
+                source_email_ids.add(run.source_email_id)
+            else:
+                # Manual upload - collect the PDF directly
+                manual_pdf_ids.add(run.pdf_file_id)
+
+        # Get ALL PDFs from contributing emails
         seen_pdf_ids: set[int] = set()
         pdf_sources: list[PdfSource] = []
 
-        for output_execution_id in output_execution_ids:
-            # Get output execution to find sub_run_id
-            output_execution = self.output_execution_repo.get_by_id(output_execution_id)
-            if not output_execution:
-                logger.warning(f"Output execution {output_execution_id} not found")
-                continue
+        for email_id in source_email_ids:
+            # Get all runs that came from this email
+            email_runs = self.eto_run_repo.get_by_source_email_id(email_id)
 
-            # Get sub_run to find eto_run_id
-            sub_run = self.eto_sub_run_repo.get_by_id(output_execution.sub_run_id)
-            if not sub_run:
-                logger.warning(f"Sub-run {output_execution.sub_run_id} not found")
-                continue
+            for run in email_runs:
+                if run.pdf_file_id in seen_pdf_ids:
+                    continue
+                seen_pdf_ids.add(run.pdf_file_id)
 
-            # Get run to find pdf_file_id
-            run = self.eto_run_repo.get_by_id(sub_run.eto_run_id)
-            if not run:
-                logger.warning(f"Run {sub_run.eto_run_id} not found")
-                continue
+                pdf_file = self.pdf_file_repo.get_by_id(run.pdf_file_id)
+                if not pdf_file:
+                    logger.warning(f"PDF file {run.pdf_file_id} not found for run {run.id}")
+                    continue
 
-            # Skip if we've already seen this PDF
-            if run.pdf_file_id in seen_pdf_ids:
-                continue
-            seen_pdf_ids.add(run.pdf_file_id)
+                pdf_sources.append(PdfSource(
+                    pdf_file_id=pdf_file.id,
+                    original_filename=pdf_file.original_filename,
+                    file_path=pdf_file.file_path,
+                ))
 
-            # Get PDF file info
-            pdf_file = self.pdf_file_repo.get_by_id(run.pdf_file_id)
+        # Add PDFs from manual uploads
+        for pdf_id in manual_pdf_ids:
+            if pdf_id in seen_pdf_ids:
+                continue
+            seen_pdf_ids.add(pdf_id)
+
+            pdf_file = self.pdf_file_repo.get_by_id(pdf_id)
             if not pdf_file:
-                logger.warning(f"PDF file {run.pdf_file_id} not found for run {run.id}")
+                logger.warning(f"PDF file {pdf_id} not found (manual upload)")
                 continue
 
             pdf_sources.append(PdfSource(
@@ -1763,7 +1793,10 @@ class OrderManagementService:
                 file_path=pdf_file.file_path,
             ))
 
-        logger.debug(f"Found {len(pdf_sources)} unique PDF files for pending action {pending_action_id}")
+        logger.debug(
+            f"Found {len(pdf_sources)} PDF files from {len(source_email_ids)} emails "
+            f"and {len(manual_pdf_ids)} manual uploads for pending action {pending_action_id}"
+        )
         return pdf_sources
 
     def retry_failed_action(self, pending_action_id: int) -> None:
