@@ -376,6 +376,7 @@ export interface PendingActionListItem {
   optional_fields_total: number;
   field_names: string[];  // List of field names being updated
   conflict_count: number;
+  error_field_count: number;  // Count of fields with processing_status='failed'
   error_message: string | null;  // Error message for failed actions
   is_read: boolean;
   created_at: string;
@@ -404,6 +405,9 @@ export interface PendingActionFieldItem {
   is_selected: boolean;
   is_approved_for_update: boolean;
   sub_run_id: number | null; // null for user-provided values
+  processing_status: 'success' | 'failed';
+  processing_error: string | null;
+  raw_value: string | null;
 }
 
 /**

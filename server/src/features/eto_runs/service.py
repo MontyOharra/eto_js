@@ -1152,15 +1152,16 @@ class EtoRunsService:
         Execute output channel processing stage for a single sub-run.
 
         Creates output execution record(s) for each HAWB and calls the
-        OutputProcessingService to process them.
+        OrderManagementService to process them.
+
+        IMPORTANT: This method never fails the sub-run based on field processing errors.
+        The sub-run is considered successful once raw output data is stored. Individual
+        field processing failures are recorded per-field and don't affect sub-run status.
 
         Args:
             sub_run_id: Sub-run ID
             output_channel_values: Output channel values from pipeline execution
             customer_id: Customer ID from the template
-
-        Raises:
-            Exception: If output execution fails
         """
         logger.monitor(f"Sub-run {sub_run_id}: Executing output channel processing stage")
 
@@ -1186,17 +1187,24 @@ class EtoRunsService:
             logger.debug(f"Sub-run {sub_run_id}: Created output_execution record {output_execution.id} for HAWB {hawb}")
 
             # Process via OrderManagementService - creates/updates pending action
-            # Returns None if update has no changed fields compared to HTC
-            pending_action = self.order_management_service.process_output_execution(output_execution.id)
-            if pending_action:
-                logger.debug(
-                    f"Sub-run {sub_run_id}: Processed output_execution {output_execution.id} -> "
-                    f"pending_action {pending_action.id} (status={pending_action.status})"
-                )
+            # NEVER raises - all errors captured per-field in the result
+            result = self.order_management_service.process_output_execution(output_execution.id)
+
+            # Log result - field failures don't fail the sub-run
+            if result.pending_action_id:
+                if result.has_failures:
+                    logger.warning(
+                        f"Sub-run {sub_run_id}: Output execution {output_execution.id} processed with field errors: "
+                        f"success={result.successful_fields}, failed={result.failed_fields}"
+                    )
+                else:
+                    logger.debug(
+                        f"Sub-run {sub_run_id}: Processed output_execution {output_execution.id} -> "
+                        f"pending_action {result.pending_action_id} (fields={result.successful_fields})"
+                    )
             else:
                 logger.debug(
-                    f"Sub-run {sub_run_id}: Output execution {output_execution.id} had no changes - "
-                    f"no pending action created"
+                    f"Sub-run {sub_run_id}: Output execution {output_execution.id} produced no pending action"
                 )
 
         logger.monitor(f"Sub-run {sub_run_id}: Output execution completed for {len(hawbs)} HAWB(s)")

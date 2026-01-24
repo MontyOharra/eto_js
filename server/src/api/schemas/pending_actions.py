@@ -4,7 +4,7 @@ Pending Actions API Schemas
 Pydantic models for pending actions list and detail endpoints.
 """
 from datetime import datetime
-from typing import Any
+from typing import Any, Literal
 
 from pydantic import BaseModel
 
@@ -34,6 +34,7 @@ class PendingActionListItem(BaseModel):
     optional_fields_total: int
     field_names: list[str]  # List of field names (for updates, shown as comma-separated)
     conflict_count: int
+    error_field_count: int  # Count of fields with processing_status='failed'
     error_message: str | None  # Error message for failed actions
     is_read: bool
     created_at: datetime
@@ -66,6 +67,9 @@ class PendingActionFieldItem(BaseModel):
     is_selected: bool
     is_approved_for_update: bool
     sub_run_id: int | None  # None for user-provided values
+    processing_status: Literal["success", "failed"]
+    processing_error: str | None
+    raw_value: str | None
 
 
 class ContributingSourceItem(BaseModel):

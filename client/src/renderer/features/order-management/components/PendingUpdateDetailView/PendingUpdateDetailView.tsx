@@ -31,12 +31,16 @@ interface PendingUpdateFieldDetail {
   source: { history_id: number } | null;
   sub_run_id: number | null; // For cross-highlighting with source cards
   is_approved_for_update: boolean; // Whether this field will be included in the update
+  processing_status: 'success' | 'failed';
+  processing_error: string | null;
 }
 
 interface ConflictOption {
   history_id: number;
   value: unknown;
   contributed_at: string;
+  processing_status: 'success' | 'failed';
+  processing_error: string | null;
 }
 
 // Alias for source type
@@ -114,8 +118,14 @@ function FieldDropdown({ field, localSelection, onSelect, isConflict }: FieldDro
     ? options.find((o) => o.history_id === localSelection.selectedHistoryId)
     : null;
 
+  // Check if the currently displayed option is failed
+  const isSelectedFailed = localSelectedOption?.processing_status === 'failed' || field.processing_status === 'failed';
+  const selectedError = localSelectedOption?.processing_error ?? field.processing_error;
+
   const rawDisplayValue = localSelectedOption?.value ?? localSelection?.selectedValue ?? field.proposed_value;
-  const displayValue = formatFieldValue(rawDisplayValue, field.data_type);
+  const displayValue = isSelectedFailed && selectedError
+    ? `Error: ${selectedError}`
+    : formatFieldValue(rawDisplayValue, field.data_type);
 
   // Determine which option is currently "active" (for highlighting in dropdown)
   // This is either the local selection or the currently confirmed value
@@ -126,12 +136,14 @@ function FieldDropdown({ field, localSelection, onSelect, isConflict }: FieldDro
       <button
         onClick={() => setIsOpen(!isOpen)}
         className={`w-full flex items-center justify-between gap-2 px-2 py-1 rounded border text-sm text-left ${
-          isConflict
-            ? 'bg-yellow-500/10 border-yellow-500/50 text-yellow-400'
-            : 'bg-gray-700 border-gray-600 text-white'
+          isSelectedFailed
+            ? 'bg-red-500/10 border-red-500/50 text-red-400'
+            : isConflict
+              ? 'bg-yellow-500/10 border-yellow-500/50 text-yellow-400'
+              : 'bg-gray-700 border-gray-600 text-white'
         }`}
       >
-        <span className="truncate">{displayValue || 'Choose value...'}</span>
+        <span className={`truncate ${isSelectedFailed ? 'italic' : ''}`}>{displayValue || 'Choose value...'}</span>
         <svg
           className={`w-4 h-4 flex-shrink-0 transition-transform ${isOpen ? 'rotate-180' : ''}`}
           fill="none"
@@ -151,6 +163,10 @@ function FieldDropdown({ field, localSelection, onSelect, isConflict }: FieldDro
           <div className="absolute top-full left-0 right-0 mt-1 bg-gray-800 border border-gray-600 rounded-lg shadow-xl z-20 overflow-hidden max-h-48 overflow-y-auto">
             {options.map((option) => {
               const isActive = option.history_id === activeHistoryId;
+              const isOptionFailed = option.processing_status === 'failed';
+              const optionDisplayValue = isOptionFailed && option.processing_error
+                ? `Error: ${option.processing_error}`
+                : formatFieldValue(option.value, field.data_type);
               return (
                 <button
                   key={option.history_id}
@@ -160,12 +176,17 @@ function FieldDropdown({ field, localSelection, onSelect, isConflict }: FieldDro
                   }}
                   className={`w-full px-3 py-2 text-left hover:bg-gray-700 transition-colors ${
                     isActive ? 'bg-gray-700' : ''
-                  }`}
+                  } ${isOptionFailed ? 'border-l-2 border-red-500' : ''}`}
                 >
                   <div className="flex items-center gap-2">
-                    <span className="text-sm text-white">{formatFieldValue(option.value, field.data_type)}</span>
+                    <span className={`text-sm ${isOptionFailed ? 'text-red-400 italic' : 'text-white'}`}>
+                      {optionDisplayValue}
+                    </span>
                     {isActive && !isConflict && (
                       <span className="text-xs text-blue-400">(current)</span>
+                    )}
+                    {isOptionFailed && (
+                      <span className="text-xs text-red-400">(failed)</span>
                     )}
                   </div>
                   <div className="text-xs text-gray-500">{formatDate(option.contributed_at)}</div>
@@ -198,6 +219,7 @@ interface FieldRowProps {
 
 function FieldRow({ field, localSelection, onConflictSelect, onConfirm, onToggleApproval, isConfirming, isTogglingApproval, canEdit, isHighlighted, onHover }: FieldRowProps) {
   const isConflict = field.state === 'conflict';
+  const isFailed = field.processing_status === 'failed';
   const hasMultipleOptions = (field.conflict_options?.length ?? 0) > 1;
   const hasLocalSelection = localSelection?.selectedHistoryId !== null;
   const isApproved = field.is_approved_for_update;
@@ -224,9 +246,11 @@ function FieldRow({ field, localSelection, onConflictSelect, onConfirm, onToggle
   // Format current HTC value
   const currentValue = formatFieldValue(field.current_value, field.data_type);
 
-  // Get the new value to display
+  // Get the new value to display - for failed fields, show error message
   const newValue = localSelection?.selectedValue ?? field.proposed_value;
-  const formattedNewValue = formatFieldValue(newValue, field.data_type);
+  const formattedNewValue = isFailed && field.processing_error
+    ? `Error: ${field.processing_error}`
+    : formatFieldValue(newValue, field.data_type);
 
   // Show dropdown if there are multiple options (conflict or confirmed with history)
   // But only if the update is editable (pending status)
@@ -241,9 +265,11 @@ function FieldRow({ field, localSelection, onConflictSelect, onConfirm, onToggle
             ? 'bg-gray-800/30 border-gray-700/50 opacity-60'
             : isHighlighted
               ? 'bg-blue-500/20 border-blue-500/50 ring-1 ring-blue-500/50'
-              : isConflict
-                ? 'bg-yellow-500/5 border-yellow-500/30'
-                : 'bg-gray-800/50 border-gray-700'
+              : isFailed
+                ? 'bg-red-500/5 border-red-500/30'
+                : isConflict
+                  ? 'bg-yellow-500/5 border-yellow-500/30'
+                  : 'bg-gray-800/50 border-gray-700'
         }`}
         onMouseEnter={() => onHover(field.name)}
         onMouseLeave={() => onHover(null)}
@@ -251,7 +277,10 @@ function FieldRow({ field, localSelection, onConflictSelect, onConfirm, onToggle
         <div className="flex items-start gap-3">
           {/* Label - fixed width on left */}
           <div className="w-32 flex-shrink-0 flex items-center gap-2 pt-0.5">
-            {isConflict && (
+            {isFailed && (
+              <span className="text-red-400 text-sm">✕</span>
+            )}
+            {isConflict && !isFailed && (
               <span className="text-yellow-400 text-sm">⚠</span>
             )}
             <span className={`text-sm ${isApproved ? 'text-gray-400' : 'text-gray-500 line-through'}`}>{field.label}</span>
@@ -300,7 +329,13 @@ function FieldRow({ field, localSelection, onConflictSelect, onConfirm, onToggle
                   )}
                 </>
               ) : (
-                <span className={`text-sm break-words ${isApproved ? 'text-white' : 'text-gray-500'}`}>
+                <span className={`text-sm break-words ${
+                  isFailed
+                    ? 'text-red-400 italic'
+                    : isApproved
+                      ? 'text-white'
+                      : 'text-gray-500'
+                }`}>
                   {formattedNewValue || <span className="italic text-gray-500">Empty</span>}
                 </span>
               )}
@@ -463,6 +498,8 @@ export function PendingUpdateDetailView({
           source: null,
           sub_run_id: null,
           is_approved_for_update: true,
+          processing_status: 'success', // Completed actions are always successful
+          processing_error: null,
         });
       }
 
@@ -525,6 +562,8 @@ export function PendingUpdateDetailView({
             history_id: item.id,
             value: item.value,
             contributed_at: update.updated_at,
+            processing_status: item.processing_status,
+            processing_error: item.processing_error,
           }))
         : null;
 
@@ -534,6 +573,10 @@ export function PendingUpdateDetailView({
       // Get is_approved_for_update - all values for a field share the same approval status
       // Default to true if no field items exist
       const isApprovedForUpdate = fieldItems.length > 0 ? fieldItems[0].is_approved_for_update : true;
+
+      // Get processing status from selected or single item
+      const processingStatus = selectedItem?.processing_status ?? (fieldItems.length === 1 ? fieldItems[0].processing_status : 'success');
+      const processingError = selectedItem?.processing_error ?? (fieldItems.length === 1 ? fieldItems[0].processing_error : null);
 
       result.push({
         name: fieldName,
@@ -547,6 +590,8 @@ export function PendingUpdateDetailView({
         source: sourceRef,
         sub_run_id: subRunId,
         is_approved_for_update: isApprovedForUpdate,
+        processing_status: processingStatus ?? 'success',
+        processing_error: processingError ?? null,
       });
     }
 

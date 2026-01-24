@@ -7,9 +7,9 @@ from output executions and manual input, execution against HTC, and user interac
 import json
 import logging
 import threading
-from dataclasses import asdict
+from dataclasses import asdict, dataclass, field
 from datetime import datetime, timezone
-from typing import Any, TYPE_CHECKING
+from typing import Any, Literal, TYPE_CHECKING
 
 from shared.database import DatabaseConnectionManager
 from shared.database.repositories.pending_action import PendingActionRepository
@@ -60,6 +60,45 @@ from shared.events.order_events import order_event_manager
 from .transformers import FIELD_TRANSFORMERS
 
 logger = logging.getLogger(__name__)
+
+
+# =============================================================================
+# Result Types for Per-Field Processing
+# =============================================================================
+
+@dataclass
+class FieldProcessingResult:
+    """Result of processing a single field."""
+    field_name: str
+    status: Literal["success", "failed"]
+    error: str | None = None
+
+
+@dataclass
+class OutputProcessingResult:
+    """
+    Aggregated result of processing all fields from an output execution.
+
+    This is returned by process_output_execution() and NEVER raises - all
+    errors are captured per-field in the results list.
+    """
+    pending_action_id: int | None  # None if no action created (e.g., no fields)
+    field_results: list[FieldProcessingResult] = field(default_factory=list)
+
+    @property
+    def has_failures(self) -> bool:
+        """True if any field failed processing."""
+        return any(f.status == "failed" for f in self.field_results)
+
+    @property
+    def failed_fields(self) -> list[str]:
+        """List of field names that failed processing."""
+        return [f.field_name for f in self.field_results if f.status == "failed"]
+
+    @property
+    def successful_fields(self) -> list[str]:
+        """List of field names that processed successfully."""
+        return [f.field_name for f in self.field_results if f.status == "success"]
 
 class OrderManagementService:
     """
@@ -131,92 +170,121 @@ class OrderManagementService:
 
     # ========== Main Entry Point ==========
 
-    def process_output_execution(self, output_execution_id: int) -> PendingAction | None:
+    def process_output_execution(self, output_execution_id: int) -> OutputProcessingResult:
         """
         Main entry point - processes a single output execution record.
 
         Called by EtoRunsService after creating the output_execution data snapshot.
 
+        IMPORTANT: This method NEVER raises exceptions. All errors are captured
+        per-field in the returned OutputProcessingResult. This allows sub-runs
+        to succeed even when some field transformations fail.
+
         Args:
             output_execution_id: ID of the output execution to process
 
         Returns:
-            The created or updated PendingAction, or None if the output had no
-            changes compared to HTC (for updates only - creates always return an action)
+            OutputProcessingResult with per-field success/failure information
         """
         # 1. Load the data snapshot
         output_execution = self.output_execution_repo.get_by_id(output_execution_id)
         if not output_execution:
-            raise ValueError(f"Output execution {output_execution_id} not found")
+            logger.error(f"Output execution {output_execution_id} not found")
+            return OutputProcessingResult(pending_action_id=None)
 
         # 2. Determine action type by checking HTC for existing orders
-        action_type, htc_order_number = self._determine_action_type(
-            customer_id=output_execution.customer_id,
-            hawb=output_execution.hawb,
-        )
-
-        # 3. Transform output channels -> order fields
-        order_fields = self._transform_output_to_fields(
-            output_channel_data=output_execution.output_channel_data,
-        )
-
-        # 3b. Resolve address IDs for location fields
-        order_fields = self._resolve_address_ids(order_fields)
-
-        # 3c. For updates, identify which fields differ from current HTC values.
-        # We store ALL fields but track which ones changed for approval status.
-        changed_fields: set[str] | None = None
-        if action_type == "update" and htc_order_number is not None:
-            order_fields, changed_fields = self._identify_changed_fields(
-                order_fields, htc_order_number
+        try:
+            action_type, htc_order_number = self._determine_action_type(
+                customer_id=output_execution.customer_id,
+                hawb=output_execution.hawb,
             )
-            if not order_fields:
-                logger.info(
-                    f"No fields to store for update on HAWB '{output_execution.hawb}' - "
-                    f"skipping pending action creation"
-                )
-                return None
+        except Exception as e:
+            logger.error(f"Failed to determine action type: {e}")
+            return OutputProcessingResult(pending_action_id=None)
 
-        # 4. Check if pending action already exists (for event type determination)
+        # 3. Check if pending action already exists (for event type determination)
         existing_action = self.pending_action_repo.get_active_by_customer_hawb(
             customer_id=output_execution.customer_id,
             hawb=output_execution.hawb,
         )
         is_new_action = existing_action is None
 
-        # 5. Find or create the pending action record
-        pending_action = self._get_or_create_pending_action(
-            customer_id=output_execution.customer_id,
-            hawb=output_execution.hawb,
-            action_type=action_type,
-            htc_order_number=htc_order_number,
-        )
+        # 4. Find or create the pending action record
+        try:
+            pending_action = self._get_or_create_pending_action(
+                customer_id=output_execution.customer_id,
+                hawb=output_execution.hawb,
+                action_type=action_type,
+                htc_order_number=htc_order_number,
+            )
+        except Exception as e:
+            logger.error(f"Failed to create/get pending action: {e}")
+            return OutputProcessingResult(pending_action_id=None)
 
-        # 6. Add field values to pending action (handles conflict detection)
-        self._add_fields_to_action(
+        # 5. For updates, get current HTC values for changed field detection
+        current_htc_values: dict[str, Any] | None = None
+        if action_type == "update" and htc_order_number is not None:
+            try:
+                htc_fields = self.htc_service.get_order_fields(order_number=htc_order_number)
+                if htc_fields:
+                    from features.order_management.transformers import transform_htc_values_to_order_fields
+                    current_htc_values = transform_htc_values_to_order_fields(asdict(htc_fields))
+            except Exception as e:
+                logger.warning(f"Could not fetch HTC values for comparison: {e}")
+
+        # 6. Process each field independently - never let one field's failure affect others
+        field_results = self._process_fields_independently(
             pending_action_id=pending_action.id,
             output_execution_id=output_execution_id,
-            fields=order_fields,
-            changed_fields=changed_fields,
+            output_channel_data=output_execution.output_channel_data,
+            action_type=action_type,
+            current_htc_values=current_htc_values,
         )
 
         # 7. Recalculate action status based on current field state
-        updated_action = self._recalculate_action_status(pending_action.id)
+        try:
+            updated_action = self._recalculate_action_status(pending_action.id)
+        except Exception as e:
+            logger.error(f"Failed to recalculate action status: {e}")
+            # Return what we have - fields were processed
+            return OutputProcessingResult(
+                pending_action_id=pending_action.id,
+                field_results=field_results,
+            )
 
         # 8. Broadcast event for real-time UI updates
-        event_type = "pending_action_created" if is_new_action else "pending_action_updated"
-        order_event_manager.broadcast_sync(
-            event_type,
-            {
-                "id": updated_action.id,
-                "status": updated_action.status,
-                "action_type": updated_action.action_type,
-                "hawb": updated_action.hawb,
-                "customer_id": updated_action.customer_id,
-            }
-        )
+        try:
+            event_type = "pending_action_created" if is_new_action else "pending_action_updated"
+            order_event_manager.broadcast_sync(
+                event_type,
+                {
+                    "id": updated_action.id,
+                    "status": updated_action.status,
+                    "action_type": updated_action.action_type,
+                    "hawb": updated_action.hawb,
+                    "customer_id": updated_action.customer_id,
+                }
+            )
+        except Exception as e:
+            logger.warning(f"Failed to broadcast event: {e}")
 
-        return updated_action
+        # Log summary
+        result = OutputProcessingResult(
+            pending_action_id=updated_action.id,
+            field_results=field_results,
+        )
+        if result.has_failures:
+            logger.warning(
+                f"Output execution {output_execution_id} processed with failures: "
+                f"success={result.successful_fields}, failed={result.failed_fields}"
+            )
+        else:
+            logger.debug(
+                f"Output execution {output_execution_id} processed successfully: "
+                f"fields={result.successful_fields}"
+            )
+
+        return result
 
     # ========== Sub-Methods (Processing) ==========
 
@@ -334,6 +402,412 @@ class OrderManagementService:
                     htc_order_number=htc_order_number,
                 ),
             )
+
+    def _process_fields_independently(
+        self,
+        pending_action_id: int,
+        output_execution_id: int,
+        output_channel_data: dict[str, Any],
+        action_type: PendingActionType,
+        current_htc_values: dict[str, Any] | None,
+    ) -> list[FieldProcessingResult]:
+        """
+        Process each field independently, capturing errors per-field.
+
+        This is the core of the decoupled error handling - each field is processed
+        in isolation, so one field's failure doesn't affect others.
+
+        Args:
+            pending_action_id: ID of the pending action to add fields to
+            output_execution_id: ID of the source output execution
+            output_channel_data: Raw output channel data from pipeline
+            action_type: Whether this is a create or update
+            current_htc_values: Current HTC values for change detection (updates only)
+
+        Returns:
+            List of FieldProcessingResult for each processed field
+        """
+        results: list[FieldProcessingResult] = []
+
+        # Iterate over all defined order fields
+        for field_name, field_def in ORDER_FIELDS.items():
+            # Extract source channel values for this field
+            source_values = {
+                channel: output_channel_data.get(channel)
+                for channel in field_def.source_channels
+            }
+
+            # Skip if no source channels have values
+            if not any(v is not None for v in source_values.values()):
+                continue
+
+            # Process this single field with error isolation
+            result = self._process_single_field(
+                pending_action_id=pending_action_id,
+                output_execution_id=output_execution_id,
+                field_name=field_name,
+                field_def=field_def,
+                source_values=source_values,
+                action_type=action_type,
+                current_htc_values=current_htc_values,
+            )
+            results.append(result)
+
+        return results
+
+    def _process_single_field(
+        self,
+        pending_action_id: int,
+        output_execution_id: int,
+        field_name: str,
+        field_def: Any,  # OrderFieldDef
+        source_values: dict[str, Any],
+        action_type: PendingActionType,
+        current_htc_values: dict[str, Any] | None,
+    ) -> FieldProcessingResult:
+        """
+        Process a single field with full error isolation. Never raises.
+
+        Attempts transformation, address resolution (for location fields),
+        and stores the result. On any failure, stores the field with
+        processing_status='failed' and the error message.
+
+        Args:
+            pending_action_id: ID of the pending action
+            output_execution_id: ID of the source output execution
+            field_name: Name of the field being processed
+            field_def: Field definition from ORDER_FIELDS
+            source_values: Raw source channel values for this field
+            action_type: Whether this is a create or update
+            current_htc_values: Current HTC values for change detection
+
+        Returns:
+            FieldProcessingResult indicating success or failure
+        """
+        raw_value_json = json.dumps(source_values)
+
+        try:
+            # Step 1: Transform using the appropriate transformer
+            transformer = FIELD_TRANSFORMERS.get(field_def.data_type)
+            if not transformer:
+                raise ValueError(f"No transformer for data_type: {field_def.data_type}")
+
+            transformed_value = transformer(source_values)
+            if transformed_value is None:
+                # No value produced - skip storing
+                return FieldProcessingResult(field_name=field_name, status="success")
+
+            # Step 2: For location fields, resolve address ID with fallback
+            if field_name in ("pickup_location", "delivery_location"):
+                transformed_value = self._resolve_location_with_fallback(
+                    field_name=field_name,
+                    location_value=transformed_value,
+                    raw_source_values=source_values,
+                )
+
+            # Step 3: Determine if this field changed from HTC (for updates)
+            is_changed = True  # Default: always approve for creates
+            if action_type == "update" and current_htc_values is not None:
+                is_changed = self._is_field_changed(
+                    field_name=field_name,
+                    proposed_value=transformed_value,
+                    htc_value=current_htc_values.get(field_name),
+                )
+                if not is_changed:
+                    # For updates, skip unchanged fields entirely
+                    logger.debug(f"Skipping unchanged field '{field_name}'")
+                    return FieldProcessingResult(field_name=field_name, status="success")
+
+            # Step 4: Store the field value
+            self._store_field_value(
+                pending_action_id=pending_action_id,
+                output_execution_id=output_execution_id,
+                field_name=field_name,
+                value=transformed_value,
+                raw_value=raw_value_json,
+                processing_status="success",
+                processing_error=None,
+                is_approved_for_update=is_changed,
+            )
+
+            return FieldProcessingResult(field_name=field_name, status="success")
+
+        except Exception as e:
+            logger.warning(f"Field '{field_name}' processing failed: {e}")
+
+            # Store the failed field with error info
+            try:
+                self._store_field_value(
+                    pending_action_id=pending_action_id,
+                    output_execution_id=output_execution_id,
+                    field_name=field_name,
+                    value=None,  # No transformed value
+                    raw_value=raw_value_json,
+                    processing_status="failed",
+                    processing_error=str(e),
+                    is_approved_for_update=False,  # Failed fields not approved
+                )
+            except Exception as store_error:
+                logger.error(f"Failed to store error for field '{field_name}': {store_error}")
+
+            return FieldProcessingResult(
+                field_name=field_name,
+                status="failed",
+                error=str(e),
+            )
+
+    def _resolve_location_with_fallback(
+        self,
+        field_name: str,
+        location_value: LocationValue,
+        raw_source_values: dict[str, Any],
+    ) -> LocationValue:
+        """
+        Resolve address ID for a location field with cascading fallback.
+
+        Fallback order:
+        1. Try usaddress-based parsing (existing HTC lookup)
+        2. Try LLM-based address parsing (future implementation)
+        3. Raise if all methods fail
+
+        Args:
+            field_name: Name of the location field
+            location_value: Transformed LocationValue to resolve
+            raw_source_values: Original source values for LLM fallback
+
+        Returns:
+            LocationValue with resolved address_id (or None if unresolvable)
+
+        Raises:
+            ValueError: If address cannot be resolved by any method
+        """
+        # If already has address_id, no resolution needed
+        if location_value.address_id is not None:
+            return location_value
+
+        address = location_value.address
+        if not address:
+            # No address to resolve - return as-is
+            return location_value
+
+        # Try primary method: HTC address lookup with usaddress parsing
+        try:
+            address_id = self.htc_service.find_address_id(address)
+            if address_id is not None:
+                logger.debug(f"Resolved {field_name} address_id via HTC lookup: {address_id}")
+                # Get canonical address info from HTC
+                addr_info = self.htc_service.get_address_info(address_id)
+                if addr_info:
+                    formatted_address = addr_info.addr_ln1
+                    if addr_info.addr_ln2:
+                        formatted_address = f"{addr_info.addr_ln1} {addr_info.addr_ln2}"
+                    formatted_address = f"{formatted_address}, {addr_info.city}, {addr_info.state} {addr_info.zip_code}"
+
+                    return LocationValue(
+                        address_id=int(address_id),
+                        name=addr_info.company,
+                        address=formatted_address,
+                    )
+                else:
+                    return LocationValue(
+                        address_id=int(address_id),
+                        name=location_value.name,
+                        address=location_value.address,
+                    )
+        except Exception as e:
+            logger.warning(f"HTC address lookup failed for {field_name}: {e}")
+
+        # Try fallback: LLM-based address parsing
+        try:
+            llm_result = self._resolve_address_via_llm(
+                field_name=field_name,
+                raw_source_values=raw_source_values,
+            )
+            if llm_result is not None:
+                logger.debug(f"Resolved {field_name} address_id via LLM: {llm_result.address_id}")
+                return llm_result
+        except Exception as e:
+            logger.warning(f"LLM address fallback failed for {field_name}: {e}")
+
+        # All methods failed - raise error to be caught by caller
+        raise ValueError(
+            f"Could not resolve address for {field_name}: '{address}' - "
+            f"address parsing failed and no matching address found in HTC"
+        )
+
+    def _resolve_address_via_llm(
+        self,
+        field_name: str,
+        raw_source_values: dict[str, Any],
+    ) -> LocationValue | None:
+        """
+        Use LLM to parse address when primary methods fail.
+
+        This is a STUB for future implementation. Currently returns None
+        to indicate the fallback is not available.
+
+        TODO: Implement LLM-based address parsing:
+        1. Extract address string from raw_source_values
+        2. Call OpenAI API to parse address components
+        3. Look up or create address in HTC
+        4. Return LocationValue with resolved address_id
+
+        Args:
+            field_name: Name of the location field (for logging)
+            raw_source_values: Original source values containing address data
+
+        Returns:
+            LocationValue with resolved address_id, or None if unavailable
+        """
+        # STUB: LLM address parsing not yet implemented
+        logger.debug(f"LLM address fallback not implemented for {field_name}")
+        return None
+
+    def _is_field_changed(
+        self,
+        field_name: str,
+        proposed_value: Any,
+        htc_value: Any,
+    ) -> bool:
+        """
+        Determine if a proposed value differs from the current HTC value.
+
+        Args:
+            field_name: Name of the field
+            proposed_value: Value from pipeline output
+            htc_value: Current value in HTC
+
+        Returns:
+            True if values differ, False if they match
+        """
+        # If HTC has no value, it's a new value - changed
+        if htc_value is None:
+            return True
+
+        # Location fields: compare by address_id only
+        if field_name in ("pickup_location", "delivery_location"):
+            proposed_id = None
+            htc_id = None
+
+            if hasattr(proposed_value, "address_id"):
+                proposed_id = proposed_value.address_id
+            elif isinstance(proposed_value, dict):
+                proposed_id = proposed_value.get("address_id")
+
+            if isinstance(htc_value, dict):
+                htc_id = htc_value.get("address_id")
+
+            # If proposed address_id is null, treat as changed (needs resolution)
+            if proposed_id is None:
+                return True
+
+            return proposed_id != htc_id
+
+        # Other fields: normalized comparison
+        proposed_normalized = self._normalize_value_for_comparison(proposed_value)
+        htc_normalized = self._normalize_value_for_comparison(htc_value)
+        return proposed_normalized != htc_normalized
+
+    def _store_field_value(
+        self,
+        pending_action_id: int,
+        output_execution_id: int,
+        field_name: str,
+        value: Any,
+        raw_value: str,
+        processing_status: Literal["success", "failed"],
+        processing_error: str | None,
+        is_approved_for_update: bool,
+    ) -> None:
+        """
+        Store a field value with processing status information.
+
+        Handles conflict detection for existing values:
+        - If no existing values: create with is_selected=True
+        - If value matches existing: skip (duplicate)
+        - If value differs: clear selections, create with is_selected=False
+
+        Args:
+            pending_action_id: ID of the pending action
+            output_execution_id: ID of the output execution
+            field_name: Name of the field
+            value: Transformed value (or None for failed fields)
+            raw_value: JSON string of original source values
+            processing_status: "success" or "failed"
+            processing_error: Error message if failed
+            is_approved_for_update: Whether field should be included in updates
+        """
+        # Get existing values for this field
+        existing_fields = self.pending_action_field_repo.get_fields_for_action(pending_action_id)
+        existing_for_field = [f for f in existing_fields if f.field_name == field_name]
+
+        # For failed fields, always store (no conflict checking)
+        if processing_status == "failed":
+            self.pending_action_field_repo.create(
+                data=PendingActionFieldCreate(
+                    pending_action_id=pending_action_id,
+                    output_execution_id=output_execution_id,
+                    field_name=field_name,
+                    value=value,
+                    is_selected=False,  # Failed fields are never selected
+                    is_approved_for_update=False,
+                    processing_status=processing_status,
+                    processing_error=processing_error,
+                    raw_value=raw_value,
+                )
+            )
+            return
+
+        # Serialize value for comparison
+        new_value_json = self._serialize_value_for_comparison(value)
+
+        if not existing_for_field:
+            # No existing values - first value is auto-selected
+            logger.debug(f"Adding first value for field '{field_name}' (auto-selected)")
+            self.pending_action_field_repo.create(
+                data=PendingActionFieldCreate(
+                    pending_action_id=pending_action_id,
+                    output_execution_id=output_execution_id,
+                    field_name=field_name,
+                    value=value,
+                    is_selected=True,
+                    is_approved_for_update=is_approved_for_update,
+                    processing_status=processing_status,
+                    processing_error=processing_error,
+                    raw_value=raw_value,
+                )
+            )
+        else:
+            # Check if value matches any existing value
+            value_matches = any(
+                self._serialize_value_for_comparison(existing.value) == new_value_json
+                for existing in existing_for_field
+            )
+
+            if value_matches:
+                # Duplicate value - skip
+                logger.debug(f"Skipping duplicate value for field '{field_name}'")
+            else:
+                # Different value - conflict! Clear all selections
+                inherit_approval = existing_for_field[0].is_approved_for_update
+                logger.debug(f"Conflict detected for field '{field_name}' - clearing selections")
+                self.pending_action_field_repo.clear_selection_for_field(
+                    action_id=pending_action_id,
+                    field_name=field_name,
+                )
+                self.pending_action_field_repo.create(
+                    data=PendingActionFieldCreate(
+                        pending_action_id=pending_action_id,
+                        output_execution_id=output_execution_id,
+                        field_name=field_name,
+                        value=value,
+                        is_selected=False,
+                        is_approved_for_update=inherit_approval,
+                        processing_status=processing_status,
+                        processing_error=processing_error,
+                        raw_value=raw_value,
+                    )
+                )
 
     def _transform_output_to_fields(
         self,
@@ -1869,6 +2343,7 @@ class OrderManagementService:
                 optional_fields_total=item.optional_fields_total,
                 field_names=item.field_names,
                 conflict_count=item.conflict_count,
+                error_field_count=item.error_field_count,
                 error_message=item.error_message,
                 is_read=item.is_read,
                 created_at=item.created_at,
@@ -1957,6 +2432,9 @@ class OrderManagementService:
                 is_selected=row["is_selected"],
                 is_approved_for_update=row["is_approved_for_update"],
                 sub_run_id=row["sub_run_id"],
+                processing_status=row["processing_status"],
+                processing_error=row["processing_error"],
+                raw_value=row["raw_value"],
             )
             if row["field_name"] not in fields:
                 fields[row["field_name"]] = []
@@ -2143,19 +2621,29 @@ class OrderManagementService:
         logger.debug(f"Created mock output execution: id={output_execution.id}")
 
         # 5. Process through the normal flow
-        pending_action = self.process_output_execution(output_execution.id)
+        result = self.process_output_execution(output_execution.id)
 
-        if pending_action:
-            logger.info(
-                f"Mock output execution processed: pending_action_id={pending_action.id}, "
-                f"status={pending_action.status}, action_type={pending_action.action_type}"
-            )
+        if result.pending_action_id:
+            # Fetch the full pending action for return
+            pending_action = self.pending_action_repo.get_by_id(result.pending_action_id)
+            if result.has_failures:
+                logger.warning(
+                    f"Mock output execution processed with field errors: "
+                    f"pending_action_id={result.pending_action_id}, "
+                    f"success={result.successful_fields}, failed={result.failed_fields}"
+                )
+            else:
+                logger.info(
+                    f"Mock output execution processed: pending_action_id={result.pending_action_id}, "
+                    f"action_type={pending_action.action_type if pending_action else 'unknown'}, "
+                    f"fields={result.successful_fields}"
+                )
+            return pending_action
         else:
             logger.info(
                 f"Mock output execution had no changes compared to HTC - no pending action created"
             )
-
-        return pending_action
+            return None
 
     # ========== User Interactions ==========
 

@@ -194,6 +194,7 @@ async def list_pending_actions(
             optional_fields_total=item.optional_fields_total,
             field_names=item.field_names,
             conflict_count=item.conflict_count,
+            error_field_count=item.error_field_count,
             error_message=item.error_message,
             is_read=item.is_read,
             created_at=item.created_at,
@@ -301,6 +302,9 @@ async def get_pending_action_detail(
                 is_selected=fv.is_selected,
                 is_approved_for_update=fv.is_approved_for_update,
                 sub_run_id=fv.sub_run_id,
+                processing_status=fv.processing_status,
+                processing_error=fv.processing_error,
+                raw_value=fv.raw_value,
             )
             for fv in field_values
         ]

@@ -47,6 +47,13 @@ Status flow:
 - Any non-terminal → rejected (user action)
 """
 
+FieldProcessingStatus = Literal["success", "failed"]
+"""
+Processing status for individual fields:
+- success: Field was transformed and stored successfully
+- failed: Field transformation failed (error recorded in processing_error)
+"""
+
 
 # =========================
 # Order Field Definitions
@@ -281,6 +288,9 @@ class PendingActionFieldCreate(BaseModel):
     value: Any  # JSON - string, dict, or list depending on field type
     is_selected: bool = False
     is_approved_for_update: bool = True
+    processing_status: FieldProcessingStatus = "success"
+    processing_error: str | None = None
+    raw_value: str | None = None  # Original value before transformation
 
 
 class PendingActionFieldUpdate(BaseModel):
@@ -291,10 +301,14 @@ class PendingActionFieldUpdate(BaseModel):
     - Setting is_selected during conflict resolution
     - Setting is_approved_for_update for partial updates
     - Updating value (e.g., refreshing location address_ids)
+    - Updating processing status after retry
     """
     is_selected: bool | None = None
     is_approved_for_update: bool | None = None
     value: Any | None = None
+    processing_status: FieldProcessingStatus | None = None
+    processing_error: str | None = None
+    raw_value: str | None = None
 
 
 class PendingActionField(BaseModel):
@@ -311,6 +325,9 @@ class PendingActionField(BaseModel):
     value: Any  # JSON - string, dict, or list depending on field type
     is_selected: bool
     is_approved_for_update: bool
+    processing_status: FieldProcessingStatus
+    processing_error: str | None
+    raw_value: str | None
 
 
 # =========================
@@ -333,6 +350,9 @@ class PendingActionFieldView(BaseModel):
     is_selected: bool
     is_approved_for_update: bool
     sub_run_id: int | None  # Resolved from output_execution, None for user-provided
+    processing_status: FieldProcessingStatus
+    processing_error: str | None
+    raw_value: str | None
 
 
 class PendingActionListView(BaseModel):
@@ -356,6 +376,7 @@ class PendingActionListView(BaseModel):
     optional_fields_total: int  # len(OPTIONAL_ORDER_FIELDS) - for display like "1/4"
     field_names: list[str]  # List of field names being updated (useful for updates display)
     conflict_count: int
+    error_field_count: int  # Count of fields with processing_status='failed'
     error_message: str | None  # Error message for failed actions
     is_read: bool
     created_at: datetime

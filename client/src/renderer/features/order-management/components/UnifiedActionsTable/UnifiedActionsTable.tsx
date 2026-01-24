@@ -339,6 +339,21 @@ function StatusInfoCell({ row }: CellContext<UnifiedActionListItem, unknown>) {
             </span>
           )}
 
+          {/* Error field count - shows fields that failed processing */}
+          {data.error_field_count > 0 && (
+            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium border bg-red-500/20 text-red-400 border-red-500/30">
+              <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={2}
+                  d="M6 18L18 6M6 6l12 12"
+                />
+              </svg>
+              {data.error_field_count} error{data.error_field_count > 1 ? 's' : ''}
+            </span>
+          )}
+
           {/* For updates: show comma-separated field names */}
           {isUpdate && data.field_names.length > 0 && (
             <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium border bg-blue-500/20 text-blue-400 border-blue-500/30">
@@ -600,6 +615,9 @@ export function UnifiedActionsTable({
                     rowBg = 'bg-red-900/10';
                   } else if (item.status === 'rejected') {
                     rowBg = 'bg-gray-900/10';
+                  } else if (item.error_field_count > 0) {
+                    // Rows with field processing errors get a subtle red tint
+                    rowBg = 'bg-red-900/5';
                   } else if (item.status === 'conflict' || item.conflict_count > 0) {
                     rowBg = 'bg-yellow-900/5';
                   } else if (item.status === 'incomplete') {

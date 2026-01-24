@@ -28,12 +28,16 @@ interface FieldDetail {
   conflict_options: ConflictOption[] | null;
   source: { history_id: number } | null;
   sub_run_id: number | null; // For cross-highlighting with source cards
+  processing_status: 'success' | 'failed';
+  processing_error: string | null;
 }
 
 interface ConflictOption {
   history_id: number;
   value: unknown;
   contributed_at: string;
+  processing_status: 'success' | 'failed';
+  processing_error: string | null;
 }
 
 // Alias for source type used in component
@@ -109,8 +113,14 @@ function FieldDropdown({ field, localSelection, onSelect, isConflict }: FieldDro
     ? options.find((o) => o.history_id === localSelection.selectedHistoryId)
     : null;
 
+  // Check if the currently displayed option is failed
+  const isSelectedFailed = localSelectedOption?.processing_status === 'failed' || field.processing_status === 'failed';
+  const selectedError = localSelectedOption?.processing_error ?? field.processing_error;
+
   const rawDisplayValue = localSelectedOption?.value ?? localSelection?.selectedValue ?? field.value;
-  const displayValue = formatFieldValue(rawDisplayValue, field.data_type);
+  const displayValue = isSelectedFailed && selectedError
+    ? `Error: ${selectedError}`
+    : formatFieldValue(rawDisplayValue, field.data_type);
 
   // Determine which option is currently "active" (for highlighting in dropdown)
   // This is either the local selection or the currently confirmed value
@@ -121,12 +131,14 @@ function FieldDropdown({ field, localSelection, onSelect, isConflict }: FieldDro
       <button
         onClick={() => setIsOpen(!isOpen)}
         className={`w-full flex items-center justify-between gap-2 px-2 py-1 rounded border text-sm text-left ${
-          isConflict
-            ? 'bg-yellow-500/10 border-yellow-500/50 text-yellow-400'
-            : 'bg-gray-700 border-gray-600 text-white'
+          isSelectedFailed
+            ? 'bg-red-500/10 border-red-500/50 text-red-400'
+            : isConflict
+              ? 'bg-yellow-500/10 border-yellow-500/50 text-yellow-400'
+              : 'bg-gray-700 border-gray-600 text-white'
         }`}
       >
-        <span className="truncate">{displayValue || 'Choose value...'}</span>
+        <span className={`truncate ${isSelectedFailed ? 'italic' : ''}`}>{displayValue || 'Choose value...'}</span>
         <svg
           className={`w-4 h-4 flex-shrink-0 transition-transform ${isOpen ? 'rotate-180' : ''}`}
           fill="none"
@@ -146,6 +158,10 @@ function FieldDropdown({ field, localSelection, onSelect, isConflict }: FieldDro
           <div className="absolute top-full left-0 right-0 mt-1 bg-gray-800 border border-gray-600 rounded-lg shadow-xl z-20 overflow-hidden max-h-48 overflow-y-auto">
             {options.map((option) => {
               const isActive = option.history_id === activeHistoryId;
+              const isOptionFailed = option.processing_status === 'failed';
+              const optionDisplayValue = isOptionFailed && option.processing_error
+                ? `Error: ${option.processing_error}`
+                : formatFieldValue(option.value, field.data_type);
               return (
                 <button
                   key={option.history_id}
@@ -155,12 +171,17 @@ function FieldDropdown({ field, localSelection, onSelect, isConflict }: FieldDro
                   }}
                   className={`w-full px-3 py-2 text-left hover:bg-gray-700 transition-colors ${
                     isActive ? 'bg-gray-700' : ''
-                  }`}
+                  } ${isOptionFailed ? 'border-l-2 border-red-500' : ''}`}
                 >
                   <div className="flex items-center gap-2">
-                    <span className="text-sm text-white">{formatFieldValue(option.value, field.data_type)}</span>
+                    <span className={`text-sm ${isOptionFailed ? 'text-red-400 italic' : 'text-white'}`}>
+                      {optionDisplayValue}
+                    </span>
                     {isActive && !isConflict && (
                       <span className="text-xs text-blue-400">(current)</span>
+                    )}
+                    {isOptionFailed && (
+                      <span className="text-xs text-red-400">(failed)</span>
                     )}
                   </div>
                   <div className="text-xs text-gray-500">{formatDate(option.contributed_at)}</div>
@@ -191,6 +212,7 @@ interface FieldRowProps {
 
 function FieldRow({ field, localSelection, onConflictSelect, onConfirm, isConfirming, canEdit, isHighlighted, onHover }: FieldRowProps) {
   const isConflict = field.state === 'conflict';
+  const isFailed = field.processing_status === 'failed';
   const hasMultipleOptions = (field.conflict_options?.length ?? 0) > 1;
   const hasLocalSelection = localSelection?.selectedHistoryId !== null;
   const hasValue = field.value !== null && field.value !== undefined;
@@ -201,6 +223,9 @@ function FieldRow({ field, localSelection, onConflictSelect, onConfirm, isConfir
 
   // Get state icon
   const getStateIcon = () => {
+    if (isFailed) {
+      return <span className="text-red-400 flex-shrink-0 w-4 text-center">✕</span>;
+    }
     if (isConflict) {
       return <span className="text-yellow-400 flex-shrink-0 w-4 text-center">!</span>;
     }
@@ -228,11 +253,13 @@ function FieldRow({ field, localSelection, onConflictSelect, onConfirm, isConfir
       className={`flex items-center gap-3 py-2 px-3 rounded transition-colors ${
         isHighlighted
           ? 'bg-blue-500/20 ring-1 ring-blue-500/50'
-          : isConflict
-            ? 'bg-yellow-500/10'
-            : !hasValue
-              ? 'bg-gray-800/50'
-              : 'bg-gray-800'
+          : isFailed
+            ? 'bg-red-500/10 border border-red-500/30'
+            : isConflict
+              ? 'bg-yellow-500/10'
+              : !hasValue
+                ? 'bg-gray-800/50'
+                : 'bg-gray-800'
       }`}
       onMouseEnter={() => onHover(field.name)}
       onMouseLeave={() => onHover(null)}
@@ -275,11 +302,19 @@ function FieldRow({ field, localSelection, onConflictSelect, onConfirm, isConfir
         </>
       ) : (
         <span
-          className={`text-sm flex-1 min-w-0 ${hasValue ? 'text-white' : 'text-gray-600 italic'} ${
-            'break-words'
-          }`}
+          className={`text-sm flex-1 min-w-0 ${
+            isFailed
+              ? 'text-red-400 italic'
+              : hasValue
+                ? 'text-white'
+                : 'text-gray-600 italic'
+          } break-words`}
         >
           {(() => {
+            // For failed fields, show the error message
+            if (isFailed && field.processing_error) {
+              return `Error: ${field.processing_error}`;
+            }
             const formatted = formatFieldValue(field.value, field.data_type);
             if (formatted) return formatted;
             // Distinguish between null/undefined (Missing) and empty string (Empty)
@@ -415,6 +450,8 @@ export function PendingOrderDetailView({
           conflict_options: null,
           source: null,
           sub_run_id: null,
+          processing_status: 'success', // Completed actions are always successful
+          processing_error: null,
         });
       }
 
@@ -455,6 +492,8 @@ export function PendingOrderDetailView({
             history_id: item.id,
             value: item.value,
             contributed_at: order.updated_at,
+            processing_status: item.processing_status,
+            processing_error: item.processing_error,
           }))
         : null;
 
@@ -479,6 +518,10 @@ export function PendingOrderDetailView({
       // Get sub_run_id for cross-highlighting (from selected or single item)
       const subRunId = selectedItem?.sub_run_id ?? (fieldItems.length === 1 ? fieldItems[0].sub_run_id : null);
 
+      // Get processing status from selected or single item
+      const processingStatus = selectedItem?.processing_status ?? (fieldItems.length === 1 ? fieldItems[0].processing_status : 'success');
+      const processingError = selectedItem?.processing_error ?? (fieldItems.length === 1 ? fieldItems[0].processing_error : null);
+
       result.push({
         name: fieldName,
         label,
@@ -490,6 +533,8 @@ export function PendingOrderDetailView({
         conflict_options: conflictOptions,
         source: sourceRef,
         sub_run_id: subRunId,
+        processing_status: processingStatus ?? 'success',
+        processing_error: processingError ?? null,
       });
     }
 
