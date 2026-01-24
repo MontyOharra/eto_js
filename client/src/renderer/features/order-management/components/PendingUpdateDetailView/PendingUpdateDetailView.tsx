@@ -119,8 +119,14 @@ function FieldDropdown({ field, localSelection, onSelect, isConflict }: FieldDro
     : null;
 
   // Check if the currently displayed option is failed
-  const isSelectedFailed = localSelectedOption?.processing_status === 'failed' || field.processing_status === 'failed';
-  const selectedError = localSelectedOption?.processing_error ?? field.processing_error;
+  // If user made a local selection, check ONLY that option's status
+  // Otherwise, fall back to the field's server-side status
+  const isSelectedFailed = localSelectedOption
+    ? localSelectedOption.processing_status === 'failed'
+    : field.processing_status === 'failed';
+  const selectedError = localSelectedOption
+    ? localSelectedOption.processing_error
+    : field.processing_error;
 
   const rawDisplayValue = localSelectedOption?.value ?? localSelection?.selectedValue ?? field.proposed_value;
   const displayValue = isSelectedFailed && selectedError
@@ -219,9 +225,8 @@ interface FieldRowProps {
 
 function FieldRow({ field, localSelection, onConflictSelect, onConfirm, onToggleApproval, isConfirming, isTogglingApproval, canEdit, isHighlighted, onHover }: FieldRowProps) {
   const isConflict = field.state === 'conflict';
-  const isFailed = field.processing_status === 'failed';
   const hasMultipleOptions = (field.conflict_options?.length ?? 0) > 1;
-  const hasLocalSelection = localSelection?.selectedHistoryId !== null;
+  const hasLocalSelection = localSelection?.selectedHistoryId !== null && localSelection?.selectedHistoryId !== undefined;
   const isApproved = field.is_approved_for_update;
 
   // Empty state - no proposed change for this field
@@ -232,6 +237,16 @@ function FieldRow({ field, localSelection, onConflictSelect, onConfirm, onToggle
   // Determine if user has changed selection from the current confirmed value
   const hasNewSelection = hasLocalSelection &&
     localSelection?.selectedHistoryId !== field.source?.history_id;
+
+  // Check if the CURRENTLY DISPLAYED value is failed
+  // If user has made a local selection, check that option's status
+  // Otherwise, check the field's server-side status
+  const localSelectedOption = hasLocalSelection && field.conflict_options
+    ? field.conflict_options.find(o => o.history_id === localSelection.selectedHistoryId)
+    : null;
+  const isFailed = localSelectedOption
+    ? localSelectedOption.processing_status === 'failed'
+    : field.processing_status === 'failed';
 
   const handleConfirm = () => {
     if (localSelection?.selectedHistoryId) {
@@ -262,7 +277,7 @@ function FieldRow({ field, localSelection, onConflictSelect, onConfirm, onToggle
       <div
         className={`flex-1 py-2 px-3 rounded-lg border transition-colors ${
           !isApproved
-            ? 'bg-gray-800/30 border-gray-700/50 opacity-60'
+            ? 'bg-gray-800/30 border-gray-700/50'
             : isHighlighted
               ? 'bg-blue-500/20 border-blue-500/50 ring-1 ring-blue-500/50'
               : isFailed
@@ -276,7 +291,7 @@ function FieldRow({ field, localSelection, onConflictSelect, onConfirm, onToggle
       >
         <div className="flex items-start gap-3">
           {/* Label - fixed width on left */}
-          <div className="w-32 flex-shrink-0 flex items-center gap-2 pt-0.5">
+          <div className={`w-32 flex-shrink-0 flex items-center gap-2 pt-0.5 ${!isApproved ? 'opacity-50' : ''}`}>
             {isFailed && (
               <span className="text-red-400 text-sm">✕</span>
             )}
@@ -289,7 +304,7 @@ function FieldRow({ field, localSelection, onConflictSelect, onConfirm, onToggle
           {/* Values section - flows naturally */}
           <div className="flex-1 min-w-0 flex flex-wrap items-start gap-x-3 gap-y-1">
             {/* Current Value - up to ~half width, then wraps */}
-            <div className="max-w-[40%] flex items-start gap-2">
+            <div className={`max-w-[40%] flex items-start gap-2 ${!isApproved ? 'opacity-50' : ''}`}>
               <span className={`text-sm break-words ${isApproved ? 'text-gray-300' : 'text-gray-500'}`}>
                 {currentValue || <span className="italic text-gray-500">Empty</span>}
               </span>
@@ -329,7 +344,7 @@ function FieldRow({ field, localSelection, onConflictSelect, onConfirm, onToggle
                   )}
                 </>
               ) : (
-                <span className={`text-sm break-words ${
+                <span className={`text-sm break-words ${!isApproved ? 'opacity-50' : ''} ${
                   isFailed
                     ? 'text-red-400 italic'
                     : isApproved

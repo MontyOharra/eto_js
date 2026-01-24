@@ -565,10 +565,16 @@ class OrderManagementService:
         """
         Resolve address ID for a location field with cascading fallback.
 
-        Fallback order:
-        1. Try usaddress-based parsing (existing HTC lookup)
-        2. Try LLM-based address parsing (future implementation)
-        3. Raise if all methods fail
+        Strategy:
+        1. First check if address can be parsed (validate format)
+        2. If parsing fails → try LLM fallback, then raise error
+        3. If parsing succeeds → try HTC lookup
+           - Found in HTC → return with address_id
+           - Not found in HTC → return WITHOUT address_id (new address is OK!)
+
+        The key distinction is:
+        - Parse failure = error (malformed address, needs LLM to interpret)
+        - Not found in HTC = success (valid new address, will be created later)
 
         Args:
             field_name: Name of the location field
@@ -576,10 +582,10 @@ class OrderManagementService:
             raw_source_values: Original source values for LLM fallback
 
         Returns:
-            LocationValue with resolved address_id (or None if unresolvable)
+            LocationValue with resolved address_id (if found) or None (if new address)
 
         Raises:
-            ValueError: If address cannot be resolved by any method
+            ValueError: If address cannot be PARSED by any method
         """
         # If already has address_id, no resolution needed
         if location_value.address_id is not None:
@@ -590,49 +596,87 @@ class OrderManagementService:
             # No address to resolve - return as-is
             return location_value
 
-        # Try primary method: HTC address lookup with usaddress parsing
-        try:
-            address_id = self.htc_service.find_address_id(address)
-            if address_id is not None:
-                logger.debug(f"Resolved {field_name} address_id via HTC lookup: {address_id}")
-                # Get canonical address info from HTC
-                addr_info = self.htc_service.get_address_info(address_id)
-                if addr_info:
-                    formatted_address = addr_info.addr_ln1
-                    if addr_info.addr_ln2:
-                        formatted_address = f"{addr_info.addr_ln1} {addr_info.addr_ln2}"
-                    formatted_address = f"{formatted_address}, {addr_info.city}, {addr_info.state} {addr_info.zip_code}"
+        # Step 1: Check if address can be parsed (validate format)
+        parsed = self.htc_service.parse_address_string(address)
 
-                    return LocationValue(
-                        address_id=int(address_id),
-                        name=addr_info.company,
-                        address=formatted_address,
-                    )
+        if parsed is not None:
+            # Parsing succeeded - address format is valid
+            logger.debug(f"Address for {field_name} parsed successfully: {parsed}")
+
+            # Step 2: Try to find existing address in HTC
+            try:
+                address_id = self.htc_service.find_address_id(address)
+                if address_id is not None:
+                    logger.debug(f"Resolved {field_name} address_id via HTC lookup: {address_id}")
+                    # Get canonical address info from HTC
+                    addr_info = self.htc_service.get_address_info(address_id)
+                    if addr_info:
+                        formatted_address = addr_info.addr_ln1
+                        if addr_info.addr_ln2:
+                            formatted_address = f"{addr_info.addr_ln1} {addr_info.addr_ln2}"
+                        formatted_address = f"{formatted_address}, {addr_info.city}, {addr_info.state} {addr_info.zip_code}"
+
+                        return LocationValue(
+                            address_id=int(address_id),
+                            name=addr_info.company,
+                            address=formatted_address,
+                        )
+                    else:
+                        return LocationValue(
+                            address_id=int(address_id),
+                            name=location_value.name,
+                            address=location_value.address,
+                        )
                 else:
-                    return LocationValue(
-                        address_id=int(address_id),
-                        name=location_value.name,
-                        address=location_value.address,
+                    # Not found in HTC - but that's OK! It's a valid new address
+                    # Rebuild clean address from parsed components (filters out garbage like "Order #100000")
+                    # Include addr_ln2 (suite, dock, etc.) if present
+                    addr_ln2 = parsed.get('addr_ln2', '')
+                    if addr_ln2:
+                        clean_address = f"{parsed['addr_ln1']} {addr_ln2}, {parsed['city']}, {parsed['state']} {parsed['zip_code']}"
+                    else:
+                        clean_address = f"{parsed['addr_ln1']}, {parsed['city']}, {parsed['state']} {parsed['zip_code']}"
+                    logger.debug(
+                        f"Address for {field_name} not found in HTC (new address). "
+                        f"Raw: '{address}' -> Clean: '{clean_address}'"
                     )
-        except Exception as e:
-            logger.warning(f"HTC address lookup failed for {field_name}: {e}")
+                    return LocationValue(
+                        address_id=None,
+                        name=location_value.name,
+                        address=clean_address.upper(),
+                    )
+            except Exception as e:
+                logger.warning(f"HTC address lookup failed for {field_name}: {e}")
+                # If lookup itself failed (DB error etc), still return as valid new address
+                # Use clean address from parsed components
+                addr_ln2 = parsed.get('addr_ln2', '')
+                if addr_ln2:
+                    clean_address = f"{parsed['addr_ln1']} {addr_ln2}, {parsed['city']}, {parsed['state']} {parsed['zip_code']}"
+                else:
+                    clean_address = f"{parsed['addr_ln1']}, {parsed['city']}, {parsed['state']} {parsed['zip_code']}"
+                return LocationValue(
+                    address_id=None,
+                    name=location_value.name,
+                    address=clean_address.upper(),
+                )
 
-        # Try fallback: LLM-based address parsing
+        # Parsing failed - try LLM fallback
+        logger.debug(f"Address parsing failed for {field_name}, trying LLM fallback: '{address}'")
         try:
             llm_result = self._resolve_address_via_llm(
                 field_name=field_name,
                 raw_source_values=raw_source_values,
             )
             if llm_result is not None:
-                logger.debug(f"Resolved {field_name} address_id via LLM: {llm_result.address_id}")
+                logger.debug(f"Resolved {field_name} address via LLM: {llm_result}")
                 return llm_result
         except Exception as e:
             logger.warning(f"LLM address fallback failed for {field_name}: {e}")
 
-        # All methods failed - raise error to be caught by caller
+        # Parsing failed and LLM couldn't help - this is an actual error
         raise ValueError(
-            f"Could not resolve address for {field_name}: '{address}' - "
-            f"address parsing failed and no matching address found in HTC"
+            f"Could not parse address for {field_name}: '{address}' - "
+            f"address format is invalid and could not be interpreted"
         )
 
     def _resolve_address_via_llm(
@@ -1244,15 +1288,18 @@ class OrderManagementService:
         Status priority:
         1. "ambiguous" if action_type == "ambiguous"
         2. "conflict" if any field has unresolved conflicts
-        3. "incomplete" if missing required fields
+        3. "incomplete" if missing required fields (or required field has error selected)
         4. "ready" if all requirements met
 
         Also updates denormalized counts:
-        - required_fields_present
+        - required_fields_present (only counts fields with successful selected values)
         - conflict_count
 
         Auto-selects single-value fields that aren't selected (can happen after
         conflict resolution when one value is deleted).
+
+        Note: Fields with processing_status='failed' selected do NOT count as present.
+        They are tracked separately via error_field_count in the repository.
         """
         # Get current action state
         action = self.pending_action_repo.get_by_id(pending_action_id)
@@ -1277,15 +1324,34 @@ class OrderManagementService:
                 )
                 selected_field_names.add(field_name)
 
+        # Re-fetch selected fields after auto-select to get processing_status
+        selected_fields = self.pending_action_field_repo.get_selected_fields_for_action(pending_action_id)
+
+        # Separate successful and failed selected fields
+        # Only successful fields count as "present" for required/optional counts
+        successful_selected_names = {
+            field_name
+            for field_name, field in selected_fields.items()
+            if field.processing_status == "success"
+        }
+        failed_selected_names = {
+            field_name
+            for field_name, field in selected_fields.items()
+            if field.processing_status == "failed"
+        }
+
         # Calculate conflict count: fields with multiple values but no selection
         conflict_count = 0
         for field_name, count in value_counts.items():
-            if count > 1 and field_name not in selected_field_names:
+            if count > 1 and field_name not in selected_fields:
                 conflict_count += 1
 
-        # Calculate required and optional fields present
-        required_fields_present = len(selected_field_names.intersection(REQUIRED_ORDER_FIELDS))
-        optional_fields_present = len(selected_field_names.intersection(OPTIONAL_ORDER_FIELDS))
+        # Calculate required and optional fields present (only successful ones count!)
+        required_fields_present = len(successful_selected_names.intersection(REQUIRED_ORDER_FIELDS))
+        optional_fields_present = len(successful_selected_names.intersection(OPTIONAL_ORDER_FIELDS))
+
+        # Check if any required field has a failed value selected (should be incomplete)
+        required_fields_with_errors = len(failed_selected_names.intersection(REQUIRED_ORDER_FIELDS))
 
         # Determine status based on priority
         # Note: "incomplete" only applies to creates - updates don't have required fields
@@ -1294,7 +1360,10 @@ class OrderManagementService:
             new_status = "ambiguous"
         elif conflict_count > 0:
             new_status = "conflict"
-        elif action.action_type == "create" and required_fields_present < len(REQUIRED_ORDER_FIELDS):
+        elif action.action_type == "create" and (
+            required_fields_present < len(REQUIRED_ORDER_FIELDS) or required_fields_with_errors > 0
+        ):
+            # Incomplete if missing required fields OR if any required field has error selected
             new_status = "incomplete"
         else:
             new_status = "ready"
@@ -1315,7 +1384,7 @@ class OrderManagementService:
             f"Recalculated action {pending_action_id}: status={new_status}, "
             f"required={required_fields_present}/{len(REQUIRED_ORDER_FIELDS)}, "
             f"optional={optional_fields_present}/{len(OPTIONAL_ORDER_FIELDS)}, "
-            f"conflicts={conflict_count}"
+            f"conflicts={conflict_count}, required_with_errors={required_fields_with_errors}"
         )
 
         return updated_action

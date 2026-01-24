@@ -60,6 +60,46 @@ def _uppercase_str(value: str | None) -> str | None:
     return value.upper()
 
 
+def _format_date_for_htc(date_str: str | None) -> str:
+    """
+    Format a date string for HTC database (M/D/YYYY, no leading zeros).
+
+    HTC stores dates in short text fields, not datetime fields, and expects
+    format like 1/24/2026, not 01/24/2026 or 2026-01-24.
+
+    Args:
+        date_str: Date string in ISO (YYYY-MM-DD) or MM/DD/YYYY format
+
+    Returns:
+        Date string in M/D/YYYY format without leading zeros
+    """
+    if not date_str:
+        return ""
+
+    date_str = date_str.strip()
+
+    # If already in M/D/YYYY or MM/DD/YYYY format (contains /)
+    if '/' in date_str:
+        parts = date_str.split('/')
+        if len(parts) == 3:
+            month = str(int(parts[0]))  # Strip leading zeros
+            day = str(int(parts[1]))
+            year = parts[2]
+            return f"{month}/{day}/{year}"
+        return date_str
+
+    # If in ISO format (YYYY-MM-DD)
+    if '-' in date_str and len(date_str) >= 10:
+        parts = date_str.split('-')
+        if len(parts) >= 3:
+            year = parts[0]
+            month = str(int(parts[1]))  # Strip leading zeros
+            day = str(int(parts[2][:2]))  # Handle "15T00:00:00" style
+            return f"{month}/{day}/{year}"
+
+    return date_str
+
+
 class HtcIntegrationService:
     """
     Centralized service for HTC Access database operations.
@@ -285,6 +325,23 @@ class HtcIntegrationService:
 
     # ==================== Address Operations ====================
     # Delegated to HtcAddressUtils
+
+    def parse_address_string(self, address_string: str) -> dict[str, str] | None:
+        """
+        Parse a US address string into components.
+
+        Use this to check if an address can be parsed before attempting HTC lookup.
+        Returns parsed components if successful, None if parsing fails.
+
+        Args:
+            address_string: Full address string to parse
+                e.g., "123 Main St, Suite 100, Dallas, TX 75201"
+
+        Returns:
+            Dictionary with parsed components (street, city, state, zip_code)
+            or None if parsing fails.
+        """
+        return self._address_utils.parse_address_string(address_string)
 
     def find_address_id(self, address_string: str) -> float | None:
         """
@@ -560,12 +617,12 @@ class HtcIntegrationService:
             hawb=hawb or "",
             mawb=mawb or "",
             order_notes=order_notes or "",
-            pu_date=pickup_date,
+            pu_date=_format_date_for_htc(pickup_date),
             pu_time_start=pickup_time_start,
             pu_time_end=pickup_time_end,
             pu_address_id=pickup_location_id,
             pu_notes=pickup_notes or "",
-            del_date=delivery_date,
+            del_date=_format_date_for_htc(delivery_date),
             del_time_start=delivery_time_start,
             del_time_end=delivery_time_end,
             del_address_id=delivery_location_id,
@@ -835,7 +892,7 @@ class HtcIntegrationService:
         # ================================================================
         pickup_datetime_updated = False
         if pickup_date is not None:
-            htc_updates["M_PUDate"] = pickup_date
+            htc_updates["M_PUDate"] = _format_date_for_htc(pickup_date)
             pickup_datetime_updated = True
 
         if pickup_time_start is not None:
@@ -864,7 +921,7 @@ class HtcIntegrationService:
         # ================================================================
         delivery_datetime_updated = False
         if delivery_date is not None:
-            htc_updates["M_DelDate"] = delivery_date
+            htc_updates["M_DelDate"] = _format_date_for_htc(delivery_date)
             delivery_datetime_updated = True
 
         if delivery_time_start is not None:

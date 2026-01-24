@@ -880,6 +880,42 @@ class HtcOrderUtils:
             # No comma - might just be a street address
             return address_string.strip()
 
+    def _format_date_no_leading_zeros(self, dt: datetime) -> str:
+        """
+        Format a datetime as M/D/YYYY without leading zeros.
+
+        HTC stores dates in short text fields, not datetime fields,
+        and expects format like 1/24/2026, not 01/24/2026.
+
+        Args:
+            dt: datetime object to format
+
+        Returns:
+            Date string in M/D/YYYY format (e.g., "1/24/2026")
+        """
+        return f"{dt.month}/{dt.day}/{dt.year}"
+
+    def _strip_date_leading_zeros(self, date_str: str) -> str:
+        """
+        Strip leading zeros from a date string in M/D/YYYY or MM/DD/YYYY format.
+
+        Args:
+            date_str: Date string like "01/24/2026"
+
+        Returns:
+            Date string without leading zeros like "1/24/2026"
+        """
+        if not date_str or '/' not in date_str:
+            return date_str
+
+        parts = date_str.split('/')
+        if len(parts) == 3:
+            month = str(int(parts[0]))  # Strip leading zero
+            day = str(int(parts[1]))    # Strip leading zero
+            year = parts[2]
+            return f"{month}/{day}/{year}"
+        return date_str
+
     def parse_datetime_string(self, datetime_str: str | None) -> tuple:
         """
         Parse a datetime string into date and time components.
@@ -889,7 +925,8 @@ class HtcOrderUtils:
                          or just a time like "HH:MM"
 
         Returns:
-            Tuple of (date_str, time_str) in formats ("MM/DD/YYYY", "HH:MM")
+            Tuple of (date_str, time_str) in formats ("M/D/YYYY", "HH:MM")
+            Date format uses NO leading zeros (e.g., "1/24/2026" not "01/24/2026")
             Returns ("", "") if input is None or empty
         """
         if not datetime_str:
@@ -902,18 +939,18 @@ class HtcOrderUtils:
             # Try ISO format first (YYYY-MM-DD HH:MM)
             if 'T' in datetime_str or (len(datetime_str) > 10 and datetime_str[4] == '-'):
                 dt = datetime.fromisoformat(datetime_str.replace('T', ' ').split('.')[0])
-                return (dt.strftime("%m/%d/%Y"), dt.strftime("%H:%M"))
+                return (self._format_date_no_leading_zeros(dt), dt.strftime("%H:%M"))
 
             # Try MM/DD/YYYY HH:MM format
             if '/' in datetime_str and ' ' in datetime_str:
                 parts = datetime_str.split(' ')
-                date_part = parts[0]
+                date_part = self._strip_date_leading_zeros(parts[0])
                 time_part = parts[1] if len(parts) > 1 else ""
                 return (date_part, time_part)
 
             # If it's just a time (HH:MM), use today's date
             if ':' in datetime_str and len(datetime_str) <= 5:
-                today = datetime.now().strftime("%m/%d/%Y")
+                today = self._format_date_no_leading_zeros(datetime.now())
                 return (today, datetime_str)
 
             # Return as-is if we can't parse
@@ -959,8 +996,8 @@ class HtcOrderUtils:
                     width = dim.width
                     qty = dim.qty
                     weight = dim.weight
-                    # Calculate dim_weight: L * W * H / 144
-                    dim_weight = (length * width * height) / 144.0
+                    # Calculate dim_weight: L * W * H / 144, rounded to 3 decimal places
+                    dim_weight = round((length * width * height) / 144.0, 3)
 
                     cursor.execute("""
                         INSERT INTO [HTC300_G040_T012A Open Order Dims]

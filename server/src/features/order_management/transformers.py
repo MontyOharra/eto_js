@@ -70,6 +70,9 @@ def transform_dims_field(source_values: dict[str, Any]) -> list[DimObject] | Non
 
     Note: dim_weight is NOT included here - it's calculated at HTC write time.
     This ensures consistent comparison between contributed values and HTC values.
+
+    All float values (length, width, height, weight) are rounded to 3 decimal places
+    for consistent storage in the ETO database.
     """
     import json as json_module
 
@@ -91,12 +94,13 @@ def transform_dims_field(source_values: dict[str, Any]) -> list[DimObject] | Non
     result = []
     for dim in raw_dims:
         try:
+            # Round float values to 3 decimal places for consistent storage
             result.append(DimObject(
-                length=float(dim["length"]),
-                width=float(dim["width"]),
-                height=float(dim["height"]),
+                length=round(float(dim["length"]), 3),
+                width=round(float(dim["width"]), 3),
+                height=round(float(dim["height"]), 3),
                 qty=int(dim["qty"]),
-                weight=float(dim["weight"]),
+                weight=round(float(dim["weight"]), 3),
             ))
         except (KeyError, TypeError, ValueError) as e:
             logger.warning(f"Invalid dims entry, skipping: {dim} - {e}")
@@ -140,47 +144,56 @@ def transform_datetime_range_field(source_values: dict[str, Any]) -> DatetimeRan
     Expects source_values with keys ending in '_start' and '_end'.
     Validates that both datetimes are on the same date.
 
+    A datetime range REQUIRES both start and end values. Partial data is an error.
+
     Raises:
         DatetimeRangeError: If the dates don't match
+        ValueError: If a datetime value is missing or cannot be parsed
     """
     start_value = None
     end_value = None
+    start_key_present = False
+    end_key_present = False
 
-    # Find the start and end values
+    # Find the start and end values, tracking which keys are present
     for key, value in source_values.items():
-        if value is None:
-            continue
         if key.endswith("_start"):
-            start_value = str(value)
+            start_key_present = True
+            if value is not None:
+                start_value = str(value)
         elif key.endswith("_end"):
-            end_value = str(value)
+            end_key_present = True
+            if value is not None:
+                end_value = str(value)
 
-    # Need at least one value
-    if not start_value and not end_value:
+    # If neither key is present, no datetime data at all - return None
+    if not start_key_present and not end_key_present:
         return None
+
+    # If at least one key is present, we expect BOTH values for a valid range
+    # Check for missing values first
+    if start_key_present and not start_value:
+        raise ValueError("Start datetime is missing")
+    if end_key_present and not end_value:
+        raise ValueError("End datetime is missing")
+
+    # If only one side of the range is provided, that's incomplete
+    if start_value and not end_key_present:
+        raise ValueError("End datetime is missing (only start provided)")
+    if end_value and not start_key_present:
+        raise ValueError("Start datetime is missing (only end provided)")
 
     # Parse the datetime values
     start_dt = _parse_datetime(start_value) if start_value else None
     end_dt = _parse_datetime(end_value) if end_value else None
 
-    # If only one is provided, we can't validate or create a proper range
-    if start_dt is not None and end_dt is None:
-        logger.warning(f"Only start datetime provided: {start_value}")
-        return DatetimeRangeValue(
-            date=start_dt.strftime("%Y-%m-%d"),
-            time_start=start_dt.strftime("%H:%M"),
-            time_end="",  # Unknown
-        )
+    # Check for parse failures
+    if start_value and start_dt is None:
+        raise ValueError(f"Could not parse start datetime: '{start_value}'")
+    if end_value and end_dt is None:
+        raise ValueError(f"Could not parse end datetime: '{end_value}'")
 
-    if end_dt is not None and start_dt is None:
-        logger.warning(f"Only end datetime provided: {end_value}")
-        return DatetimeRangeValue(
-            date=end_dt.strftime("%Y-%m-%d"),
-            time_start="",  # Unknown
-            time_end=end_dt.strftime("%H:%M"),
-        )
-
-    # Both None (values provided but failed to parse)
+    # Both should be set at this point
     if start_dt is None or end_dt is None:
         return None
 

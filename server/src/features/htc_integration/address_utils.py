@@ -267,6 +267,28 @@ class HtcAddressUtils:
 
     # ==================== Address Parsing ====================
 
+    def _sanitize_for_htc(self, value: str) -> str:
+        """
+        Sanitize a string value for HTC database storage.
+
+        - Replaces newlines with spaces
+        - Collapses multiple spaces
+        - Strips leading/trailing whitespace
+
+        Args:
+            value: String to sanitize
+
+        Returns:
+            Sanitized string
+        """
+        if not value:
+            return ""
+        # Replace newlines with spaces
+        result = value.replace('\n', ' ').replace('\r', ' ')
+        # Collapse multiple spaces
+        result = ' '.join(result.split())
+        return result.strip()
+
     def parse_address_string(self, address_string: str) -> dict[str, str] | None:
         """
         Parse a US address string into components using the usaddress library.
@@ -277,10 +299,13 @@ class HtcAddressUtils:
 
         Returns:
             Dictionary with parsed components:
-            - street: Full street line including suite/unit (e.g., "123 Main St Suite 100")
+            - street: Full street line including suite/unit (legacy, for backward compat)
+            - addr_ln1: Primary street address (e.g., "123 Main St")
+            - addr_ln2: Secondary address info (e.g., "Suite 100", "Dock 5", etc.)
             - city: City name
             - state: State abbreviation
             - zip_code: ZIP code (without +4)
+            All strings are sanitized (newlines replaced with spaces).
             Returns None if parsing fails or essential components missing.
         """
 
@@ -288,49 +313,75 @@ class HtcAddressUtils:
             logger.debug("Empty address string provided")
             return None
 
+        # Sanitize input - replace newlines with spaces before parsing
+        address_string = self._sanitize_for_htc(address_string)
         logger.debug(f"Parsing address: '{address_string}'")
 
         try:
             parsed, address_type = usaddress.tag(address_string)
+            # Log the raw usaddress output for debugging
+            logger.info(f"[ADDRESS_PARSE] Input: '{address_string}'")
+            logger.info(f"[ADDRESS_PARSE] Type: {address_type}")
+            logger.info(f"[ADDRESS_PARSE] Raw parsed fields:")
+            for label, value in parsed.items():
+                logger.info(f"[ADDRESS_PARSE]   {label}: '{value}'")
         except usaddress.RepeatedLabelError as e:  # type: ignore[attr-defined]
             logger.warning(f"Address parsing ambiguous (repeated labels): {e}")
+            logger.warning(f"[ADDRESS_PARSE] RepeatedLabelError for: '{address_string}'")
             return None
 
-        # Build full street line (everything before city/state/zip)
-        # This includes suite/unit info since that's how DB stores it
-        street_parts = []
+        # Build primary street line (addr_ln1) - main address without secondary
+        addr_ln1_parts = []
 
         # Street number
         if 'AddressNumber' in parsed:
-            street_parts.append(parsed['AddressNumber'])
+            addr_ln1_parts.append(parsed['AddressNumber'])
 
         # Pre-directional (N, S, E, W)
         if 'StreetNamePreDirectional' in parsed:
-            street_parts.append(parsed['StreetNamePreDirectional'])
+            addr_ln1_parts.append(parsed['StreetNamePreDirectional'])
+
+        # Pre-modifier (OLD, NEW, etc.)
+        if 'StreetNamePreModifier' in parsed:
+            addr_ln1_parts.append(parsed['StreetNamePreModifier'])
+
+        # Pre-type (HIGHWAY, ROUTE, etc.) - e.g., "STATE HIGHWAY 121"
+        if 'StreetNamePreType' in parsed:
+            addr_ln1_parts.append(parsed['StreetNamePreType'])
 
         # Street name
         if 'StreetName' in parsed:
-            street_parts.append(parsed['StreetName'])
+            addr_ln1_parts.append(parsed['StreetName'])
 
         # Street type (St, Ave, Blvd)
         if 'StreetNamePostType' in parsed:
-            street_parts.append(parsed['StreetNamePostType'])
+            addr_ln1_parts.append(parsed['StreetNamePostType'])
 
         # Post-directional
         if 'StreetNamePostDirectional' in parsed:
-            street_parts.append(parsed['StreetNamePostDirectional'])
+            addr_ln1_parts.append(parsed['StreetNamePostDirectional'])
 
-        # Suite/unit/apt - append to street line (matches DB storage)
+        addr_ln1 = ' '.join(addr_ln1_parts)
+
+        # Build secondary address line (addr_ln2) - suite, unit, building, dock, etc.
+        addr_ln2_parts = []
+
+        # Suite/unit/apt info goes to addr_ln2
         if 'OccupancyType' in parsed:
-            street_parts.append(parsed['OccupancyType'])
+            addr_ln2_parts.append(parsed['OccupancyType'])
         if 'OccupancyIdentifier' in parsed:
-            street_parts.append(parsed['OccupancyIdentifier'])
+            addr_ln2_parts.append(parsed['OccupancyIdentifier'])
         if 'SubaddressType' in parsed:
-            street_parts.append(parsed['SubaddressType'])
+            addr_ln2_parts.append(parsed['SubaddressType'])
         if 'SubaddressIdentifier' in parsed:
-            street_parts.append(parsed['SubaddressIdentifier'])
+            addr_ln2_parts.append(parsed['SubaddressIdentifier'])
 
-        street = ' '.join(street_parts)
+        addr_ln2 = ' '.join(addr_ln2_parts)
+
+        # Build combined street line for backward compatibility
+        street = addr_ln1
+        if addr_ln2:
+            street = f"{addr_ln1} {addr_ln2}"
 
         # Extract location components
         city = parsed.get('PlaceName', '')
@@ -338,16 +389,19 @@ class HtcAddressUtils:
         zip_code = parsed.get('ZipCode', '')
 
         # Validate we have minimum required components
-        if not street or not city or not state or not zip_code:
-            logger.debug(f"Missing required components - street: '{street}', "
+        if not addr_ln1 or not city or not state or not zip_code:
+            logger.debug(f"Missing required components - addr_ln1: '{addr_ln1}', "
                         f"city: '{city}', state: '{state}', zip: '{zip_code}'")
             return None
 
+        # Sanitize all output components
         result = {
-            'street': street,
-            'city': city,
-            'state': state,
-            'zip_code': zip_code,
+            'street': self._sanitize_for_htc(street),  # Legacy field
+            'addr_ln1': self._sanitize_for_htc(addr_ln1),
+            'addr_ln2': self._sanitize_for_htc(addr_ln2),
+            'city': self._sanitize_for_htc(city),
+            'state': self._sanitize_for_htc(state),
+            'zip_code': self._sanitize_for_htc(zip_code),
         }
 
         logger.debug(f"Parsed address: {result}")
@@ -472,7 +526,8 @@ class HtcAddressUtils:
             return None
 
         logger.info(
-            f"[FIND_ADDRESS_ID] Parsed: street='{parsed['street']}', "
+            f"[FIND_ADDRESS_ID] Parsed: addr_ln1='{parsed['addr_ln1']}', "
+            f"addr_ln2='{parsed.get('addr_ln2', '')}', "
             f"city='{parsed['city']}', state='{parsed['state']}', zip='{parsed['zip_code']}'"
         )
 
@@ -541,11 +596,12 @@ class HtcAddressUtils:
         logger.info(f"Address not found, creating new address")
         new_id = self.create_address(
             company_name=company_name,
-            addr_ln1=parsed['street'],
+            addr_ln1=parsed['addr_ln1'],
             city=parsed['city'],
             state=parsed['state'],
             zip_code=parsed['zip_code'],
             country=country,
+            addr_ln2=parsed.get('addr_ln2', ''),
         )
 
         return new_id
@@ -757,6 +813,15 @@ class HtcAddressUtils:
         Raises:
             OutputExecutionError: If address creation fails
         """
+        # Sanitize all input values - strip newlines, collapse spaces
+        company_name = self._sanitize_for_htc(company_name)
+        addr_ln1 = self._sanitize_for_htc(addr_ln1)
+        addr_ln2 = self._sanitize_for_htc(addr_ln2)
+        city = self._sanitize_for_htc(city)
+        state = self._sanitize_for_htc(state)
+        zip_code = self._sanitize_for_htc(zip_code)
+        country = self._sanitize_for_htc(country)
+
         logger.info(f"Creating new address: {addr_ln1}, {city}, {state} {zip_code}")
 
         # Generate keycheck and keycounts

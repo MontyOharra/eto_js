@@ -114,8 +114,14 @@ function FieldDropdown({ field, localSelection, onSelect, isConflict }: FieldDro
     : null;
 
   // Check if the currently displayed option is failed
-  const isSelectedFailed = localSelectedOption?.processing_status === 'failed' || field.processing_status === 'failed';
-  const selectedError = localSelectedOption?.processing_error ?? field.processing_error;
+  // If user made a local selection, check ONLY that option's status
+  // Otherwise, fall back to the field's server-side status
+  const isSelectedFailed = localSelectedOption
+    ? localSelectedOption.processing_status === 'failed'
+    : field.processing_status === 'failed';
+  const selectedError = localSelectedOption
+    ? localSelectedOption.processing_error
+    : field.processing_error;
 
   const rawDisplayValue = localSelectedOption?.value ?? localSelection?.selectedValue ?? field.value;
   const displayValue = isSelectedFailed && selectedError
@@ -212,14 +218,23 @@ interface FieldRowProps {
 
 function FieldRow({ field, localSelection, onConflictSelect, onConfirm, isConfirming, canEdit, isHighlighted, onHover }: FieldRowProps) {
   const isConflict = field.state === 'conflict';
-  const isFailed = field.processing_status === 'failed';
   const hasMultipleOptions = (field.conflict_options?.length ?? 0) > 1;
-  const hasLocalSelection = localSelection?.selectedHistoryId !== null;
+  const hasLocalSelection = localSelection?.selectedHistoryId !== null && localSelection?.selectedHistoryId !== undefined;
   const hasValue = field.value !== null && field.value !== undefined;
 
   // Determine if user has changed selection from the current confirmed value
   const hasNewSelection = hasLocalSelection &&
     localSelection?.selectedHistoryId !== field.source?.history_id;
+
+  // Check if the CURRENTLY DISPLAYED value is failed
+  // If user has made a local selection, check that option's status
+  // Otherwise, check the field's server-side status
+  const localSelectedOption = hasLocalSelection && field.conflict_options
+    ? field.conflict_options.find(o => o.history_id === localSelection.selectedHistoryId)
+    : null;
+  const isFailed = localSelectedOption
+    ? localSelectedOption.processing_status === 'failed'
+    : field.processing_status === 'failed';
 
   // Get state icon
   const getStateIcon = () => {
