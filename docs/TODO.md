@@ -54,7 +54,7 @@ Then **discuss the plan** before implementation begins.
 
 | # | Item | Priority | Complexity | Plan | Implement | Test |
 |---|------|:--------:|:----------:|:----:|:---------:|:----:|
-| 3 | Field Processing Error Handling (Decoupled) | 1 | 4 | [x] | [ ] | [ ] |
+| 3 | Field Processing Error Handling (Decoupled) | 1 | 4 | [x] | [x] | [x] |
 | 13 | Improved Attachment Handling | 1 | 3 | [x] | [x] | [x] |
 | 15 | Create Template from Existing | 1 | 4 | [x] | [ ] | [ ] |
 | 19 | Merge Adjacent PDF Text Boxes | 1 | 2 | [x] | [x] | [x] |
@@ -162,18 +162,19 @@ Then **discuss the plan** before implementation begins.
 - LLM fallback for address parsing when usaddress fails
 
 **Database:**
-- [ ] Add `processing_status`, `processing_error`, `raw_value` columns to `pending_action_fields`
-- [ ] Create migration, update types
+- [x] Add `processing_status`, `processing_error`, `raw_value` columns to `pending_action_fields`
+- [x] Create migration, update types
 
 **Backend:**
-- [ ] Update ETO service to not fail sub-run on order management errors
-- [ ] Refactor `process_output_execution()` to never raise, handle per-field
-- [ ] Implement cascading address resolution (usaddress → LLM fallback)
+- [x] Update ETO service to not fail sub-run on order management errors
+- [x] Refactor `process_output_execution()` to never raise, handle per-field
+- [x] Implement cascading address resolution (usaddress → LLM fallback stub)
 
 **API/Frontend:**
-- [ ] Update API schemas with processing status fields
-- [ ] Display field processing errors in UI
-- [ ] Consider retry/manual fix UI for failed fields
+- [x] Update API schemas with processing status fields
+- [x] Display field processing errors in UI
+- [x] Error fields don't count toward required_fields_present
+- [x] Hide error badges for completed/rejected actions
 
 ---
 
