@@ -37,3 +37,5 @@ usaddress>=0.5.10
 
 # LLM APIs for text extraction
 openai>=1.0.0
+
+alembic>=1.13.0

@@ -1039,7 +1039,23 @@ class PendingActionFieldModel(BaseModel):
     # Relationships
     pending_action: Mapped["PendingActionModel"] = relationship(back_populates="fields")
     output_execution: Mapped[Optional["EtoSubRunOutputExecutionModel"]] = relationship()
+    
+    processing_status: Mapped[str] = mapped_column(
+        String(20),
+        nullable=False,
+        server_default="success"
+    )  # "success" | "failed"
 
+    processing_error: Mapped[Optional[str]] = mapped_column(
+        Text,
+        nullable=True
+    )  # Error message if processing failed
+
+    raw_value: Mapped[Optional[str]] = mapped_column(
+        Text,
+        nullable=True
+    )  # Original value before transformation
+      
     __table_args__ = (
         Index("idx_paf_pending_action", "pending_action_id"),
         Index("idx_paf_field", "pending_action_id", "field_name"),
