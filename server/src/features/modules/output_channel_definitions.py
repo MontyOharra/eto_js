@@ -121,33 +121,15 @@ OUTPUT_CHANNEL_DEFINITIONS: list[OutputChannelTypeCreate] = [
         description="Special instructions for delivery",
     ),
 
-    # Cargo
-    OutputChannelTypeCreate(
-        name="pieces",
-        label="Pieces",
-        data_type="int",
-        is_required=False,
-        category="cargo",
-        description="Number of pieces in shipment",
-    ),
-    OutputChannelTypeCreate(
-        name="weight",
-        label="Weight",
-        data_type="float",
-        is_required=False,
-        category="cargo",
-        description="Total weight of shipment",
-    ),
+    # Other
     OutputChannelTypeCreate(
         name="dims",
         label="Dimensions",
         data_type="list[dim]",
         is_required=False,
-        category="cargo",
+        category="other",
         description="List of dimension sets with height, length, width, qty, and weight",
     ),
-
-    # Other
     OutputChannelTypeCreate(
         name="order_notes",
         label="Order Notes",
