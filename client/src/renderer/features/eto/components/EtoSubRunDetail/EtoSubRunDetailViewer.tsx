@@ -6,6 +6,7 @@
 
 import { useState } from "react";
 import { useEtoSubRunDetail, useReprocessRun, useSkipRun } from "../../api/hooks";
+import { FieldHighlightProvider } from "../../../pipelines/contexts";
 import { EtoSubRunDetailHeader } from "./EtoSubRunDetailHeader";
 import { EtoSubRunDetailFooter } from "./EtoSubRunDetailFooter";
 import { SummarySuccessView } from "./SummarySuccessView";
@@ -101,6 +102,7 @@ export function EtoSubRunDetailViewer({
 
           {!isLoading && !error && runDetail && (
             <div className="pr-4 pl-2 py-4 h-full">
+              <FieldHighlightProvider>
               <ResizablePanelLayout
                 onDragStateChange={setIsDragging}
                 leftPanel={
@@ -147,6 +149,7 @@ export function EtoSubRunDetailViewer({
                   />
                 }
               />
+              </FieldHighlightProvider>
             </div>
           )}
         </div>

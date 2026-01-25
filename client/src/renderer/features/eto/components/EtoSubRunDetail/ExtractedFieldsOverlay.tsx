@@ -2,10 +2,11 @@
  * ExtractedFieldsOverlay
  * Renders extracted field bounding boxes with values on top of PDF canvas
  * Read-only overlay for viewing extraction results in ETO runs
+ * Uses FieldHighlightContext for cross-component highlighting with pipeline entry points
  */
 
-import { useState } from 'react';
 import { usePdfViewer } from '../../../pdf';
+import { useFieldHighlight } from '../../../pipelines/contexts';
 import { ExtractedFieldWithBox } from '../../types';
 
 interface ExtractedFieldsOverlayProps {
@@ -14,7 +15,7 @@ interface ExtractedFieldsOverlayProps {
 
 export function ExtractedFieldsOverlay({ fields }: ExtractedFieldsOverlayProps) {
   const { renderScale, currentPage, pdfDimensions } = usePdfViewer();
-  const [hoveredFieldId, setHoveredFieldId] = useState<string | null>(null);
+  const highlightContext = useFieldHighlight();
 
   if (!pdfDimensions) {
     return null;
@@ -29,7 +30,8 @@ export function ExtractedFieldsOverlay({ fields }: ExtractedFieldsOverlayProps) 
 
     // Bbox is already in screen coordinates (y=0 at top)
     // No conversion needed - pdfplumber uses same coordinate system
-    const isHovered = hoveredFieldId === field.field_id;
+    // Note: field_id contains the field name (set from result.name in PdfViewerPanel)
+    const isHighlighted = highlightContext?.highlightedFieldName === field.field_id;
 
     const boxStyle: React.CSSProperties = {
       position: 'absolute',
@@ -37,13 +39,14 @@ export function ExtractedFieldsOverlay({ fields }: ExtractedFieldsOverlayProps) 
       top: `${y0 * renderScale}px`,
       width: `${(x1 - x0) * renderScale}px`,
       height: `${(y1 - y0) * renderScale}px`,
-      backgroundColor: 'rgba(59, 130, 246, 0.15)', // Blue with transparency
-      border: `2px solid rgba(59, 130, 246, ${isHovered ? '1' : '0.6'})`,
+      backgroundColor: isHighlighted ? 'rgba(59, 130, 246, 0.25)' : 'rgba(59, 130, 246, 0.15)',
+      border: `2px solid rgba(59, 130, 246, ${isHighlighted ? '1' : '0.6'})`,
       borderRadius: '2px',
       cursor: 'default',
-      transition: 'border-color 0.15s ease-in-out, background-color 0.15s ease-in-out',
+      transition: 'border-color 0.15s ease-in-out, background-color 0.15s ease-in-out, box-shadow 0.15s ease-in-out',
       zIndex: 5,
       pointerEvents: 'auto',
+      boxShadow: isHighlighted ? '0 0 12px rgba(59, 130, 246, 0.6)' : undefined,
     };
 
     // Determine label position (above or below box)
@@ -51,16 +54,24 @@ export function ExtractedFieldsOverlay({ fields }: ExtractedFieldsOverlayProps) 
     // Convert to PDF coordinates by dividing by renderScale
     const popupHeightPixels = 90;
     const popupHeightPdfCoords = popupHeightPixels / renderScale;
-    const showLabel = isHovered;
+    const showLabel = isHighlighted;
     const labelAtTop = y0 < 120; // Show below if bbox is near top of page
     const labelY = labelAtTop ? y1 + 8 : y0 - popupHeightPdfCoords; // Position below if at top, otherwise align popup bottom with bbox top
+
+    const handleMouseEnter = () => {
+      highlightContext?.setHighlightedFieldName(field.field_id);
+    };
+
+    const handleMouseLeave = () => {
+      highlightContext?.setHighlightedFieldName(null);
+    };
 
     return (
       <div key={field.field_id}>
         <div
           style={boxStyle}
-          onMouseEnter={() => setHoveredFieldId(field.field_id)}
-          onMouseLeave={() => setHoveredFieldId(null)}
+          onMouseEnter={handleMouseEnter}
+          onMouseLeave={handleMouseLeave}
         />
         {showLabel && (
           <div

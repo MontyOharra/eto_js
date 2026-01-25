@@ -6,6 +6,7 @@
 
 import { useState, useEffect, useCallback } from 'react';
 import { ExecutedPipelineGraph } from '../../../pipelines/components/ExecutedPipelineGraph';
+import { FieldHighlightProvider, useFieldHighlight } from '../../../pipelines/contexts';
 import { PdfViewer, usePdfViewer } from '../../../pdf';
 import { useOutputChannels } from '../../../modules';
 import {
@@ -32,6 +33,7 @@ interface TestingStepProps {
 /**
  * ExtractedFieldsOverlay
  * Renders extraction field boxes with values on PDF canvas
+ * Uses FieldHighlightContext for cross-component highlighting with pipeline entry points
  */
 function ExtractedFieldsOverlay({
   fields
@@ -39,7 +41,7 @@ function ExtractedFieldsOverlay({
   fields: SimulateTemplateResponse['extraction_results']
 }) {
   const { renderScale, currentPage, pdfDimensions } = usePdfViewer();
-  const [hoveredFieldId, setHoveredFieldId] = useState<string | null>(null);
+  const highlightContext = useFieldHighlight();
 
   if (!pdfDimensions) {
     return null;
@@ -50,7 +52,7 @@ function ExtractedFieldsOverlay({
     if (field.page !== currentPage) return null;
 
     const [x0, y0, x1, y1] = field.bbox;
-    const isHovered = hoveredFieldId === field.name;
+    const isHighlighted = highlightContext?.highlightedFieldName === field.name;
 
     const boxStyle: React.CSSProperties = {
       position: 'absolute',
@@ -58,28 +60,37 @@ function ExtractedFieldsOverlay({
       top: `${y0 * renderScale}px`,
       width: `${(x1 - x0) * renderScale}px`,
       height: `${(y1 - y0) * renderScale}px`,
-      backgroundColor: 'rgba(59, 130, 246, 0.15)', // Blue with transparency
-      border: `2px solid rgba(59, 130, 246, ${isHovered ? '1' : '0.6'})`,
+      backgroundColor: isHighlighted ? 'rgba(59, 130, 246, 0.25)' : 'rgba(59, 130, 246, 0.15)',
+      border: `2px solid rgba(59, 130, 246, ${isHighlighted ? '1' : '0.6'})`,
       borderRadius: '2px',
       cursor: 'default',
-      transition: 'border-color 0.15s ease-in-out, background-color 0.15s ease-in-out',
+      transition: 'border-color 0.15s ease-in-out, background-color 0.15s ease-in-out, box-shadow 0.15s ease-in-out',
       zIndex: 5,
       pointerEvents: 'auto',
+      boxShadow: isHighlighted ? '0 0 12px rgba(59, 130, 246, 0.6)' : undefined,
     };
 
     // Determine label position (above or below box)
     const popupHeightPixels = 90;
     const popupHeightPdfCoords = popupHeightPixels / renderScale;
-    const showLabel = isHovered;
+    const showLabel = isHighlighted;
     const labelAtTop = y0 < 120;
     const labelY = labelAtTop ? y1 + 8 : y0 - popupHeightPdfCoords;
+
+    const handleMouseEnter = () => {
+      highlightContext?.setHighlightedFieldName(field.name);
+    };
+
+    const handleMouseLeave = () => {
+      highlightContext?.setHighlightedFieldName(null);
+    };
 
     return (
       <div key={field.name}>
         <div
           style={boxStyle}
-          onMouseEnter={() => setHoveredFieldId(field.name)}
-          onMouseLeave={() => setHoveredFieldId(null)}
+          onMouseEnter={handleMouseEnter}
+          onMouseLeave={handleMouseLeave}
         />
         {showLabel && (
           <div
@@ -341,6 +352,7 @@ export function TestingStep({
           )}
 
         {result && (
+          <FieldHighlightProvider>
             <ResizablePanelLayout
               defaultSplitPercentage={50}
               onDragStateChange={setIsDragging}
@@ -467,6 +479,7 @@ export function TestingStep({
                 />
               }
             />
+          </FieldHighlightProvider>
         )}
       </div>
     </div>
