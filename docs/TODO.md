@@ -59,7 +59,7 @@ Then **discuss the plan** before implementation begins.
 | 15 | Create Template from Existing | 1 | 4 | [x] | [x] | [x] |
 | 19 | Merge Adjacent PDF Text Boxes | 1 | 2 | [x] | [x] | [x] |
 | 9 | Summary Page Rework | 2 | 3 | [x] | [ ] | [ ] |
-| 12 | Navigate from Order Management to ETO | 2 | 1 | [x] | [ ] | [ ] |
+| 12 | Navigate from Order Management to ETO | 2 | 1 | [x] | [x] | [x] |
 | 16 | HTC Time Format Parsing | 2 | 2 | [x] | [ ] | [ ] |
 | 18 | Manual Field Entry for Pending Actions | 2 | 3 | [x] | [ ] | [ ] |
 | 1 | Template Draft Saving | 3 | 4 | [x] | [ ] | [ ] |
@@ -313,9 +313,9 @@ Then **discuss the plan** before implementation begins.
 
 **Summary:** From the order management page, users can view details of contributing sub-runs in a modal. Add navigation from this modal to the full ETO run page for that sub-run, allowing users to see other associated data (sibling sub-runs, email source, etc.).
 
-- [ ] Add "View in ETO" link/button to sub-run detail modal
-- [ ] Navigate to ETO run page with sub-run highlighted/expanded
-- [ ] Handle modal close / navigation flow
+- [x] Add "View in ETO" link/button to sub-run detail modal
+- [x] Navigate to ETO run page with sub-run highlighted/expanded
+- [x] Handle modal close / navigation flow
 
 ---
 

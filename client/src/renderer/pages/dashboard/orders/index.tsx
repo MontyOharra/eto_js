@@ -1,4 +1,4 @@
-import { createFileRoute } from '@tanstack/react-router';
+import { createFileRoute, useNavigate } from '@tanstack/react-router';
 import { useState, useEffect } from 'react';
 import {
   UnifiedActionsTable,
@@ -68,6 +68,9 @@ function useDebounce<T>(value: T, delay: number): T {
 function OrdersPage() {
   // Connect to SSE for real-time updates
   useOrderEvents();
+
+  // Navigation hook for "View in ETO" functionality
+  const navigate = useNavigate();
 
   // Fetch customers for dropdown
   const { data: customers, isLoading: customersLoading } = useCustomers();
@@ -289,6 +292,11 @@ function OrdersPage() {
     setViewingSubRunId(null);
   };
 
+  const handleViewInEto = (etoRunId: number) => {
+    setViewingSubRunId(null); // Close the modal first
+    navigate({ to: '/dashboard/eto/$runId', params: { runId: String(etoRunId) } });
+  };
+
   const handleCloseReviewAlert = () => {
     setReviewAlert((prev) => ({ ...prev, isOpen: false }));
   };
@@ -347,6 +355,7 @@ function OrdersPage() {
             isOpen={viewingSubRunId !== null}
             subRunId={viewingSubRunId}
             onClose={handleCloseSubRunViewer}
+            onViewInEto={handleViewInEto}
           />
           <ReviewRequiredAlert
             isOpen={reviewAlert.isOpen}
@@ -376,6 +385,7 @@ function OrdersPage() {
             isOpen={viewingSubRunId !== null}
             subRunId={viewingSubRunId}
             onClose={handleCloseSubRunViewer}
+            onViewInEto={handleViewInEto}
           />
           <ReviewRequiredAlert
             isOpen={reviewAlert.isOpen}
@@ -419,6 +429,7 @@ function OrdersPage() {
           isOpen={viewingSubRunId !== null}
           subRunId={viewingSubRunId}
           onClose={handleCloseSubRunViewer}
+          onViewInEto={handleViewInEto}
         />
       </>
     );
@@ -637,6 +648,7 @@ function OrdersPage() {
         isOpen={viewingSubRunId !== null}
         subRunId={viewingSubRunId}
         onClose={handleCloseSubRunViewer}
+        onViewInEto={handleViewInEto}
       />
 
       {/* Review Required Alert */}

@@ -18,6 +18,8 @@ interface EtoSubRunDetailViewerProps {
   isOpen: boolean;
   subRunId: number | null;
   onClose: () => void;
+  /** Optional callback to navigate to the ETO runs page for this run */
+  onViewInEto?: (etoRunId: number) => void;
 }
 
 type ViewMode = "summary" | "detail";
@@ -26,6 +28,7 @@ export function EtoSubRunDetailViewer({
   isOpen,
   subRunId,
   onClose,
+  onViewInEto,
 }: EtoSubRunDetailViewerProps) {
   const {
     data: runDetail,
@@ -158,6 +161,7 @@ export function EtoSubRunDetailViewer({
           onSkip={handleSkip}
           isReprocessing={reprocessMutation.isPending}
           isSkipping={skipMutation.isPending}
+          onViewInEto={onViewInEto}
         />
       </div>
     </div>
