@@ -60,7 +60,7 @@ Then **discuss the plan** before implementation begins.
 | 19 | Merge Adjacent PDF Text Boxes | 1 | 2 | [x] | [x] | [x] |
 | 9 | Summary Page Rework | 2 | 3 | [x] | [x] | [x] |
 | 12 | Navigate from Order Management to ETO | 2 | 1 | [x] | [x] | [x] |
-| 16 | HTC Time Format Parsing | 2 | 2 | [x] | [ ] | [ ] |
+| 16 | HTC Time Format Parsing | 2 | 2 | [x] | [x] | [x] |
 | 18 | Manual Field Entry for Pending Actions | 2 | 3 | [x] | [ ] | [ ] |
 | 1 | Template Draft Saving | 3 | 4 | [x] | [ ] | [ ] |
 | 6 | Browse Template Matches / Set New Base | 3 | 3 | [x] | [ ] | [ ] |
@@ -418,11 +418,11 @@ Then **discuss the plan** before implementation begins.
 
 **Note:** Specific formats to be cataloged during implementation by examining production database.
 
-- [ ] Identify where HTC time values are read/parsed
-- [ ] Query production database to catalog all time format variations
-- [ ] Implement flexible time parser that handles all discovered formats
-- [ ] Add fallback/error handling for unknown formats
-- [ ] Test with various time format samples from production data
+- [x] Identify where HTC time values are read/parsed
+- [x] Query production database to catalog all time format variations
+- [x] Implement flexible time parser that handles all discovered formats
+- [x] Add fallback/error handling for unknown formats
+- [x] Test with various time format samples from production data
 
 ---
 
