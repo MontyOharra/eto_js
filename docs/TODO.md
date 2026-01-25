@@ -65,7 +65,7 @@ Then **discuss the plan** before implementation begins.
 | 1 | Template Draft Saving | 3 | 4 | [x] | [ ] | [ ] |
 | 6 | Browse Template Matches / Set New Base | 3 | 3 | [x] | [ ] | [ ] |
 | 14 | Email Filter Rules: NOT/Negation | 3 | 2 | [x] | [ ] | [ ] |
-| 17 | Sub-Run Modal: View Template Button | 4 | 1 | [x] | [ ] | [ ] |
+| 17 | Sub-Run Modal: View Template Button | 4 | 1 | [x] | [x] | [x] |
 | 2 | New Pipeline Modules (Math + LLM) | 5 | 3 | [x] | [ ] | [ ] |
 | 4 | Address Matching with Company Name | 5 | 3 | [x] | [ ] | [ ] |
 | 5 | Extraction Field Rename Syncs to Pipeline | 5 | 2 | [x] | [ ] | [ ] |
@@ -430,9 +430,9 @@ Then **discuss the plan** before implementation begins.
 
 **Summary:** Add a button in the sub-run detail modal to navigate to the template it was matched to. Makes it easy to view or edit the template when issues are found.
 
-- [ ] Add "View Template" button to sub-run detail modal
-- [ ] Navigate to template detail/edit page
-- [ ] Handle case where template was deleted or sub-run has no matched template
+- [x] Add "View Template" button to sub-run detail modal
+- [x] Navigate to template detail/edit page
+- [x] Handle case where template was deleted or sub-run has no matched template (button hidden when no template)
 
 ---
 
