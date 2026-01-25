@@ -71,7 +71,7 @@ Then **discuss the plan** before implementation begins.
 | 5 | Extraction Field Rename Syncs to Pipeline | 5 | 2 | [x] | [ ] | [ ] |
 | 7 | Conditional Error/Halt Module | 5 | 2 | [x] | [ ] | [ ] |
 | 8 | Extraction Field ↔ Pipeline Hover Highlighting | 5 | 2 | [x] | [x] | [x] |
-| 10 | Extraction Field Popup Overflow Fix | 5 | 1 | [x] | [ ] | [ ] |
+| 10 | Extraction Field Popup Overflow Fix | 5 | 1 | [x] | [x] | [x] |
 | 20 | ETO Bulk Actions | 3 | 2 | [x] | [ ] | [ ] |
 
 **Priority:** 1 = Critical, 2 = High, 3 = Medium, 4 = Low, 5 = Nice to have
@@ -301,10 +301,10 @@ Then **discuss the plan** before implementation begins.
 - Consider as fallback if (A) doesn't work well
 
 **Checklist:**
-- [ ] Identify extraction field popup component
-- [ ] Implement text wrapping within popup
-- [ ] Implement edge detection and auto-shift logic
-- [ ] Test with various text lengths and field positions near all edges
+- [x] Identify extraction field popup component
+- [x] Implement text wrapping within popup
+- [x] Implement edge detection and auto-shift logic
+- [x] Test with various text lengths and field positions near all edges
 - [ ] If (A) insufficient, evaluate (B) approach
 
 ---
