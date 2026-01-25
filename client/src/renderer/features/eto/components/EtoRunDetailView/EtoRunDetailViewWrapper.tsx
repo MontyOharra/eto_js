@@ -1,5 +1,4 @@
 import { useState, useEffect, useRef } from 'react';
-import { useNavigate } from '@tanstack/react-router';
 import {
   EtoRunDetailHeader,
   EtoRunDetailOverview,
@@ -72,8 +71,6 @@ export function EtoRunDetailViewWrapper({ runId, onBack }: EtoRunDetailViewWrapp
   // Note: SSE connection is established at page level (eto/index.tsx)
   // No need for duplicate connection here
 
-  const navigate = useNavigate();
-
   // Modal state
   const [selectedSubRunId, setSelectedSubRunId] = useState<number | null>(null);
 
@@ -125,11 +122,6 @@ export function EtoRunDetailViewWrapper({ runId, onBack }: EtoRunDetailViewWrapp
   // Sub-run action handlers
   const handleViewSubRunDetails = (subRunId: number) => {
     setSelectedSubRunId(subRunId);
-  };
-
-  const handleViewTemplate = (templateId: number) => {
-    setSelectedSubRunId(null); // Close the modal first
-    navigate({ to: '/dashboard/templates/$templateId', params: { templateId: String(templateId) } });
   };
 
   const handleReprocessSubRun = async (subRunId: number) => {
@@ -380,7 +372,6 @@ export function EtoRunDetailViewWrapper({ runId, onBack }: EtoRunDetailViewWrapp
         isOpen={selectedSubRunId !== null}
         subRunId={selectedSubRunId}
         onClose={() => setSelectedSubRunId(null)}
-        onViewTemplate={handleViewTemplate}
       />
 
       {/* Template Builder Modal */}

@@ -297,11 +297,6 @@ function OrdersPage() {
     navigate({ to: '/dashboard/eto/$runId', params: { runId: String(etoRunId) } });
   };
 
-  const handleViewTemplate = (templateId: number) => {
-    setViewingSubRunId(null); // Close the modal first
-    navigate({ to: '/dashboard/templates/$templateId', params: { templateId: String(templateId) } });
-  };
-
   const handleCloseReviewAlert = () => {
     setReviewAlert((prev) => ({ ...prev, isOpen: false }));
   };
@@ -361,7 +356,6 @@ function OrdersPage() {
             subRunId={viewingSubRunId}
             onClose={handleCloseSubRunViewer}
             onViewInEto={handleViewInEto}
-            onViewTemplate={handleViewTemplate}
           />
           <ReviewRequiredAlert
             isOpen={reviewAlert.isOpen}
@@ -392,7 +386,6 @@ function OrdersPage() {
             subRunId={viewingSubRunId}
             onClose={handleCloseSubRunViewer}
             onViewInEto={handleViewInEto}
-            onViewTemplate={handleViewTemplate}
           />
           <ReviewRequiredAlert
             isOpen={reviewAlert.isOpen}

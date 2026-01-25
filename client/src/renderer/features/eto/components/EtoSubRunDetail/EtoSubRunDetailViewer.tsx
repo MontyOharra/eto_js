@@ -7,6 +7,7 @@
 import { useState } from "react";
 import { useEtoSubRunDetail, useSkipRun } from "../../api/hooks";
 import { FieldHighlightProvider } from "../../../pipelines/contexts";
+import { TemplateDetailModal } from "../../../templates/components/TemplateDetail";
 import { EtoSubRunDetailHeader } from "./EtoSubRunDetailHeader";
 import { EtoSubRunDetailFooter } from "./EtoSubRunDetailFooter";
 import { SummarySuccessView } from "./SummarySuccessView";
@@ -21,8 +22,6 @@ interface EtoSubRunDetailViewerProps {
   onClose: () => void;
   /** Optional callback to navigate to the ETO runs page for this run */
   onViewInEto?: (etoRunId: number) => void;
-  /** Optional callback to navigate to the matched template */
-  onViewTemplate?: (templateId: number) => void;
 }
 
 type ViewMode = "summary" | "detail";
@@ -32,7 +31,6 @@ export function EtoSubRunDetailViewer({
   subRunId,
   onClose,
   onViewInEto,
-  onViewTemplate,
 }: EtoSubRunDetailViewerProps) {
   const {
     data: runDetail,
@@ -42,6 +40,7 @@ export function EtoSubRunDetailViewer({
   const skipMutation = useSkipRun();
   const [viewMode, setViewMode] = useState<ViewMode>("summary");
   const [isDragging, setIsDragging] = useState(false);
+  const [viewingTemplateId, setViewingTemplateId] = useState<number | null>(null);
 
   const error = queryError ? "Failed to load run details" : null;
 
@@ -149,9 +148,16 @@ export function EtoSubRunDetailViewer({
           onSkip={handleSkip}
           isSkipping={skipMutation.isPending}
           onViewInEto={onViewInEto}
-          onViewTemplate={onViewTemplate}
+          onViewTemplate={(templateId) => setViewingTemplateId(templateId)}
         />
       </div>
+
+      {/* Template Detail Modal */}
+      <TemplateDetailModal
+        isOpen={viewingTemplateId !== null}
+        templateId={viewingTemplateId}
+        onClose={() => setViewingTemplateId(null)}
+      />
     </div>
   );
 }
