@@ -12,7 +12,7 @@ import {
   formatValue,
   formatChannelLabel,
   getChannelColor,
-  sortOutputChannelsByCategory,
+  groupOutputChannelsByCategory,
   type OutputChannelResult,
 } from '../../../eto/utils';
 import type { PipelineState } from '../../../pipelines/types';
@@ -280,7 +280,7 @@ export function TestingStep({
   };
 
   // Build output channel results with labels from output channel types registry
-  const outputChannelResults = (() => {
+  const outputChannelGroups = (() => {
     if (!result?.output_channel_values) return [];
 
     const results = Object.entries(result.output_channel_values).map(([channelType, value]) => {
@@ -297,8 +297,8 @@ export function TestingStep({
       };
     });
 
-    // Sort results by category order
-    return sortOutputChannelsByCategory(results, outputChannelTypes);
+    // Group results by category
+    return groupOutputChannelsByCategory(results, outputChannelTypes);
   })();
 
   return (
@@ -359,21 +359,30 @@ export function TestingStep({
                     {viewMode === 'summary' ? (
                       // Summary View - Output Channel Values/Errors
                       <div>
-                        {result.pipeline_status === 'success' && outputChannelResults.length > 0 ? (
-                          <div className="space-y-2">
-                            {outputChannelResults.map((channelResult, index) => {
+                        {result.pipeline_status === 'success' && outputChannelGroups.length > 0 ? (
+                          <div className="space-y-4">
+                            {outputChannelGroups.map((group) => {
                               const colors = getChannelColor();
                               return (
-                                <div
-                                  key={index}
-                                  className={`flex items-start gap-3 py-2 px-3 rounded border ${colors.bg} ${colors.border}`}
-                                >
-                                  <span className={`text-sm w-40 flex-shrink-0 font-medium ${colors.text}`}>
-                                    {channelResult.label}
-                                  </span>
-                                  <span className="text-sm text-white break-words flex-1">
-                                    {formatValue(channelResult.value)}
-                                  </span>
+                                <div key={group.category}>
+                                  <h4 className="text-sm font-semibold text-gray-400 uppercase tracking-wider mb-2">
+                                    {group.categoryLabel}
+                                  </h4>
+                                  <div className="space-y-2">
+                                    {group.channels.map((channelResult, index) => (
+                                      <div
+                                        key={index}
+                                        className={`flex items-start gap-3 py-2 px-3 rounded border ${colors.bg} ${colors.border}`}
+                                      >
+                                        <span className={`text-sm w-40 flex-shrink-0 font-medium ${colors.text}`}>
+                                          {channelResult.label}
+                                        </span>
+                                        <span className="text-sm text-white break-words flex-1">
+                                          {formatValue(channelResult.value)}
+                                        </span>
+                                      </div>
+                                    ))}
+                                  </div>
                                 </div>
                               );
                             })}

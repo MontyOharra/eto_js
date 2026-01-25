@@ -16,6 +16,12 @@ export interface OutputChannelResult {
   value: unknown;
 }
 
+export interface OutputChannelGroup {
+  category: string;
+  categoryLabel: string;
+  channels: OutputChannelResult[];
+}
+
 // =============================================================================
 // Category Ordering
 // =============================================================================
@@ -91,6 +97,90 @@ export function sortOutputChannelsByCategory(
     // Fallback to alphabetical
     return a.channelType.localeCompare(b.channelType);
   });
+}
+
+/**
+ * Category display labels
+ */
+const CATEGORY_LABELS: Record<string, string> = {
+  identification: 'Identification',
+  pickup: 'Pickup',
+  delivery: 'Delivery',
+  other: 'Other',
+};
+
+/**
+ * Format category name to display label
+ */
+export function formatCategoryLabel(category: string): string {
+  return CATEGORY_LABELS[category] || category.charAt(0).toUpperCase() + category.slice(1);
+}
+
+/**
+ * Group output channel results by category
+ * Returns groups in category order, with channels sorted within each group
+ */
+export function groupOutputChannelsByCategory(
+  channels: OutputChannelResult[],
+  outputChannelTypes: OutputChannelType[] | undefined
+): OutputChannelGroup[] {
+  if (!outputChannelTypes || channels.length === 0) {
+    return [];
+  }
+
+  // Build a map of channel type -> category
+  const categoryMap = new Map<string, string>();
+  outputChannelTypes.forEach((oct) => {
+    categoryMap.set(oct.name, oct.category);
+  });
+
+  // Group channels by category
+  const groupedMap = new Map<string, OutputChannelResult[]>();
+
+  channels.forEach((channel) => {
+    const category = categoryMap.get(channel.channelType) || 'other';
+    if (!groupedMap.has(category)) {
+      groupedMap.set(category, []);
+    }
+    groupedMap.get(category)!.push(channel);
+  });
+
+  // Sort channels within each group
+  groupedMap.forEach((groupChannels, category) => {
+    groupChannels.sort((a, b) => {
+      const orderA = CHANNEL_SORT_ORDER[a.channelType] ?? 999;
+      const orderB = CHANNEL_SORT_ORDER[b.channelType] ?? 999;
+      if (orderA !== orderB) return orderA - orderB;
+      return a.channelType.localeCompare(b.channelType);
+    });
+  });
+
+  // Build result array in category order
+  const result: OutputChannelGroup[] = [];
+
+  CATEGORY_ORDER.forEach((category) => {
+    const groupChannels = groupedMap.get(category);
+    if (groupChannels && groupChannels.length > 0) {
+      result.push({
+        category,
+        categoryLabel: formatCategoryLabel(category),
+        channels: groupChannels,
+      });
+    }
+  });
+
+  // Add any categories not in CATEGORY_ORDER at the end
+  groupedMap.forEach((groupChannels, category) => {
+    if (!CATEGORY_ORDER.includes(category) && groupChannels.length > 0) {
+      result.push({
+        category,
+        categoryLabel: formatCategoryLabel(category),
+        channels: groupChannels,
+      });
+    }
+  });
+
+  return result;
 }
 
 // =============================================================================

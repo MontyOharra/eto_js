@@ -10,7 +10,7 @@ import {
   formatValue,
   formatChannelLabel,
   getChannelColor,
-  sortOutputChannelsByCategory,
+  groupOutputChannelsByCategory,
   type OutputChannelResult,
 } from "../../utils";
 import type { EtoSubRunFullDetail } from "../../types";
@@ -47,7 +47,7 @@ export function SummarySuccessView({ runDetail }: SummarySuccessViewProps) {
   }, [pipelineDefinitionId, getPipeline]);
 
   // Extract output channel results from execution steps
-  const outputChannelResults = (() => {
+  const outputChannelGroups = (() => {
     if (!pipelineState || !runDetail.stage_pipeline_execution?.steps) {
       return [];
     }
@@ -79,8 +79,8 @@ export function SummarySuccessView({ runDetail }: SummarySuccessViewProps) {
       }
     });
 
-    // Sort results by category order
-    return sortOutputChannelsByCategory(results, outputChannelTypes);
+    // Group results by category
+    return groupOutputChannelsByCategory(results, outputChannelTypes);
   })();
 
   if (isLoading) {
@@ -91,7 +91,7 @@ export function SummarySuccessView({ runDetail }: SummarySuccessViewProps) {
     );
   }
 
-  if (outputChannelResults.length === 0) {
+  if (outputChannelGroups.length === 0) {
     return (
       <div className="flex flex-col items-center justify-center h-full text-center">
         <div className="text-green-400 mb-4">
@@ -122,22 +122,29 @@ export function SummarySuccessView({ runDetail }: SummarySuccessViewProps) {
   const colors = getChannelColor();
 
   return (
-    <div className="space-y-2">
-      {outputChannelResults.map((result, index) => {
-        return (
-          <div
-            key={index}
-            className={`flex items-start gap-3 py-2 px-3 rounded border ${colors.bg} ${colors.border}`}
-          >
-            <span className={`text-sm w-40 flex-shrink-0 font-medium ${colors.text}`}>
-              {result.label}
-            </span>
-            <span className="text-sm text-white break-words flex-1">
-              {formatValue(result.value)}
-            </span>
+    <div className="space-y-4">
+      {outputChannelGroups.map((group) => (
+        <div key={group.category}>
+          <h4 className="text-sm font-semibold text-gray-400 uppercase tracking-wider mb-2">
+            {group.categoryLabel}
+          </h4>
+          <div className="space-y-2">
+            {group.channels.map((result, index) => (
+              <div
+                key={index}
+                className={`flex items-start gap-3 py-2 px-3 rounded border ${colors.bg} ${colors.border}`}
+              >
+                <span className={`text-sm w-40 flex-shrink-0 font-medium ${colors.text}`}>
+                  {result.label}
+                </span>
+                <span className="text-sm text-white break-words flex-1">
+                  {formatValue(result.value)}
+                </span>
+              </div>
+            ))}
           </div>
-        );
-      })}
+        </div>
+      ))}
     </div>
   );
 }
