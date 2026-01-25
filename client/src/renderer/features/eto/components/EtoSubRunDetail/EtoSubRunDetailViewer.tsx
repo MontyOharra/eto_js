@@ -5,7 +5,7 @@
  */
 
 import { useState } from "react";
-import { useEtoSubRunDetail, useReprocessRun, useSkipRun } from "../../api/hooks";
+import { useEtoSubRunDetail, useSkipRun } from "../../api/hooks";
 import { FieldHighlightProvider } from "../../../pipelines/contexts";
 import { EtoSubRunDetailHeader } from "./EtoSubRunDetailHeader";
 import { EtoSubRunDetailFooter } from "./EtoSubRunDetailFooter";
@@ -21,6 +21,8 @@ interface EtoSubRunDetailViewerProps {
   onClose: () => void;
   /** Optional callback to navigate to the ETO runs page for this run */
   onViewInEto?: (etoRunId: number) => void;
+  /** Optional callback to navigate to the matched template */
+  onViewTemplate?: (templateId: number) => void;
 }
 
 type ViewMode = "summary" | "detail";
@@ -30,37 +32,22 @@ export function EtoSubRunDetailViewer({
   subRunId,
   onClose,
   onViewInEto,
+  onViewTemplate,
 }: EtoSubRunDetailViewerProps) {
   const {
     data: runDetail,
     isLoading,
     error: queryError,
   } = useEtoSubRunDetail(isOpen ? subRunId : null);
-  const reprocessMutation = useReprocessRun();
   const skipMutation = useSkipRun();
   const [viewMode, setViewMode] = useState<ViewMode>("summary");
   const [isDragging, setIsDragging] = useState(false);
 
   const error = queryError ? "Failed to load run details" : null;
 
-  // Reprocess is available for success, failure, and needs_template
-  const canReprocess =
-    runDetail?.status === "success" ||
-    runDetail?.status === "failure" ||
-    runDetail?.status === "needs_template";
-
   // Skip is only available for failure and needs_template (not success)
   const canSkip =
     runDetail?.status === "failure" || runDetail?.status === "needs_template";
-
-  const handleReprocess = async () => {
-    if (!runDetail?.eto_run_id) return;
-    try {
-      await reprocessMutation.mutateAsync(runDetail.eto_run_id);
-    } catch (err) {
-      console.error("Failed to reprocess run:", err);
-    }
-  };
 
   const handleSkip = async () => {
     if (!runDetail?.eto_run_id) return;
@@ -158,13 +145,11 @@ export function EtoSubRunDetailViewer({
         <EtoSubRunDetailFooter
           runDetail={runDetail || null}
           onClose={onClose}
-          showReprocessButton={canReprocess}
           showSkipButton={canSkip}
-          onReprocess={handleReprocess}
           onSkip={handleSkip}
-          isReprocessing={reprocessMutation.isPending}
           isSkipping={skipMutation.isPending}
           onViewInEto={onViewInEto}
+          onViewTemplate={onViewTemplate}
         />
       </div>
     </div>
