@@ -58,6 +58,24 @@ export function ExtractedFieldsOverlay({ fields }: ExtractedFieldsOverlayProps) 
     const labelAtTop = y0 < 120; // Show below if bbox is near top of page
     const labelY = labelAtTop ? y1 + 8 : y0 - popupHeightPdfCoords; // Position below if at top, otherwise align popup bottom with bbox top
 
+    // Calculate horizontal position with edge detection
+    const popupMaxWidth = 400; // max width in pixels
+    const popupPadding = 40; // total horizontal padding (20px left + 20px right)
+    const edgePadding = 10; // minimum padding from PDF edge
+
+    // PDF width in screen coordinates
+    const pdfWidthPixels = pdfDimensions.width * renderScale;
+
+    // Start at field's left edge
+    let popupLeftPixels = x0 * renderScale;
+
+    // Check if popup would overflow the right edge
+    const popupRightEdge = popupLeftPixels + popupMaxWidth + popupPadding;
+    if (popupRightEdge > pdfWidthPixels - edgePadding) {
+      // Shift popup left so it stays within bounds
+      popupLeftPixels = Math.max(edgePadding, pdfWidthPixels - popupMaxWidth - popupPadding - edgePadding);
+    }
+
     const handleMouseEnter = () => {
       highlightContext?.setHighlightedFieldName(field.field_id);
     };
@@ -77,8 +95,9 @@ export function ExtractedFieldsOverlay({ fields }: ExtractedFieldsOverlayProps) 
           <div
             style={{
               position: 'absolute',
-              left: `${x0 * renderScale}px`,
+              left: `${popupLeftPixels}px`,
               top: `${labelY * renderScale}px`,
+              maxWidth: `${popupMaxWidth}px`,
               backgroundColor: 'rgba(17, 24, 39, 0.95)',
               border: '2px solid rgba(59, 130, 246, 0.8)',
               borderRadius: '8px',
@@ -86,10 +105,11 @@ export function ExtractedFieldsOverlay({ fields }: ExtractedFieldsOverlayProps) 
               fontSize: '24px',
               fontWeight: 500,
               color: 'white',
-              whiteSpace: 'nowrap',
               zIndex: 20,
               pointerEvents: 'none',
               boxShadow: '0 4px 12px rgba(0, 0, 0, 0.5)',
+              wordWrap: 'break-word',
+              overflowWrap: 'break-word',
             }}
           >
             <div className="text-blue-400 mb-2" style={{ fontSize: '20px' }}>{field.label}</div>
