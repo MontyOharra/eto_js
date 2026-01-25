@@ -59,7 +59,6 @@ Then **discuss the plan** before implementation begins.
 | 15 | Create Template from Existing | 1 | 4 | [x] | [x] | [x] |
 | 19 | Merge Adjacent PDF Text Boxes | 1 | 2 | [x] | [x] | [x] |
 | 9 | Summary Page Rework | 2 | 3 | [x] | [ ] | [ ] |
-| 11 | ETO Page: Group Runs by Email | 1 | 5 | [x] | [ ] | [ ] |
 | 12 | Navigate from Order Management to ETO | 2 | 1 | [x] | [ ] | [ ] |
 | 16 | HTC Time Format Parsing | 2 | 2 | [x] | [ ] | [ ] |
 | 18 | Manual Field Entry for Pending Actions | 2 | 3 | [x] | [ ] | [ ] |
@@ -307,53 +306,6 @@ Then **discuss the plan** before implementation begins.
 - [ ] Implement edge detection and auto-shift logic
 - [ ] Test with various text lengths and field positions near all edges
 - [ ] If (A) insufficient, evaluate (B) approach
-
----
-
-## 11. ETO Page: Group Runs by Email
-
-**Plan:** [`docs/plans/eto-email-grouping.md`](./plans/eto-email-grouping.md)
-
-**Summary:** Visually group ETO runs by their source email. Multi-run emails get a header row with child run rows indented beneath. Single-run emails and manual uploads display as standalone rows (no header). Filtering still applies to runs, but returns all sibling runs from matching emails. No data model changes.
-
-**Key Decisions:**
-- Multi-run emails: Header row (sender, subject, date, PDF count) + indented run rows
-- Single-run emails / manual uploads: Standalone row, no header
-- Filters apply to runs, but return all siblings from matching emails
-- Pagination by source count (each email = 1, each manual upload = 1)
-- Sorting: MAX of time fields for email groups; `pdf_filename` sort removed
-- Runs within groups: always sorted by `last_processed_at` DESC
-- Headers are non-interactive, always expanded
-- Run rows unchanged (all existing fields preserved, slight left indent in groups)
-
-### Backend
-
-- [ ] Update `EtoRunRepository.list()` to return sibling runs from matching emails
-- [ ] Add `source_email_id` and `email_run_count` to `EtoRunListView`
-- [ ] Update pagination to count by source instead of by run
-- [ ] Update sorting to use MAX for time-based fields at email level
-- [ ] Remove `pdf_filename` sort option
-- [ ] Ensure runs within groups sorted by `last_processed_at` DESC
-- [ ] Update API schema with new fields
-
-### Frontend
-
-- [ ] Create `EtoEmailHeaderRow` component (sender, subject, date, PDF count)
-- [ ] Update `EtoRunsTable` to group runs by `source_email_id`
-- [ ] Render header + indented runs for multi-run groups
-- [ ] Render standalone row for single-run groups (no header)
-- [ ] Add left padding to grouped run rows
-- [ ] Update pagination display text
-
-### Testing
-
-- [ ] Test email with single PDF (no header)
-- [ ] Test email with multiple PDFs (header + grouped runs)
-- [ ] Test manual upload (no header)
-- [ ] Test filtering - verify sibling runs included
-- [ ] Test pagination by source count
-- [ ] Test all sort options
-- [ ] Test mixed page (emails + manual uploads)
 
 ---
 
