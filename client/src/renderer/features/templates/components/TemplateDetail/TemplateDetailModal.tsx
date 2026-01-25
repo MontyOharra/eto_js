@@ -146,7 +146,7 @@ export function TemplateDetailModal({
           selectedVersionId={versionIdToFetch}
           currentVersionId={templateDetail?.current_version_id || null}
           onVersionChange={handleVersionChange}
-          onEdit={handleEdit}
+          onEdit={onEdit ? handleEdit : undefined}
         />
 
         {/* Content Area */}
