@@ -70,7 +70,7 @@ Then **discuss the plan** before implementation begins.
 | 4 | Address Matching with Company Name | 5 | 3 | [x] | [ ] | [ ] |
 | 5 | Extraction Field Rename Syncs to Pipeline | 5 | 2 | [x] | [ ] | [ ] |
 | 7 | Conditional Error/Halt Module | 5 | 2 | [x] | [ ] | [ ] |
-| 8 | Extraction Field ↔ Pipeline Hover Highlighting | 5 | 2 | [x] | [ ] | [ ] |
+| 8 | Extraction Field ↔ Pipeline Hover Highlighting | 5 | 2 | [x] | [x] | [x] |
 | 10 | Extraction Field Popup Overflow Fix | 5 | 1 | [x] | [ ] | [ ] |
 | 20 | ETO Bulk Actions | 3 | 2 | [x] | [ ] | [ ] |
 
@@ -259,11 +259,11 @@ Then **discuss the plan** before implementation begins.
 
 **Summary:** In the viewer modal for completed sub runs and template testing step, hovering over an extraction field on the PDF should highlight the corresponding pipeline entry point, and vice versa. Improves visual connection between extracted data and pipeline inputs.
 
-- [ ] Identify components: PDF extraction field overlay + pipeline entry points
-- [ ] Add hover state that links extraction field name to entry point name
-- [ ] Highlight corresponding entry point when hovering extraction field on PDF
-- [ ] Highlight corresponding extraction field when hovering pipeline entry point
-- [ ] Apply to both sub run viewer and template testing confirmation step
+- [x] Identify components: PDF extraction field overlay + pipeline entry points
+- [x] Add hover state that links extraction field name to entry point name (FieldHighlightContext)
+- [x] Highlight corresponding entry point when hovering extraction field on PDF
+- [x] Highlight corresponding extraction field when hovering pipeline entry point
+- [x] Apply to both sub run viewer and template testing confirmation step
 
 ---
 
