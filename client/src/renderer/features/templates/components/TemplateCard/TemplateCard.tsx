@@ -44,6 +44,12 @@ export function TemplateCard({
           </span>
         </div>
         <div className="flex items-center justify-between text-sm">
+          <span className="text-gray-400">Pages:</span>
+          <span className="text-gray-200 font-medium">
+            {template.page_count ?? 'N/A'}
+          </span>
+        </div>
+        <div className="flex items-center justify-between text-sm">
           <span className="text-gray-400">Current Version:</span>
           <span className="text-gray-200 font-medium">
             v{template.current_version.version_num}

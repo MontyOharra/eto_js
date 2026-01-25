@@ -132,6 +132,7 @@ class PdfTemplateListView(BaseModel):
     status: PdfTemplateStatus
     is_autoskip: bool
     source_pdf_id: int
+    page_count: int | None = None  # From source PDF file
     current_version_id: int | None = None
     current_version_number: int | None = None
     version_usage_count: int | None = None

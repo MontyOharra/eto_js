@@ -56,7 +56,7 @@ Then **discuss the plan** before implementation begins.
 |---|------|:--------:|:----------:|:----:|:---------:|:----:|
 | 3 | Field Processing Error Handling (Decoupled) | 1 | 4 | [x] | [x] | [x] |
 | 13 | Improved Attachment Handling | 1 | 3 | [x] | [x] | [x] |
-| 15 | Create Template from Existing | 1 | 4 | [x] | [ ] | [ ] |
+| 15 | Create Template from Existing | 1 | 4 | [x] | [x] | [x] |
 | 19 | Merge Adjacent PDF Text Boxes | 1 | 2 | [x] | [x] | [x] |
 | 9 | Summary Page Rework | 2 | 3 | [x] | [ ] | [ ] |
 | 11 | ETO Page: Group Runs by Email | 1 | 5 | [x] | [ ] | [ ] |
@@ -427,35 +427,36 @@ Then **discuss the plan** before implementation begins.
 - Extraction fields and pipeline: copied exactly as-is
 
 ### Backend
-- [ ] Verify existing API provides template structure data (sig objects, fields, pipeline)
-- [ ] If needed, add endpoint for template structure
-- [ ] Ensure signature object matching logic is accessible/reusable
+- [x] Verify existing API provides template structure data (sig objects, fields, pipeline)
+- [x] If needed, add endpoint for template structure
+- [x] Ensure signature object matching logic is accessible/reusable
+- [x] Add page_count to template list API response
 
 ### Frontend - Template Builder Integration
-- [ ] Add "Copy from Existing Template" button after step 1 (page selection)
-- [ ] Wire button to open copy modal
-- [ ] Implement state update when copy is performed
+- [x] Add "Copy from Existing Template" button after step 1 (page selection)
+- [x] Wire button to open copy modal
+- [x] Implement state update when copy is performed
 
 ### Frontend - Template Copy Modal
-- [ ] Create modal component (left/right panel layout)
-- [ ] Implement template list with filtering (like main templates page)
-- [ ] Implement PDF preview with signature object + extraction field overlays
-- [ ] Implement source/new PDF toggle
-- [ ] Implement read-only pipeline viewer
-- [ ] Implement "Copy Structure" action
+- [x] Create modal component (left/right panel layout)
+- [x] Implement template list with filtering (like main templates page)
+- [x] Implement PDF preview with signature object + extraction field overlays
+- [ ] Implement source/new PDF toggle (deferred - not needed for MVP)
+- [ ] Implement read-only pipeline viewer (deferred - not needed for MVP)
+- [x] Implement "Copy Structure" action
 
 ### Frontend - State Update Logic
-- [ ] Implement signature object matching against new PDF
-- [ ] Update selectedSignatureObjects based on matches
-- [ ] Deep copy extraction fields from source template
-- [ ] Deep copy pipeline definition from source template
+- [x] Implement signature object matching against new PDF
+- [x] Update selectedSignatureObjects based on matches
+- [x] Deep copy extraction fields from source template
+- [x] Deep copy pipeline definition from source template
 
 ### Testing
-- [ ] Test with template that has matching signature objects
-- [ ] Test with template that has NO matching signature objects
-- [ ] Test extraction field and pipeline copying
-- [ ] Test toggle between source/new PDF views
-- [ ] Test modal close without copying (no side effects)
+- [x] Test with template that has matching signature objects
+- [x] Test with template that has NO matching signature objects
+- [x] Test extraction field and pipeline copying
+- [ ] Test toggle between source/new PDF views (deferred)
+- [x] Test modal close without copying (no side effects)
 
 ---
 

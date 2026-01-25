@@ -23,6 +23,7 @@ interface SignatureObjectsStepProps {
   onTemplateDescriptionChange: (description: string) => void;
   onCustomerIdChange: (customerId: number | null) => void;
   onSignatureObjectsChange: (objects: PdfObjects) => void;
+  onCopyFromExisting?: () => void;
 }
 
 export function SignatureObjectsStep({
@@ -37,6 +38,7 @@ export function SignatureObjectsStep({
   onTemplateDescriptionChange,
   onCustomerIdChange,
   onSignatureObjectsChange,
+  onCopyFromExisting,
 }: SignatureObjectsStepProps) {
 
   // Local state for UI
@@ -289,6 +291,7 @@ export function SignatureObjectsStep({
         onTypeToggle={handleTypeToggle}
         onShowAll={handleShowAll}
         onHideAll={handleHideAll}
+        onCopyFromExisting={onCopyFromExisting}
       />
       <PdfViewerSection
         pdfUrl={pdfUrl}

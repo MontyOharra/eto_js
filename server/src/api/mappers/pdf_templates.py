@@ -69,6 +69,7 @@ def build_template_list_item(
         status=summary.status,
         is_autoskip=summary.is_autoskip,
         source_pdf_id=summary.source_pdf_id,
+        page_count=summary.page_count,
         current_version=TemplateVersionSummary(
             version_id=summary.current_version_id or 0,
             version_num=summary.current_version_number or 0,

@@ -114,8 +114,8 @@ function ExtractionFieldsOverlay({
               top: `${top}px`,
               width: `${width}px`,
               height: `${height}px`,
-              border: '2px solid #3b82f6', // blue (matching TestingStep)
-              backgroundColor: 'rgba(59, 130, 246, 0.15)',
+              border: '2px solid rgba(147, 51, 234, 0.8)', // purple (matching TemplateBuilder)
+              backgroundColor: 'rgba(147, 51, 234, 0.2)',
               pointerEvents: 'none',
             }}
             title={field.name}
@@ -126,7 +126,7 @@ function ExtractionFieldsOverlay({
                 position: 'absolute',
                 top: '-20px',
                 left: '0',
-                backgroundColor: '#3b82f6',
+                backgroundColor: '#9333ea', // purple-600
                 color: 'white',
                 padding: '2px 6px',
                 borderRadius: '4px',
