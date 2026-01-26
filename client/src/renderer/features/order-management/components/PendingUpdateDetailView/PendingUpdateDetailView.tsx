@@ -17,6 +17,8 @@ import type {
 } from '../../types';
 import { getStatusColorClasses } from '../../constants';
 import { formatFieldValue as formatValue } from '../../utils/formatFieldValue';
+import { useSetFieldValue } from '../../api/hooks';
+import { AddFieldModal } from '../AddFieldModal';
 
 // Internal field type for this component
 interface PendingUpdateFieldDetail {
@@ -38,13 +40,17 @@ interface PendingUpdateFieldDetail {
 interface ConflictOption {
   history_id: number;
   value: unknown;
-  contributed_at: string;
+  contributed_at: string | null;
+  source_filename: string | null;
   processing_status: 'success' | 'failed';
   processing_error: string | null;
 }
 
 // Alias for source type
 type ContributingSubRun = ContributingSourceItem;
+
+// Sentinel sub_run_id for user-provided values (cross-highlighting)
+const USER_SOURCE_HOVER_ID = -1;
 
 // =============================================================================
 // Types
@@ -195,7 +201,10 @@ function FieldDropdown({ field, localSelection, onSelect, isConflict }: FieldDro
                       <span className="text-xs text-red-400">(failed)</span>
                     )}
                   </div>
-                  <div className="text-xs text-gray-500">{formatDate(option.contributed_at)}</div>
+                  <div className="text-xs text-gray-500">
+                    {option.contributed_at ? formatDate(option.contributed_at) : 'Manual Entry'}
+                    {option.source_filename && ` — ${option.source_filename}`}
+                  </div>
                 </button>
               );
             })}
@@ -302,9 +311,9 @@ function FieldRow({ field, localSelection, onConflictSelect, onConfirm, onToggle
           </div>
 
           {/* Values section - flows naturally */}
-          <div className="flex-1 min-w-0 flex flex-wrap items-start gap-x-3 gap-y-1">
+          <div className="flex-1 min-w-0 flex flex-wrap items-center gap-x-3 gap-y-1">
             {/* Current Value - up to ~half width, then wraps */}
-            <div className={`max-w-[40%] flex items-start gap-2 ${!isApproved ? 'opacity-50' : ''}`}>
+            <div className={`max-w-[40%] flex items-center gap-2 ${!isApproved ? 'opacity-50' : ''}`}>
               <span className={`text-sm break-words ${isApproved ? 'text-gray-300' : 'text-gray-500'}`}>
                 {currentValue || <span className="italic text-gray-500">Empty</span>}
               </span>
@@ -399,25 +408,33 @@ interface SourceCardProps {
 }
 
 function SourceCard({ source, onViewSubRun, hoveredFieldName, onHover, isHovered }: SourceCardProps) {
-  const isMockSource = source.sub_run_id === null;
+  const isUserSource = source.source_type === 'user';
+  const hasSubRun = source.sub_run_id !== null;
+  const hoverKey = isUserSource ? USER_SOURCE_HOVER_ID : source.sub_run_id;
 
   return (
     <div
       className={`rounded-lg border p-3 transition-colors ${
         isHovered
           ? 'border-blue-500/50 bg-blue-500/10 ring-1 ring-blue-500/50'
-          : 'border-gray-600 bg-gray-800'
+          : isUserSource
+            ? 'border-teal-600/50 bg-teal-900/20'
+            : 'border-gray-600 bg-gray-800'
       }`}
-      onMouseEnter={() => onHover(source.sub_run_id)}
+      onMouseEnter={() => onHover(hoverKey)}
       onMouseLeave={() => onHover(null)}
     >
       <div className="min-w-0">
-        <p className="text-sm font-medium text-white break-words">{source.pdf_filename}</p>
+        <p className={`text-sm font-medium break-words ${isUserSource ? 'text-teal-300' : 'text-white'}`}>
+          {source.pdf_filename}
+        </p>
         <p className="text-xs text-gray-400 mt-0.5 break-words">
           {source.source_type === 'email' ? (
             <>From: {source.source_identifier}</>
           ) : source.source_type === 'mock' ? (
             <span className="text-purple-400">{source.source_identifier}</span>
+          ) : source.source_type === 'user' ? (
+            <span className="text-teal-400">User-provided values</span>
           ) : (
             <>{source.source_identifier}</>
           )}
@@ -448,7 +465,7 @@ function SourceCard({ source, onViewSubRun, hoveredFieldName, onHover, isHovered
         })}
       </div>
 
-      {!isMockSource && (
+      {hasSubRun && (
         <button
           onClick={() => onViewSubRun(source.sub_run_id!)}
           className="mt-3 w-full text-xs py-1.5 rounded bg-blue-500/20 text-blue-400 hover:bg-blue-500/30 transition-colors"
@@ -482,6 +499,11 @@ export function PendingUpdateDetailView({
   const [hoveredFieldName, setHoveredFieldName] = useState<string | null>(null);
   // Track hovered source card for cross-highlighting field rows
   const [hoveredSubRunId, setHoveredSubRunId] = useState<number | null>(null);
+  // Track add field modal visibility
+  const [isAddFieldModalOpen, setIsAddFieldModalOpen] = useState(false);
+
+  // Mutation for adding a manual field value
+  const setFieldValue = useSetFieldValue();
 
   // Transform API fields to internal format, showing ALL fields from metadata
   // (not just fields with values). This ensures empty/missing fields are visible.
@@ -576,14 +598,17 @@ export function PendingUpdateDetailView({
         ? fieldItems.map(item => ({
             history_id: item.id,
             value: item.value,
-            contributed_at: update.updated_at,
+            contributed_at: item.contributed_at,
+            source_filename: item.source_filename,
             processing_status: item.processing_status,
             processing_error: item.processing_error,
           }))
         : null;
 
       // Get sub_run_id for cross-highlighting (from selected or single item)
-      const subRunId = selectedItem?.sub_run_id ?? (fieldItems.length === 1 ? fieldItems[0].sub_run_id : null);
+      // Use sentinel for user-provided values (sub_run_id null but has items) so cross-highlighting works
+      const rawSubRunId = selectedItem?.sub_run_id ?? (fieldItems.length === 1 ? fieldItems[0].sub_run_id : null);
+      const subRunId = rawSubRunId === null && fieldItems.length > 0 ? USER_SOURCE_HOVER_ID : rawSubRunId;
 
       // Get is_approved_for_update - all values for a field share the same approval status
       // Default to true if no field items exist
@@ -644,6 +669,29 @@ export function PendingUpdateDetailView({
   // Can retry only if update is failed
   const canRetry = update.status === 'failed';
   const hasConflicts = conflictCount > 0;
+
+  // Build available fields list for AddFieldModal
+  const availableFields = useMemo(() => {
+    const metadata = update.field_metadata ?? {};
+    return Object.entries(metadata).map(([name, meta]) => ({
+      name,
+      label: meta.label,
+      data_type: meta.data_type,
+    }));
+  }, [update.field_metadata]);
+
+  // Track which fields already have values
+  const existingFieldNames = useMemo(() => {
+    return new Set(transformedFields.filter((f) => f.proposed_value !== null && f.proposed_value !== undefined).map((f) => f.name));
+  }, [transformedFields]);
+
+  // Handle add field submission via API
+  const handleAddFieldSubmit = (fieldName: string, value: unknown) => {
+    setFieldValue.mutate(
+      { actionId: update.id, field_name: fieldName, value },
+      { onSuccess: () => setIsAddFieldModalOpen(false) },
+    );
+  };
 
   // Get status display label
   const getStatusLabel = (status: string): string => {
@@ -798,6 +846,18 @@ export function PendingUpdateDetailView({
               ))
             )}
           </div>
+
+          {/* Sticky Add Field Row */}
+          {canEdit && (
+            <div className="sticky bottom-0 mt-4 pt-3 pb-1 bg-gradient-to-t from-gray-900 from-70% to-transparent">
+              <button
+                onClick={() => setIsAddFieldModalOpen(true)}
+                className="w-full py-2 px-3 rounded bg-blue-600 hover:bg-blue-500 transition-colors text-white text-sm font-medium"
+              >
+                + Add Field Value
+              </button>
+            </div>
+          )}
         </div>
 
         {/* Right Column - Data Sources */}
@@ -812,18 +872,32 @@ export function PendingUpdateDetailView({
             ) : (
               update.contributing_sources.map((source, index) => (
                 <SourceCard
-                  key={source.sub_run_id ?? `mock-${index}`}
+                  key={source.sub_run_id ?? (source.source_type === 'user' ? 'user-entry' : `other-${index}`)}
                   source={source}
                   onViewSubRun={onViewSubRun}
                   hoveredFieldName={hoveredFieldName}
                   onHover={setHoveredSubRunId}
-                  isHovered={hoveredSubRunId === source.sub_run_id && source.sub_run_id !== null}
+                  isHovered={
+                    source.source_type === 'user'
+                      ? hoveredSubRunId === USER_SOURCE_HOVER_ID
+                      : hoveredSubRunId === source.sub_run_id && source.sub_run_id !== null
+                  }
                 />
               ))
             )}
           </div>
         </div>
       </div>
+
+      {/* Add Field Modal */}
+      <AddFieldModal
+        isOpen={isAddFieldModalOpen}
+        onClose={() => setIsAddFieldModalOpen(false)}
+        onSubmit={handleAddFieldSubmit}
+        availableFields={availableFields}
+        existingFieldNames={existingFieldNames}
+        isSubmitting={setFieldValue.isPending}
+      />
     </div>
   );
 }

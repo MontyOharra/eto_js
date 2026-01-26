@@ -31,6 +31,10 @@ import type {
   GetUnifiedActionsResponse,
   MarkReadRequest,
   MarkReadResponse,
+  SetFieldValueRequest,
+  SetFieldValueResponse,
+  GetAddressesResponse,
+  GetAddressesParams,
 } from './types';
 import type { ActionType } from '../types';
 
@@ -75,6 +79,9 @@ export const orderManagementQueryKeys = {
   orderHistory: () => [...orderManagementQueryKeys.all, 'history'] as const,
   orderHistoryByHawb: (hawb: string) =>
     [...orderManagementQueryKeys.orderHistory(), hawb] as const,
+
+  // Addresses (for location field dropdowns)
+  addresses: () => [...orderManagementQueryKeys.all, 'addresses'] as const,
 };
 
 // ============================================================================
@@ -705,5 +712,71 @@ export function useMarkRead() {
         queryKey: orderManagementQueryKeys.unifiedActions(),
       });
     },
+  });
+}
+
+// ============================================================================
+// Set Field Value (Manual Entry)
+// ============================================================================
+
+/**
+ * Mutation to manually set a field value on a pending action.
+ * Invalidates the action detail query on success so the UI refreshes.
+ */
+export function useSetFieldValue() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async ({
+      actionId,
+      ...body
+    }: SetFieldValueRequest & { actionId: number }): Promise<SetFieldValueResponse> => {
+      const response = await apiClient.post<SetFieldValueResponse>(
+        `/api/pending-actions/${actionId}/set-field-value`,
+        body
+      );
+      return response.data;
+    },
+    onSuccess: (_data, variables) => {
+      // Invalidate all detail key patterns so the UI refreshes with the new field
+      queryClient.invalidateQueries({
+        queryKey: orderManagementQueryKeys.pendingActionDetail(variables.actionId),
+      });
+      queryClient.invalidateQueries({
+        queryKey: orderManagementQueryKeys.pendingOrderDetail(variables.actionId),
+      });
+      queryClient.invalidateQueries({
+        queryKey: orderManagementQueryKeys.pendingUpdateDetail(variables.actionId),
+      });
+      // Also invalidate list since status may have changed
+      queryClient.invalidateQueries({
+        queryKey: orderManagementQueryKeys.pendingActions(),
+      });
+    },
+  });
+}
+
+// ============================================================================
+// Addresses Hooks (for AddFieldModal location dropdowns)
+// ============================================================================
+
+/**
+ * Fetch addresses with search and pagination.
+ * Used by the AddressSearchPicker component.
+ */
+export function useAddresses(params: GetAddressesParams = {}, enabled = true) {
+  return useQuery({
+    queryKey: [...orderManagementQueryKeys.addresses(), params] as const,
+    queryFn: async (): Promise<GetAddressesResponse> => {
+      const response = await apiClient.get<GetAddressesResponse>(
+        '/api/pending-actions/addresses',
+        { params }
+      );
+      return response.data;
+    },
+    enabled,
+    staleTime: 5 * 60 * 1000,
+    gcTime: 30 * 60 * 1000,
+    placeholderData: keepPreviousData,
   });
 }

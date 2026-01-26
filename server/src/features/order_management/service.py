@@ -2504,6 +2504,8 @@ class OrderManagementService:
                 processing_status=row["processing_status"],
                 processing_error=row["processing_error"],
                 raw_value=row["raw_value"],
+                contributed_at=row["contributed_at"],
+                source_filename=row["pdf_filename"],
             )
             if row["field_name"] not in fields:
                 fields[row["field_name"]] = []
@@ -2511,10 +2513,12 @@ class OrderManagementService:
 
         # 5. Build contributing sources (grouped by sub_run_id)
         sources_by_sub_run: dict[int, dict] = {}
+        user_contributed_fields: set[str] = set()
         for row in fields_with_sources:
             sub_run_id = row["sub_run_id"]
             if sub_run_id is None:
-                # User-provided value, skip for contributing sources
+                # User-provided value — collect for synthetic source
+                user_contributed_fields.add(row["field_name"])
                 continue
 
             if sub_run_id not in sources_by_sub_run:
@@ -2550,6 +2554,21 @@ class OrderManagementService:
             )
             for src in sources_by_sub_run.values()
         ]
+
+        # Add synthetic source for user-provided fields
+        if user_contributed_fields:
+            contributing_sources.append(
+                ContributingSource(
+                    sub_run_id=None,
+                    pdf_filename="Manual Entry",
+                    template_name=None,
+                    source_type="user",
+                    source_identifier="Manual Entry",
+                    fields_contributed=sorted(user_contributed_fields),
+                    contributed_at=action.updated_at,
+                )
+            )
+
         # Sort by contributed_at descending (most recent first)
         contributing_sources.sort(key=lambda s: s.contributed_at, reverse=True)
 
@@ -2782,7 +2801,7 @@ class OrderManagementService:
         pending_action_id: int,
         field_name: str,
         value: Any,
-    ) -> int:
+    ) -> tuple[int, PendingAction]:
         """
         User provides their own value for a field (overriding extracted data).
 
@@ -2790,11 +2809,194 @@ class OrderManagementService:
         Sets is_selected=TRUE for this value, FALSE for all others.
         Recalculates action status after update.
 
+        Args:
+            pending_action_id: ID of the pending action
+            field_name: Field name (must be a valid ORDER_FIELDS key)
+            value: Raw value from frontend, validated and transformed by data_type
+
         Returns:
-            ID of the newly created field record
+            Tuple of (new field ID, updated PendingAction)
+
+        Raises:
+            ValueError: If field_name is invalid or value doesn't match expected type
         """
-        # TODO: Implement user value setting
-        raise NotImplementedError()
+        logger.info(f"Setting user value for action {pending_action_id}, field '{field_name}'")
+
+        # 1. Validate field_name
+        if field_name not in ORDER_FIELDS:
+            raise ValueError(f"Unknown field name: '{field_name}'")
+
+        field_def = ORDER_FIELDS[field_name]
+
+        # 2. Validate action exists
+        action = self.pending_action_repo.get_by_id(pending_action_id)
+        if action is None:
+            raise ValueError(f"Pending action {pending_action_id} not found")
+
+        # 3. Validate and transform value based on data_type
+        transformed_value = self._validate_and_transform_user_value(
+            field_name=field_name,
+            data_type=field_def.data_type,
+            value=value,
+        )
+
+        # 4. Deselect all existing values for this field
+        self.pending_action_field_repo.clear_selection_for_field(
+            action_id=pending_action_id,
+            field_name=field_name,
+        )
+
+        # 5. Create the new field record (auto-selected)
+        new_field = self.pending_action_field_repo.create(
+            data=PendingActionFieldCreate(
+                pending_action_id=pending_action_id,
+                output_execution_id=None,  # User-provided value
+                field_name=field_name,
+                value=transformed_value,
+                is_selected=True,
+                is_approved_for_update=True,
+                processing_status="success",
+                raw_value=json.dumps(value),  # Store original frontend payload
+            )
+        )
+
+        # 6. Recalculate action status
+        updated_action = self._recalculate_action_status(pending_action_id)
+
+        # 7. Broadcast update event
+        order_event_manager.broadcast_sync("pending_action_updated", {
+            "id": updated_action.id,
+            "status": updated_action.status,
+            "action_type": updated_action.action_type,
+        })
+
+        logger.info(
+            f"User value set for field '{field_name}' on action {pending_action_id}, "
+            f"field_id={new_field.id}, new status: {updated_action.status}"
+        )
+
+        return new_field.id, updated_action
+
+    def _validate_and_transform_user_value(
+        self,
+        field_name: str,
+        data_type: str,
+        value: Any,
+    ) -> Any:
+        """
+        Validate and transform a user-provided value to the internal format.
+
+        Args:
+            field_name: The field name (for error messages)
+            data_type: The expected data type (string, datetime_range, location, dims)
+            value: The raw value from the frontend
+
+        Returns:
+            Transformed value in internal format
+
+        Raises:
+            ValueError: If value doesn't match expected structure
+        """
+        if data_type == "string":
+            if not isinstance(value, str) or not value.strip():
+                raise ValueError(f"Field '{field_name}' requires a non-empty string value")
+            return value.strip().upper()
+
+        elif data_type == "datetime_range":
+            if not isinstance(value, dict):
+                raise ValueError(f"Field '{field_name}' requires a datetime range object")
+
+            date = value.get("date")
+            start_time = value.get("startTime")
+            end_time = value.get("endTime")
+
+            if not date or not start_time or not end_time:
+                raise ValueError(
+                    f"Field '{field_name}' requires date, startTime, and endTime"
+                )
+
+            return DatetimeRangeValue(
+                date=date,
+                time_start=start_time,
+                time_end=end_time,
+            )
+
+        elif data_type == "location":
+            if not isinstance(value, dict):
+                raise ValueError(f"Field '{field_name}' requires a location object")
+
+            mode = value.get("mode")
+
+            if mode == "select":
+                address_id = value.get("addressId")
+                if address_id is None:
+                    raise ValueError(f"Field '{field_name}': must select an address")
+
+                # Look up address info from HTC
+                addr_info = self.htc_service.get_address_info(float(address_id))
+                if addr_info is None:
+                    raise ValueError(
+                        f"Field '{field_name}': address ID {address_id} not found in HTC"
+                    )
+
+                # Format address string same as _format_address_from_info
+                street = addr_info.addr_ln1
+                if addr_info.addr_ln2:
+                    street = f"{addr_info.addr_ln1} {addr_info.addr_ln2}"
+                formatted = f"{street}, {addr_info.city}, {addr_info.state} {addr_info.zip_code}"
+
+                return LocationValue(
+                    address_id=int(address_id),
+                    name=addr_info.company.upper(),
+                    address=formatted.upper(),
+                )
+
+            elif mode == "create":
+                company_name = value.get("companyName", "").strip()
+                address = value.get("address", "").strip()
+
+                if not company_name or not address:
+                    raise ValueError(
+                        f"Field '{field_name}': company name and address are required"
+                    )
+
+                return LocationValue(
+                    address_id=None,  # New address, not yet in HTC
+                    name=company_name.upper(),
+                    address=address.upper(),
+                )
+
+            else:
+                raise ValueError(
+                    f"Field '{field_name}': location mode must be 'select' or 'create'"
+                )
+
+        elif data_type == "dims":
+            if not isinstance(value, list) or len(value) == 0:
+                raise ValueError(f"Field '{field_name}' requires a non-empty list of dimensions")
+
+            dims = []
+            for i, row in enumerate(value):
+                if not isinstance(row, dict):
+                    raise ValueError(f"Field '{field_name}': row {i} must be an object")
+
+                try:
+                    dims.append(DimObject(
+                        qty=int(row.get("qty", 0)),
+                        length=round(float(row.get("length", 0)), 3),
+                        width=round(float(row.get("width", 0)), 3),
+                        height=round(float(row.get("height", 0)), 3),
+                        weight=round(float(row.get("weight", 0)), 3),
+                    ))
+                except (TypeError, ValueError) as e:
+                    raise ValueError(
+                        f"Field '{field_name}': invalid values in row {i}: {e}"
+                    )
+
+            return dims
+
+        else:
+            raise ValueError(f"Unsupported data type '{data_type}' for field '{field_name}'")
 
     def set_field_approval(
         self,
@@ -3380,3 +3582,22 @@ class OrderManagementService:
                 f"Failed to send order created notification for pending action "
                 f"{pending_action_id}: {e}"
             )
+
+    # ==================== Address Lookup ====================
+
+    def list_addresses(
+        self,
+        search: str | None = None,
+        limit: int = 50,
+        offset: int = 0,
+    ) -> tuple[list[dict], int]:
+        """
+        Get active addresses from HTC database with search and pagination.
+
+        Used by the AddFieldModal to populate address dropdowns for
+        pickup_location and delivery_location fields.
+
+        Returns:
+            Tuple of (list of address dicts, total matching count)
+        """
+        return self.htc_service.list_addresses(search=search, limit=limit, offset=offset)

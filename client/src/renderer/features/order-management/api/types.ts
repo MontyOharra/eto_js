@@ -288,3 +288,42 @@ export { MarkReadRequest };
  * Response for POST /order-management/mark-read
  */
 export { MarkReadResponse };
+
+// =============================================================================
+// Set Field Value (Manual Entry)
+// =============================================================================
+
+export interface SetFieldValueRequest {
+  field_name: string;
+  value: unknown;
+}
+
+export interface SetFieldValueResponse {
+  pending_action_id: number;
+  field_name: string;
+  field_id: number;
+  new_status: string;
+  success: boolean;
+  message: string | null;
+}
+
+// =============================================================================
+// Addresses API (for AddFieldModal location dropdowns)
+// =============================================================================
+
+export interface AddressOption {
+  id: number;
+  name: string;
+  address: string;
+}
+
+export interface GetAddressesResponse {
+  addresses: AddressOption[];
+  total: number;
+}
+
+export interface GetAddressesParams {
+  search?: string;
+  limit?: number;
+  offset?: number;
+}

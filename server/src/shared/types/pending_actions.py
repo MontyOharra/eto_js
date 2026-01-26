@@ -353,6 +353,8 @@ class PendingActionFieldView(BaseModel):
     processing_status: FieldProcessingStatus
     processing_error: str | None
     raw_value: str | None
+    contributed_at: datetime | None  # When this value was contributed (None for user-provided)
+    source_filename: str | None  # PDF filename that contributed this value
 
 
 class PendingActionListView(BaseModel):
@@ -393,11 +395,11 @@ class ContributingSource(BaseModel):
     """
     model_config = ConfigDict(frozen=True)
 
-    sub_run_id: int
+    sub_run_id: int | None  # None for user-provided values
     pdf_filename: str
     template_name: str | None  # None if no template matched
-    source_type: str  # "email" or "manual"
-    source_identifier: str  # Email address or "Manual Upload"
+    source_type: str  # "email", "manual", or "user"
+    source_identifier: str  # Email address, "Manual Upload", or "Manual Entry"
     fields_contributed: list[str]  # Field names this source contributed
     contributed_at: datetime
 

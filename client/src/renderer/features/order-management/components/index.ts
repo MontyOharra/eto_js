@@ -22,3 +22,4 @@ export { UnifiedActionsTable } from './UnifiedActionsTable';
 export { FieldStatusBadge } from './FieldStatusBadge';
 export { OrderStatusBadge } from './OrderStatusBadge';
 export { ReviewRequiredAlert } from './ReviewRequiredAlert';
+export { AddFieldModal } from './AddFieldModal';

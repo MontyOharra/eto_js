@@ -530,6 +530,115 @@ class HtcLookupUtils:
             logger.error(f"Failed to get address info for ID {address_id}: {e}")
             return None
 
+    def list_addresses(
+        self,
+        search: str | None = None,
+        limit: int = 50,
+        offset: int = 0,
+    ) -> tuple[list[dict], int]:
+        """
+        Get active addresses from HTC database with search and pagination.
+
+        Queries the HTC300_G060_T010 Addresses table for active addresses.
+        Supports searching by company name or address fields.
+
+        Args:
+            search: Optional search string to filter by company name or address
+            limit: Max number of results to return
+            offset: Number of results to skip
+
+        Returns:
+            Tuple of (list of address dicts, total count matching the query)
+        """
+        connection = self._get_connection()
+
+        try:
+            base_where = """
+                [FavCoID] = ?
+                AND [FavBrID] = ?
+                AND [FavActive] = True
+                AND [FavCompany] IS NOT NULL
+                AND LEN([FavCompany]) > 0
+            """
+            params: list = [self.CO_ID, self.BR_ID]
+
+            # Add search filter across company name and address fields
+            if search and search.strip():
+                search_term = f"%{search.strip()}%"
+                base_where += """
+                    AND (
+                        [FavCompany] LIKE ?
+                        OR [FavAddrLn1] LIKE ?
+                        OR [FavCity] LIKE ?
+                        OR [FavState] LIKE ?
+                        OR [FavZip] LIKE ?
+                    )
+                """
+                params.extend([search_term] * 5)
+
+            # Get total count
+            count_sql = f"""
+                SELECT COUNT(*)
+                FROM [HTC300_G060_T010 Addresses]
+                WHERE {base_where}
+            """
+
+            # Get paginated results
+            data_sql = f"""
+                SELECT
+                    [FavID],
+                    [FavCompany],
+                    [FavAddrLn1],
+                    [FavAddrLn2],
+                    [FavCity],
+                    [FavState],
+                    [FavZip]
+                FROM [HTC300_G060_T010 Addresses]
+                WHERE {base_where}
+                ORDER BY [FavCompany]
+            """
+
+            with connection.cursor() as cursor:
+                cursor.execute(count_sql, params)
+                total = cursor.fetchone()[0]
+
+                cursor.execute(data_sql, params)
+                # Manual offset/limit since Access SQL doesn't support OFFSET/FETCH
+                all_rows = cursor.fetchall()
+                rows = all_rows[offset:offset + limit]
+
+            addresses = []
+            for row in rows:
+                fav_id = row[0]
+                company = str(row[1]) if row[1] else ""
+                addr_ln1 = str(row[2]) if row[2] else ""
+                addr_ln2 = str(row[3]) if row[3] else ""
+                city = str(row[4]) if row[4] else ""
+                state = str(row[5]) if row[5] else ""
+                zip_code = str(row[6]) if row[6] else ""
+
+                # Format the address string
+                street = addr_ln1
+                if addr_ln2:
+                    street = f"{addr_ln1} {addr_ln2}"
+                formatted_address = f"{street}, {city}, {state} {zip_code}".strip(", ")
+
+                addresses.append({
+                    "id": int(fav_id) if fav_id else 0,
+                    "name": company,
+                    "address": formatted_address,
+                })
+
+            logger.info(
+                f"Retrieved {len(addresses)} addresses (total={total}, "
+                f"search={search!r}, offset={offset}, limit={limit})"
+            )
+            return addresses, total
+
+        except Exception as e:
+            logger.error(f"Failed to list addresses from HTC database: {e}")
+            return [], 0
+
     def get_aci_letter(self, aci_id: int) -> str:
         """
         Get the ACI zone letter from an ACI ID.

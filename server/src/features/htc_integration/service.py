@@ -252,6 +252,20 @@ class HtcIntegrationService:
         """
         return self._lookup_utils.get_address_info(address_id)
 
+    def list_addresses(
+        self,
+        search: str | None = None,
+        limit: int = 50,
+        offset: int = 0,
+    ) -> tuple[list[dict], int]:
+        """
+        Get active addresses from HTC database with search and pagination.
+
+        Returns:
+            Tuple of (list of address dicts, total matching count)
+        """
+        return self._lookup_utils.list_addresses(search=search, limit=limit, offset=offset)
+
     def get_aci_letter(self, aci_id: int) -> str:
         """
         Get the ACI zone letter from an ACI ID.

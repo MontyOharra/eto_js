@@ -31,6 +31,10 @@ from api.schemas.pending_actions import (
     SelectFieldValueResponse,
     SetFieldApprovalRequest,
     SetFieldApprovalResponse,
+    SetFieldValueRequest,
+    SetFieldValueResponse,
+    Address,
+    GetAddressesResponse,
 )
 from shared.types.pending_actions import PendingActionStatus, PendingActionType, ORDER_FIELDS
 from shared.services.service_container import ServiceContainer
@@ -212,6 +216,36 @@ async def list_pending_actions(
     )
 
 
+@router.get("/addresses", response_model=GetAddressesResponse)
+async def get_addresses(
+    search: str | None = Query(None, description="Search by company name or address"),
+    limit: int = Query(50, ge=1, le=200, description="Number of items to return"),
+    offset: int = Query(0, ge=0, description="Number of items to skip"),
+    service: OrderManagementService = Depends(lambda: ServiceContainer.get_order_management_service())
+) -> GetAddressesResponse:
+    """
+    Get list of addresses for field entry dropdowns with search and pagination.
+
+    Fetches active addresses from the HTC Access database.
+    Supports searching by company name or address fields.
+    Returns addresses sorted by company name.
+
+    Used by AddFieldModal when entering pickup_location or delivery_location fields.
+    """
+    addresses_data, total = service.list_addresses(
+        search=search,
+        limit=limit,
+        offset=offset,
+    )
+
+    addresses = [
+        Address(id=a["id"], name=a["name"], address=a["address"])
+        for a in addresses_data
+    ]
+
+    return GetAddressesResponse(addresses=addresses, total=total)
+
+
 @router.post("/mock", response_model=CreateMockOutputResponse)
 async def create_mock_output(
     request: CreateMockOutputRequest,
@@ -305,6 +339,8 @@ async def get_pending_action_detail(
                 processing_status=fv.processing_status,
                 processing_error=fv.processing_error,
                 raw_value=fv.raw_value,
+                contributed_at=fv.contributed_at,
+                source_filename=fv.source_filename,
             )
             for fv in field_values
         ]
@@ -562,6 +598,49 @@ async def set_field_approval(
             is_approved=is_approved,
             success=True,
             message=f"Field '{request.field_name}' {'included in' if is_approved else 'excluded from'} update",
+        )
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+@router.post("/{action_id}/set-field-value", response_model=SetFieldValueResponse)
+async def set_field_value(
+    action_id: int,
+    request: SetFieldValueRequest,
+    service: OrderManagementService = Depends(lambda: ServiceContainer.get_order_management_service())
+) -> SetFieldValueResponse:
+    """
+    Manually set a field value for a pending action.
+
+    Creates a new field value record with the user-provided data.
+    Auto-selects the new value and deselects any previous values for the field.
+    Recalculates action status after setting the value.
+
+    Value format depends on the field's data_type:
+    - string: plain string (will be uppercased)
+    - datetime_range: {"date": "2025-01-27", "startTime": "09:00", "endTime": "17:00"}
+    - location (select existing): {"mode": "select", "addressId": 123}
+    - location (create new): {"mode": "create", "companyName": "Acme", "address": "123 Main St"}
+    - dims: [{"qty": 1, "length": 12, "width": 10, "height": 8, "weight": 25}, ...]
+    """
+    logger.info(
+        f"Set field value: action={action_id}, field={request.field_name}"
+    )
+
+    try:
+        field_id, updated_action = service.set_user_value(
+            pending_action_id=action_id,
+            field_name=request.field_name,
+            value=request.value,
+        )
+
+        return SetFieldValueResponse(
+            pending_action_id=action_id,
+            field_name=request.field_name,
+            field_id=field_id,
+            new_status=updated_action.status,
+            success=True,
+            message=f"Value set for field '{request.field_name}'",
         )
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
