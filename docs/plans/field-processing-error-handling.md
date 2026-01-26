@@ -375,33 +375,33 @@ Consider how failed fields interact with existing conflict resolution:
 ## Checklist
 
 ### Database
-- [ ] Add `processing_status` column to `pending_action_fields`
-- [ ] Add `processing_error` column to `pending_action_fields`
-- [ ] Add `raw_value` column to `pending_action_fields`
-- [ ] Create migration script
-- [ ] Update types in `shared/types/pending_actions.py`
+- [x] Add `processing_status` column to `pending_action_fields`
+- [x] Add `processing_error` column to `pending_action_fields`
+- [x] Add `raw_value` column to `pending_action_fields`
+- [x] Create migration script
+- [x] Update types in `shared/types/pending_actions.py`
 
 ### Backend - ETO Service
-- [ ] Update `_process_sub_run_output_execution()` to not fail sub-run on order management errors
-- [ ] Mark sub-run successful after storing raw output data
+- [x] Update `_process_sub_run_output_execution()` to not fail sub-run on order management errors
+- [x] Mark sub-run successful after storing raw output data
 
 ### Backend - Order Management Service
-- [ ] Create `FieldProcessingResult` and `OutputProcessingResult` types
-- [ ] Refactor `process_output_execution()` to never raise
-- [ ] Implement `_process_single_field()` with per-field error handling
-- [ ] Implement `_resolve_address_with_fallback()` cascading logic
-- [ ] Implement `_resolve_address_via_llm()` fallback
+- [x] Create `FieldProcessingResult` and `OutputProcessingResult` types
+- [x] Refactor `process_output_execution()` to never raise
+- [x] Implement `_process_single_field()` with per-field error handling
+- [x] Implement `_resolve_address_with_fallback()` cascading logic
+- [x] Implement `_resolve_address_via_llm()` fallback (stub - returns None)
 
 ### API
-- [ ] Update `PendingActionFieldResponse` schema with new fields
-- [ ] Ensure API returns processing status and error info
+- [x] Update `PendingActionFieldResponse` schema with new fields
+- [x] Ensure API returns processing status and error info
 
 ### Frontend
-- [ ] Display field processing status (success/failed badge)
-- [ ] Show processing error message for failed fields
-- [ ] Show raw value for failed fields
+- [x] Display field processing status (success/failed badge)
+- [x] Show processing error message for failed fields
+- [ ] Show raw value for failed fields (deferred - not needed for MVP)
 - [ ] Consider retry/manual fix UI (may tie into separate manual entry feature)
-- [ ] Update conflict resolution UI to handle failed fields
+- [x] Update conflict resolution UI to handle failed fields
 
 ### Testing
 - [ ] Test field processing with valid data

@@ -1,5 +1,13 @@
 """Order Management Feature"""
 
-from .service import OrderManagementService
+from .service import (
+    OrderManagementService,
+    FieldProcessingResult,
+    OutputProcessingResult,
+)
 
-__all__ = ["OrderManagementService"]
+__all__ = [
+    "OrderManagementService",
+    "FieldProcessingResult",
+    "OutputProcessingResult",
+]

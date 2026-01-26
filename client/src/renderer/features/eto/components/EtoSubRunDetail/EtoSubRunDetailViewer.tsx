@@ -5,7 +5,9 @@
  */
 
 import { useState } from "react";
-import { useEtoSubRunDetail, useReprocessRun, useSkipRun } from "../../api/hooks";
+import { useEtoSubRunDetail, useSkipRun } from "../../api/hooks";
+import { FieldHighlightProvider } from "../../../pipelines/contexts";
+import { TemplateDetailModal } from "../../../templates/components/TemplateDetail";
 import { EtoSubRunDetailHeader } from "./EtoSubRunDetailHeader";
 import { EtoSubRunDetailFooter } from "./EtoSubRunDetailFooter";
 import { SummarySuccessView } from "./SummarySuccessView";
@@ -18,6 +20,8 @@ interface EtoSubRunDetailViewerProps {
   isOpen: boolean;
   subRunId: number | null;
   onClose: () => void;
+  /** Optional callback to navigate to the ETO runs page for this run */
+  onViewInEto?: (etoRunId: number) => void;
 }
 
 type ViewMode = "summary" | "detail";
@@ -26,37 +30,23 @@ export function EtoSubRunDetailViewer({
   isOpen,
   subRunId,
   onClose,
+  onViewInEto,
 }: EtoSubRunDetailViewerProps) {
   const {
     data: runDetail,
     isLoading,
     error: queryError,
   } = useEtoSubRunDetail(isOpen ? subRunId : null);
-  const reprocessMutation = useReprocessRun();
   const skipMutation = useSkipRun();
   const [viewMode, setViewMode] = useState<ViewMode>("summary");
   const [isDragging, setIsDragging] = useState(false);
+  const [viewingTemplateId, setViewingTemplateId] = useState<number | null>(null);
 
   const error = queryError ? "Failed to load run details" : null;
-
-  // Reprocess is available for success, failure, and needs_template
-  const canReprocess =
-    runDetail?.status === "success" ||
-    runDetail?.status === "failure" ||
-    runDetail?.status === "needs_template";
 
   // Skip is only available for failure and needs_template (not success)
   const canSkip =
     runDetail?.status === "failure" || runDetail?.status === "needs_template";
-
-  const handleReprocess = async () => {
-    if (!runDetail?.eto_run_id) return;
-    try {
-      await reprocessMutation.mutateAsync(runDetail.eto_run_id);
-    } catch (err) {
-      console.error("Failed to reprocess run:", err);
-    }
-  };
 
   const handleSkip = async () => {
     if (!runDetail?.eto_run_id) return;
@@ -98,6 +88,7 @@ export function EtoSubRunDetailViewer({
 
           {!isLoading && !error && runDetail && (
             <div className="pr-4 pl-2 py-4 h-full">
+              <FieldHighlightProvider>
               <ResizablePanelLayout
                 onDragStateChange={setIsDragging}
                 leftPanel={
@@ -144,6 +135,7 @@ export function EtoSubRunDetailViewer({
                   />
                 }
               />
+              </FieldHighlightProvider>
             </div>
           )}
         </div>
@@ -152,14 +144,20 @@ export function EtoSubRunDetailViewer({
         <EtoSubRunDetailFooter
           runDetail={runDetail || null}
           onClose={onClose}
-          showReprocessButton={canReprocess}
           showSkipButton={canSkip}
-          onReprocess={handleReprocess}
           onSkip={handleSkip}
-          isReprocessing={reprocessMutation.isPending}
           isSkipping={skipMutation.isPending}
+          onViewInEto={onViewInEto}
+          onViewTemplate={(templateId) => setViewingTemplateId(templateId)}
         />
       </div>
+
+      {/* Template Detail Modal */}
+      <TemplateDetailModal
+        isOpen={viewingTemplateId !== null}
+        templateId={viewingTemplateId}
+        onClose={() => setViewingTemplateId(null)}
+      />
     </div>
   );
 }

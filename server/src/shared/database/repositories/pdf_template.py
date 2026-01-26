@@ -8,7 +8,7 @@ from sqlalchemy import func, case, desc, asc
 from sqlalchemy.orm import joinedload, selectinload
 
 from shared.database.repositories.base import BaseRepository
-from shared.database.models import PdfTemplateModel, PdfTemplateVersionModel
+from shared.database.models import PdfTemplateModel, PdfTemplateVersionModel, PdfFileModel
 from shared.types.pdf_templates import (
     PdfTemplate,
     PdfTemplateListView
@@ -100,7 +100,8 @@ class PdfTemplateRepository(BaseRepository[PdfTemplateModel]):
                     PdfTemplateModel,
                     PdfTemplateVersionModel.version_num,
                     PdfTemplateVersionModel.usage_count,
-                    version_count_subquery.c.version_count
+                    version_count_subquery.c.version_count,
+                    PdfFileModel.page_count
                 )
                 .outerjoin(
                     PdfTemplateVersionModel,
@@ -109,6 +110,10 @@ class PdfTemplateRepository(BaseRepository[PdfTemplateModel]):
                 .outerjoin(
                     version_count_subquery,
                     PdfTemplateModel.id == version_count_subquery.c.pdf_template_id
+                )
+                .outerjoin(
+                    PdfFileModel,
+                    PdfTemplateModel.source_pdf_id == PdfFileModel.id
                 )
             )
 
@@ -163,13 +168,14 @@ class PdfTemplateRepository(BaseRepository[PdfTemplateModel]):
                     status=template.status,  # Convert enum to string
                     is_autoskip=template.is_autoskip,
                     source_pdf_id=template.source_pdf_id,
+                    page_count=page_count,
                     current_version_id=template.current_version_id,
                     current_version_number=version_num,
                     version_usage_count=usage_count or 0,  # Default to 0 if None
                     version_count=version_count or 0,  # Default to 0 if None
                     updated_at=template.updated_at
                 )
-                for template, version_num, usage_count, version_count in results
+                for template, version_num, usage_count, version_count, page_count in results
             ]
 
             return summaries, total

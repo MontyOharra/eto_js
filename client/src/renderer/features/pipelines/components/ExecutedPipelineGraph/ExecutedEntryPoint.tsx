@@ -7,9 +7,13 @@
  * - "Entry Point" as module name
  * - No inputs
  * - Single string output with the entry point name
+ *
+ * Supports cross-component highlighting via FieldHighlightContext
  */
 
+import { useCallback } from "react";
 import { ExecutedModule } from "./ExecutedModule";
+import { useFieldHighlight } from "../../contexts";
 
 interface ExecutedEntryPointProps {
   data: {
@@ -21,6 +25,19 @@ interface ExecutedEntryPointProps {
 
 export function ExecutedEntryPoint({ data }: ExecutedEntryPointProps) {
   const { name, nodeId, entryPointId } = data;
+  const highlightContext = useFieldHighlight();
+
+  // Check if this entry point is highlighted
+  const isHighlighted = highlightContext?.highlightedFieldName === name;
+
+  // Handlers for hover (only if context is available)
+  const handleMouseEnter = useCallback(() => {
+    highlightContext?.setHighlightedFieldName(name);
+  }, [highlightContext, name]);
+
+  const handleMouseLeave = useCallback(() => {
+    highlightContext?.setHighlightedFieldName(null);
+  }, [highlightContext]);
 
   // Hardcoded values for entry points
   const moduleData = {
@@ -38,6 +55,9 @@ export function ExecutedEntryPoint({ data }: ExecutedEntryPointProps) {
       },
     },
     status: "executed" as const,
+    isHighlighted,
+    onMouseEnter: highlightContext ? handleMouseEnter : undefined,
+    onMouseLeave: highlightContext ? handleMouseLeave : undefined,
   };
 
   return <ExecutedModule data={moduleData} />;

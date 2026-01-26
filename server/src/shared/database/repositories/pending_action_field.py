@@ -54,6 +54,9 @@ class PendingActionFieldRepository(BaseRepository[PendingActionFieldModel]):
             value=value,
             is_selected=model.is_selected,
             is_approved_for_update=model.is_approved_for_update,
+            processing_status=model.processing_status,
+            processing_error=model.processing_error,
+            raw_value=model.raw_value,
         )
 
     def _serialize_value(self, value: Any) -> str:
@@ -93,6 +96,9 @@ class PendingActionFieldRepository(BaseRepository[PendingActionFieldModel]):
                 value=self._serialize_value(data.value),
                 is_selected=data.is_selected,
                 is_approved_for_update=data.is_approved_for_update,
+                processing_status=data.processing_status,
+                processing_error=data.processing_error,
+                raw_value=data.raw_value,
             )
 
             session.add(model)
@@ -599,6 +605,9 @@ class PendingActionFieldRepository(BaseRepository[PendingActionFieldModel]):
                     self.model_class.is_selected,
                     self.model_class.is_approved_for_update,
                     self.model_class.output_execution_id,
+                    self.model_class.processing_status,
+                    self.model_class.processing_error,
+                    self.model_class.raw_value,
                     EtoSubRunOutputExecutionModel.sub_run_id,
                     EtoSubRunOutputExecutionModel.created_at.label("contributed_at"),
                     PdfFileModel.original_filename.label("pdf_filename"),
@@ -656,6 +665,9 @@ class PendingActionFieldRepository(BaseRepository[PendingActionFieldModel]):
                     "is_selected": row.is_selected,
                     "is_approved_for_update": row.is_approved_for_update,
                     "output_execution_id": row.output_execution_id,
+                    "processing_status": row.processing_status,
+                    "processing_error": row.processing_error,
+                    "raw_value": row.raw_value,
                     "sub_run_id": row.sub_run_id,
                     "contributed_at": row.contributed_at,
                     "pdf_filename": row.pdf_filename,

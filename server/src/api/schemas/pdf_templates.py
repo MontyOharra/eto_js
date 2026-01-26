@@ -38,6 +38,7 @@ class TemplateListItem(BaseModel):
     status: PdfTemplateStatus
     is_autoskip: bool = False
     source_pdf_id: int
+    page_count: int | None = None  # From source PDF file
     current_version: TemplateVersionSummary
     total_versions: int
 

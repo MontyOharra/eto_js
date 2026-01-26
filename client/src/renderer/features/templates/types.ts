@@ -92,6 +92,7 @@ export interface TemplateListItem {
   status: TemplateStatus;
   is_autoskip: boolean; // If true, pages matching this template are automatically skipped
   source_pdf_id: number;
+  page_count: number | null; // From source PDF file
   current_version: TemplateVersionSummary;
   total_versions: number; // Count of all versions for this template
 }

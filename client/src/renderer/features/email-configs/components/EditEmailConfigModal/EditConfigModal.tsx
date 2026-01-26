@@ -48,6 +48,7 @@ export function EditConfigModal({
         operation: "contains",
         value: "",
         case_sensitive: false,
+        negate: false,
       },
     ]);
   };
@@ -280,23 +281,38 @@ export function EditConfigModal({
                         <label className="block text-xs font-medium text-gray-400 mb-1">
                           Operation
                         </label>
-                        <select
-                          value={rule.operation}
-                          onChange={(e) =>
-                            handleUpdateFilterRule(
-                              index,
-                              "operation",
-                              e.target.value
-                            )
-                          }
-                          disabled={config.is_active}
-                          className="w-full px-2 py-1.5 bg-gray-700 border border-gray-600 rounded text-white text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-50 disabled:cursor-not-allowed"
-                        >
-                          <option value="contains">Contains</option>
-                          <option value="equals">Equals</option>
-                          <option value="starts_with">Starts With</option>
-                          <option value="ends_with">Ends With</option>
-                        </select>
+                        <div className="flex gap-1">
+                          <button
+                            type="button"
+                            onClick={() => handleUpdateFilterRule(index, 'negate', !rule.negate)}
+                            disabled={config.is_active}
+                            className={`px-1.5 py-1.5 rounded text-xs font-bold shrink-0 transition-colors ${
+                              rule.negate
+                                ? 'bg-red-600 text-white'
+                                : 'bg-gray-700 text-gray-400 hover:bg-gray-600'
+                            } disabled:opacity-50 disabled:cursor-not-allowed`}
+                            title={rule.negate ? 'Negated - click to remove' : 'Click to negate this rule'}
+                          >
+                            NOT
+                          </button>
+                          <select
+                            value={rule.operation}
+                            onChange={(e) =>
+                              handleUpdateFilterRule(
+                                index,
+                                "operation",
+                                e.target.value
+                              )
+                            }
+                            disabled={config.is_active}
+                            className="w-full px-2 py-1.5 bg-gray-700 border border-gray-600 rounded text-white text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-50 disabled:cursor-not-allowed"
+                          >
+                            <option value="contains">Contains</option>
+                            <option value="equals">Equals</option>
+                            <option value="starts_with">Starts With</option>
+                            <option value="ends_with">Ends With</option>
+                          </select>
+                        </div>
                       </div>
                       <div className="col-span-4">
                         <label className="block text-xs font-medium text-gray-400 mb-1">

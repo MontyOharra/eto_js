@@ -15,7 +15,8 @@ logger = logging.getLogger(__name__)
 
 
 # Dimension object structure
-# A dim is a dict with: height, length, width, qty, weight, dim_weight (calculated)
+# A dim is a dict with: height, length, width, qty, weight
+# Note: dim_weight is NOT stored here - it's calculated at HTC write time only
 DimObject = Dict[str, Any]
 
 
@@ -131,17 +132,14 @@ class DimBuilder(BaseModule):
             elif group_index == 4:  # weight
                 weight = float(value) if value is not None else 0.0
 
-        # Calculate dim weight: L * W * H / 144 (industry standard formula)
-        dim_weight = (length * width * height) / 144.0
-
         # Build the dim object
+        # Note: dim_weight is NOT included here - it's calculated at HTC write time only
         dim_obj: DimObject = {
             "height": height,
             "length": length,
             "width": width,
             "qty": qty,
             "weight": weight,
-            "dim_weight": round(dim_weight, 2)
         }
 
         logger.info(f"Built dim object: {dim_obj}")

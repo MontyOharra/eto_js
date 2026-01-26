@@ -117,10 +117,7 @@ function formatDatetimeRange(value: DatetimeRangeValue): string {
     const day = dateParts[2];
     const formattedDate = `${month}/${day}/${year}`;
 
-    // Format time range
-    if (value.time_start === value.time_end) {
-      return `${formattedDate} ${value.time_start}`;
-    }
+    // Format time range - always show both start and end
     return `${formattedDate} ${value.time_start} - ${value.time_end}`;
   }
 

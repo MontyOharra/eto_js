@@ -17,6 +17,8 @@ import type {
 } from '../../types';
 import { getStatusColorClasses } from '../../constants';
 import { formatFieldValue as formatValue } from '../../utils/formatFieldValue';
+import { useSetFieldValue } from '../../api/hooks';
+import { AddFieldModal } from '../AddFieldModal';
 
 // Internal field type for this component
 interface PendingUpdateFieldDetail {
@@ -31,16 +33,24 @@ interface PendingUpdateFieldDetail {
   source: { history_id: number } | null;
   sub_run_id: number | null; // For cross-highlighting with source cards
   is_approved_for_update: boolean; // Whether this field will be included in the update
+  processing_status: 'success' | 'failed';
+  processing_error: string | null;
 }
 
 interface ConflictOption {
   history_id: number;
   value: unknown;
-  contributed_at: string;
+  contributed_at: string | null;
+  source_filename: string | null;
+  processing_status: 'success' | 'failed';
+  processing_error: string | null;
 }
 
 // Alias for source type
 type ContributingSubRun = ContributingSourceItem;
+
+// Sentinel sub_run_id for user-provided values (cross-highlighting)
+const USER_SOURCE_HOVER_ID = -1;
 
 // =============================================================================
 // Types
@@ -114,8 +124,20 @@ function FieldDropdown({ field, localSelection, onSelect, isConflict }: FieldDro
     ? options.find((o) => o.history_id === localSelection.selectedHistoryId)
     : null;
 
+  // Check if the currently displayed option is failed
+  // If user made a local selection, check ONLY that option's status
+  // Otherwise, fall back to the field's server-side status
+  const isSelectedFailed = localSelectedOption
+    ? localSelectedOption.processing_status === 'failed'
+    : field.processing_status === 'failed';
+  const selectedError = localSelectedOption
+    ? localSelectedOption.processing_error
+    : field.processing_error;
+
   const rawDisplayValue = localSelectedOption?.value ?? localSelection?.selectedValue ?? field.proposed_value;
-  const displayValue = formatFieldValue(rawDisplayValue, field.data_type);
+  const displayValue = isSelectedFailed && selectedError
+    ? `Error: ${selectedError}`
+    : formatFieldValue(rawDisplayValue, field.data_type);
 
   // Determine which option is currently "active" (for highlighting in dropdown)
   // This is either the local selection or the currently confirmed value
@@ -126,12 +148,14 @@ function FieldDropdown({ field, localSelection, onSelect, isConflict }: FieldDro
       <button
         onClick={() => setIsOpen(!isOpen)}
         className={`w-full flex items-center justify-between gap-2 px-2 py-1 rounded border text-sm text-left ${
-          isConflict
-            ? 'bg-yellow-500/10 border-yellow-500/50 text-yellow-400'
-            : 'bg-gray-700 border-gray-600 text-white'
+          isSelectedFailed
+            ? 'bg-red-500/10 border-red-500/50 text-red-400'
+            : isConflict
+              ? 'bg-yellow-500/10 border-yellow-500/50 text-yellow-400'
+              : 'bg-gray-700 border-gray-600 text-white'
         }`}
       >
-        <span className="truncate">{displayValue || 'Choose value...'}</span>
+        <span className={`truncate ${isSelectedFailed ? 'italic' : ''}`}>{displayValue || 'Choose value...'}</span>
         <svg
           className={`w-4 h-4 flex-shrink-0 transition-transform ${isOpen ? 'rotate-180' : ''}`}
           fill="none"
@@ -151,6 +175,10 @@ function FieldDropdown({ field, localSelection, onSelect, isConflict }: FieldDro
           <div className="absolute top-full left-0 right-0 mt-1 bg-gray-800 border border-gray-600 rounded-lg shadow-xl z-20 overflow-hidden max-h-48 overflow-y-auto">
             {options.map((option) => {
               const isActive = option.history_id === activeHistoryId;
+              const isOptionFailed = option.processing_status === 'failed';
+              const optionDisplayValue = isOptionFailed && option.processing_error
+                ? `Error: ${option.processing_error}`
+                : formatFieldValue(option.value, field.data_type);
               return (
                 <button
                   key={option.history_id}
@@ -160,15 +188,23 @@ function FieldDropdown({ field, localSelection, onSelect, isConflict }: FieldDro
                   }}
                   className={`w-full px-3 py-2 text-left hover:bg-gray-700 transition-colors ${
                     isActive ? 'bg-gray-700' : ''
-                  }`}
+                  } ${isOptionFailed ? 'border-l-2 border-red-500' : ''}`}
                 >
                   <div className="flex items-center gap-2">
-                    <span className="text-sm text-white">{formatFieldValue(option.value, field.data_type)}</span>
+                    <span className={`text-sm ${isOptionFailed ? 'text-red-400 italic' : 'text-white'}`}>
+                      {optionDisplayValue}
+                    </span>
                     {isActive && !isConflict && (
                       <span className="text-xs text-blue-400">(current)</span>
                     )}
+                    {isOptionFailed && (
+                      <span className="text-xs text-red-400">(failed)</span>
+                    )}
                   </div>
-                  <div className="text-xs text-gray-500">{formatDate(option.contributed_at)}</div>
+                  <div className="text-xs text-gray-500">
+                    {option.contributed_at ? formatDate(option.contributed_at) : 'Manual Entry'}
+                    {option.source_filename && ` — ${option.source_filename}`}
+                  </div>
                 </button>
               );
             })}
@@ -199,7 +235,7 @@ interface FieldRowProps {
 function FieldRow({ field, localSelection, onConflictSelect, onConfirm, onToggleApproval, isConfirming, isTogglingApproval, canEdit, isHighlighted, onHover }: FieldRowProps) {
   const isConflict = field.state === 'conflict';
   const hasMultipleOptions = (field.conflict_options?.length ?? 0) > 1;
-  const hasLocalSelection = localSelection?.selectedHistoryId !== null;
+  const hasLocalSelection = localSelection?.selectedHistoryId !== null && localSelection?.selectedHistoryId !== undefined;
   const isApproved = field.is_approved_for_update;
 
   // Empty state - no proposed change for this field
@@ -210,6 +246,16 @@ function FieldRow({ field, localSelection, onConflictSelect, onConfirm, onToggle
   // Determine if user has changed selection from the current confirmed value
   const hasNewSelection = hasLocalSelection &&
     localSelection?.selectedHistoryId !== field.source?.history_id;
+
+  // Check if the CURRENTLY DISPLAYED value is failed
+  // If user has made a local selection, check that option's status
+  // Otherwise, check the field's server-side status
+  const localSelectedOption = hasLocalSelection && field.conflict_options
+    ? field.conflict_options.find(o => o.history_id === localSelection.selectedHistoryId)
+    : null;
+  const isFailed = localSelectedOption
+    ? localSelectedOption.processing_status === 'failed'
+    : field.processing_status === 'failed';
 
   const handleConfirm = () => {
     if (localSelection?.selectedHistoryId) {
@@ -224,9 +270,11 @@ function FieldRow({ field, localSelection, onConflictSelect, onConfirm, onToggle
   // Format current HTC value
   const currentValue = formatFieldValue(field.current_value, field.data_type);
 
-  // Get the new value to display
+  // Get the new value to display - for failed fields, show error message
   const newValue = localSelection?.selectedValue ?? field.proposed_value;
-  const formattedNewValue = formatFieldValue(newValue, field.data_type);
+  const formattedNewValue = isFailed && field.processing_error
+    ? `Error: ${field.processing_error}`
+    : formatFieldValue(newValue, field.data_type);
 
   // Show dropdown if there are multiple options (conflict or confirmed with history)
   // But only if the update is editable (pending status)
@@ -238,29 +286,34 @@ function FieldRow({ field, localSelection, onConflictSelect, onConfirm, onToggle
       <div
         className={`flex-1 py-2 px-3 rounded-lg border transition-colors ${
           !isApproved
-            ? 'bg-gray-800/30 border-gray-700/50 opacity-60'
+            ? 'bg-gray-800/30 border-gray-700/50'
             : isHighlighted
               ? 'bg-blue-500/20 border-blue-500/50 ring-1 ring-blue-500/50'
-              : isConflict
-                ? 'bg-yellow-500/5 border-yellow-500/30'
-                : 'bg-gray-800/50 border-gray-700'
+              : isFailed
+                ? 'bg-red-500/5 border-red-500/30'
+                : isConflict
+                  ? 'bg-yellow-500/5 border-yellow-500/30'
+                  : 'bg-gray-800/50 border-gray-700'
         }`}
         onMouseEnter={() => onHover(field.name)}
         onMouseLeave={() => onHover(null)}
       >
         <div className="flex items-start gap-3">
           {/* Label - fixed width on left */}
-          <div className="w-32 flex-shrink-0 flex items-center gap-2 pt-0.5">
-            {isConflict && (
+          <div className={`w-32 flex-shrink-0 flex items-center gap-2 pt-0.5 ${!isApproved ? 'opacity-50' : ''}`}>
+            {isFailed && (
+              <span className="text-red-400 text-sm">✕</span>
+            )}
+            {isConflict && !isFailed && (
               <span className="text-yellow-400 text-sm">⚠</span>
             )}
             <span className={`text-sm ${isApproved ? 'text-gray-400' : 'text-gray-500 line-through'}`}>{field.label}</span>
           </div>
 
           {/* Values section - flows naturally */}
-          <div className="flex-1 min-w-0 flex flex-wrap items-start gap-x-3 gap-y-1">
+          <div className="flex-1 min-w-0 flex flex-wrap items-center gap-x-3 gap-y-1">
             {/* Current Value - up to ~half width, then wraps */}
-            <div className="max-w-[40%] flex items-start gap-2">
+            <div className={`max-w-[40%] flex items-center gap-2 ${!isApproved ? 'opacity-50' : ''}`}>
               <span className={`text-sm break-words ${isApproved ? 'text-gray-300' : 'text-gray-500'}`}>
                 {currentValue || <span className="italic text-gray-500">Empty</span>}
               </span>
@@ -300,7 +353,13 @@ function FieldRow({ field, localSelection, onConflictSelect, onConfirm, onToggle
                   )}
                 </>
               ) : (
-                <span className={`text-sm break-words ${isApproved ? 'text-white' : 'text-gray-500'}`}>
+                <span className={`text-sm break-words ${!isApproved ? 'opacity-50' : ''} ${
+                  isFailed
+                    ? 'text-red-400 italic'
+                    : isApproved
+                      ? 'text-white'
+                      : 'text-gray-500'
+                }`}>
                   {formattedNewValue || <span className="italic text-gray-500">Empty</span>}
                 </span>
               )}
@@ -349,25 +408,33 @@ interface SourceCardProps {
 }
 
 function SourceCard({ source, onViewSubRun, hoveredFieldName, onHover, isHovered }: SourceCardProps) {
-  const isMockSource = source.sub_run_id === null;
+  const isUserSource = source.source_type === 'user';
+  const hasSubRun = source.sub_run_id !== null;
+  const hoverKey = isUserSource ? USER_SOURCE_HOVER_ID : source.sub_run_id;
 
   return (
     <div
       className={`rounded-lg border p-3 transition-colors ${
         isHovered
           ? 'border-blue-500/50 bg-blue-500/10 ring-1 ring-blue-500/50'
-          : 'border-gray-600 bg-gray-800'
+          : isUserSource
+            ? 'border-teal-600/50 bg-teal-900/20'
+            : 'border-gray-600 bg-gray-800'
       }`}
-      onMouseEnter={() => onHover(source.sub_run_id)}
+      onMouseEnter={() => onHover(hoverKey)}
       onMouseLeave={() => onHover(null)}
     >
       <div className="min-w-0">
-        <p className="text-sm font-medium text-white break-words">{source.pdf_filename}</p>
+        <p className={`text-sm font-medium break-words ${isUserSource ? 'text-teal-300' : 'text-white'}`}>
+          {source.pdf_filename}
+        </p>
         <p className="text-xs text-gray-400 mt-0.5 break-words">
           {source.source_type === 'email' ? (
             <>From: {source.source_identifier}</>
           ) : source.source_type === 'mock' ? (
             <span className="text-purple-400">{source.source_identifier}</span>
+          ) : source.source_type === 'user' ? (
+            <span className="text-teal-400">User-provided values</span>
           ) : (
             <>{source.source_identifier}</>
           )}
@@ -398,7 +465,7 @@ function SourceCard({ source, onViewSubRun, hoveredFieldName, onHover, isHovered
         })}
       </div>
 
-      {!isMockSource && (
+      {hasSubRun && (
         <button
           onClick={() => onViewSubRun(source.sub_run_id!)}
           className="mt-3 w-full text-xs py-1.5 rounded bg-blue-500/20 text-blue-400 hover:bg-blue-500/30 transition-colors"
@@ -432,6 +499,11 @@ export function PendingUpdateDetailView({
   const [hoveredFieldName, setHoveredFieldName] = useState<string | null>(null);
   // Track hovered source card for cross-highlighting field rows
   const [hoveredSubRunId, setHoveredSubRunId] = useState<number | null>(null);
+  // Track add field modal visibility
+  const [isAddFieldModalOpen, setIsAddFieldModalOpen] = useState(false);
+
+  // Mutation for adding a manual field value
+  const setFieldValue = useSetFieldValue();
 
   // Transform API fields to internal format, showing ALL fields from metadata
   // (not just fields with values). This ensures empty/missing fields are visible.
@@ -463,6 +535,8 @@ export function PendingUpdateDetailView({
           source: null,
           sub_run_id: null,
           is_approved_for_update: true,
+          processing_status: 'success', // Completed actions are always successful
+          processing_error: null,
         });
       }
 
@@ -524,16 +598,25 @@ export function PendingUpdateDetailView({
         ? fieldItems.map(item => ({
             history_id: item.id,
             value: item.value,
-            contributed_at: update.updated_at,
+            contributed_at: item.contributed_at,
+            source_filename: item.source_filename,
+            processing_status: item.processing_status,
+            processing_error: item.processing_error,
           }))
         : null;
 
       // Get sub_run_id for cross-highlighting (from selected or single item)
-      const subRunId = selectedItem?.sub_run_id ?? (fieldItems.length === 1 ? fieldItems[0].sub_run_id : null);
+      // Use sentinel for user-provided values (sub_run_id null but has items) so cross-highlighting works
+      const rawSubRunId = selectedItem?.sub_run_id ?? (fieldItems.length === 1 ? fieldItems[0].sub_run_id : null);
+      const subRunId = rawSubRunId === null && fieldItems.length > 0 ? USER_SOURCE_HOVER_ID : rawSubRunId;
 
       // Get is_approved_for_update - all values for a field share the same approval status
       // Default to true if no field items exist
       const isApprovedForUpdate = fieldItems.length > 0 ? fieldItems[0].is_approved_for_update : true;
+
+      // Get processing status from selected or single item
+      const processingStatus = selectedItem?.processing_status ?? (fieldItems.length === 1 ? fieldItems[0].processing_status : 'success');
+      const processingError = selectedItem?.processing_error ?? (fieldItems.length === 1 ? fieldItems[0].processing_error : null);
 
       result.push({
         name: fieldName,
@@ -547,6 +630,8 @@ export function PendingUpdateDetailView({
         source: sourceRef,
         sub_run_id: subRunId,
         is_approved_for_update: isApprovedForUpdate,
+        processing_status: processingStatus ?? 'success',
+        processing_error: processingError ?? null,
       });
     }
 
@@ -584,6 +669,29 @@ export function PendingUpdateDetailView({
   // Can retry only if update is failed
   const canRetry = update.status === 'failed';
   const hasConflicts = conflictCount > 0;
+
+  // Build available fields list for AddFieldModal
+  const availableFields = useMemo(() => {
+    const metadata = update.field_metadata ?? {};
+    return Object.entries(metadata).map(([name, meta]) => ({
+      name,
+      label: meta.label,
+      data_type: meta.data_type,
+    }));
+  }, [update.field_metadata]);
+
+  // Track which fields already have values
+  const existingFieldNames = useMemo(() => {
+    return new Set(transformedFields.filter((f) => f.proposed_value !== null && f.proposed_value !== undefined).map((f) => f.name));
+  }, [transformedFields]);
+
+  // Handle add field submission via API
+  const handleAddFieldSubmit = (fieldName: string, value: unknown) => {
+    setFieldValue.mutate(
+      { actionId: update.id, field_name: fieldName, value },
+      { onSuccess: () => setIsAddFieldModalOpen(false) },
+    );
+  };
 
   // Get status display label
   const getStatusLabel = (status: string): string => {
@@ -738,6 +846,18 @@ export function PendingUpdateDetailView({
               ))
             )}
           </div>
+
+          {/* Sticky Add Field Row */}
+          {canEdit && (
+            <div className="sticky bottom-0 mt-4 pt-3 pb-1 bg-gradient-to-t from-gray-900 from-70% to-transparent">
+              <button
+                onClick={() => setIsAddFieldModalOpen(true)}
+                className="w-full py-2 px-3 rounded bg-blue-600 hover:bg-blue-500 transition-colors text-white text-sm font-medium"
+              >
+                + Add Field Value
+              </button>
+            </div>
+          )}
         </div>
 
         {/* Right Column - Data Sources */}
@@ -752,18 +872,32 @@ export function PendingUpdateDetailView({
             ) : (
               update.contributing_sources.map((source, index) => (
                 <SourceCard
-                  key={source.sub_run_id ?? `mock-${index}`}
+                  key={source.sub_run_id ?? (source.source_type === 'user' ? 'user-entry' : `other-${index}`)}
                   source={source}
                   onViewSubRun={onViewSubRun}
                   hoveredFieldName={hoveredFieldName}
                   onHover={setHoveredSubRunId}
-                  isHovered={hoveredSubRunId === source.sub_run_id && source.sub_run_id !== null}
+                  isHovered={
+                    source.source_type === 'user'
+                      ? hoveredSubRunId === USER_SOURCE_HOVER_ID
+                      : hoveredSubRunId === source.sub_run_id && source.sub_run_id !== null
+                  }
                 />
               ))
             )}
           </div>
         </div>
       </div>
+
+      {/* Add Field Modal */}
+      <AddFieldModal
+        isOpen={isAddFieldModalOpen}
+        onClose={() => setIsAddFieldModalOpen(false)}
+        onSubmit={handleAddFieldSubmit}
+        availableFields={availableFields}
+        existingFieldNames={existingFieldNames}
+        isSubmitting={setFieldValue.isPending}
+      />
     </div>
   );
 }

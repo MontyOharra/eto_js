@@ -33,6 +33,7 @@ interface ObjectTypesSidebarProps {
   onTypeToggle: (type: string) => void;
   onShowAll: () => void;
   onHideAll: () => void;
+  onCopyFromExisting?: () => void;
 }
 
 export function ObjectTypesSidebar({
@@ -52,6 +53,7 @@ export function ObjectTypesSidebar({
   onTypeToggle,
   onShowAll,
   onHideAll,
+  onCopyFromExisting,
 }: ObjectTypesSidebarProps) {
   // Calculate total selected objects
   const totalSelected = Object.values(selectedTypeCounts).reduce((sum, count) => sum + count, 0);
@@ -94,6 +96,18 @@ export function ObjectTypesSidebar({
           </div>
         </div>
       </div>
+
+      {/* Copy from Existing Template */}
+      {onCopyFromExisting && (
+        <div className="mb-6">
+          <button
+            onClick={onCopyFromExisting}
+            className="w-full px-3 py-2 text-sm bg-blue-500 hover:bg-blue-600 text-white rounded transition-colors font-medium"
+          >
+            Copy from Existing Template
+          </button>
+        </div>
+      )}
 
       {/* Object Visibility Section */}
       <h3 className="text-sm font-semibold text-white mb-3">Object Visibility</h3>

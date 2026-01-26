@@ -301,8 +301,10 @@ class PendingActionRepository(BaseRepository[PendingActionModel]):
             # Get field names for all actions in result set (single query)
             action_ids = [model.id for model in models]
             field_names_by_action: dict[int, list[str]] = {aid: [] for aid in action_ids}
+            error_field_counts: dict[int, int] = {aid: 0 for aid in action_ids}
 
             if action_ids:
+                # Get distinct field names per action
                 field_rows = (
                     session.query(
                         PendingActionFieldModel.pending_action_id,
@@ -319,6 +321,21 @@ class PendingActionRepository(BaseRepository[PendingActionModel]):
                 for row in field_rows:
                     field_names_by_action[row.pending_action_id].append(row.field_name)
 
+                # Count failed fields per action
+                from sqlalchemy import func
+                error_rows = (
+                    session.query(
+                        PendingActionFieldModel.pending_action_id,
+                        func.count(PendingActionFieldModel.id).label('error_count'),
+                    )
+                    .filter(PendingActionFieldModel.pending_action_id.in_(action_ids))
+                    .filter(PendingActionFieldModel.processing_status == 'failed')
+                    .group_by(PendingActionFieldModel.pending_action_id)
+                    .all()
+                )
+                for row in error_rows:
+                    error_field_counts[row.pending_action_id] = row.error_count
+
             result = [
                 PendingActionListView(
                     id=model.id,
@@ -334,6 +351,7 @@ class PendingActionRepository(BaseRepository[PendingActionModel]):
                     optional_fields_total=len(OPTIONAL_ORDER_FIELDS),
                     field_names=field_names_by_action.get(model.id, []),
                     conflict_count=model.conflict_count,
+                    error_field_count=error_field_counts.get(model.id, 0),
                     error_message=model.error_message,
                     is_read=model.is_read,
                     created_at=model.created_at,

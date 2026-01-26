@@ -9,6 +9,7 @@ Provides lookup operations for HTC database entities:
 """
 
 import json
+import re
 from dataclasses import dataclass
 from datetime import datetime
 from typing import Any, Callable
@@ -16,6 +17,71 @@ from typing import Any, Callable
 from shared.logging import get_logger
 
 logger = get_logger(__name__)
+
+
+def parse_htc_time(time_val) -> str:
+    """
+    Parse HTC time value into normalized HH:MM format (24-hour).
+
+    Handles various formats from the Access database:
+    - HH:MM (24-hour): "09:00", "17:30"
+    - H:MM (without leading zero): "9:00", "5:30"
+    - HH:MM:SS (with seconds): "09:00:00", "17:30:45"
+    - H:MM:SS (without leading zero, with seconds): "9:00:00"
+    - HH:MM AM/PM (12-hour): "9:00 AM", "5:30 PM"
+    - H:MM AM/PM: "9:00 AM", "5:30 PM"
+    - Variations with periods: "9:00 A.M.", "5:30 P.M."
+
+    Returns:
+        Normalized time string in HH:MM format (24-hour)
+        Returns "00:00" if parsing fails or input is empty
+    """
+    if not time_val:
+        return "00:00"
+
+    # Handle time objects directly
+    if hasattr(time_val, 'strftime'):
+        return time_val.strftime("%H:%M")
+
+    time_str = str(time_val).strip()
+
+    if not time_str:
+        return "00:00"
+
+    # Check for AM/PM (case-insensitive)
+    time_upper = time_str.upper()
+    is_pm = 'PM' in time_upper or 'P.M.' in time_upper
+    is_am = 'AM' in time_upper or 'A.M.' in time_upper
+
+    # Remove AM/PM markers
+    time_str = re.sub(r'\s*(A\.?M\.?|P\.?M\.?)\s*', '', time_str, flags=re.IGNORECASE).strip()
+
+    # Extract hours, minutes (and optionally seconds)
+    # Match patterns like "9:00", "09:00", "9:00:00", "09:00:00"
+    match = re.match(r'^(\d{1,2}):(\d{2})(?::(\d{2}))?$', time_str)
+
+    if not match:
+        logger.warning(f"Could not parse HTC time value: {time_val!r}")
+        return "00:00"
+
+    hours = int(match.group(1))
+    minutes = int(match.group(2))
+
+    # Handle 12-hour to 24-hour conversion
+    if is_pm and hours < 12:
+        hours += 12
+    elif is_am and hours == 12:
+        hours = 0
+
+    # Validate ranges
+    if hours > 23:
+        logger.warning(f"Invalid hour value {hours} in time: {time_val!r}, clamping to 23")
+        hours = 23
+    if minutes > 59:
+        logger.warning(f"Invalid minute value {minutes} in time: {time_val!r}, clamping to 59")
+        minutes = 59
+
+    return f"{hours:02d}:{minutes:02d}"
 
 
 # ==================== Result Types ====================
@@ -464,6 +530,115 @@ class HtcLookupUtils:
             logger.error(f"Failed to get address info for ID {address_id}: {e}")
             return None
 
+    def list_addresses(
+        self,
+        search: str | None = None,
+        limit: int = 50,
+        offset: int = 0,
+    ) -> tuple[list[dict], int]:
+        """
+        Get active addresses from HTC database with search and pagination.
+
+        Queries the HTC300_G060_T010 Addresses table for active addresses.
+        Supports searching by company name or address fields.
+
+        Args:
+            search: Optional search string to filter by company name or address
+            limit: Max number of results to return
+            offset: Number of results to skip
+
+        Returns:
+            Tuple of (list of address dicts, total count matching the query)
+        """
+        connection = self._get_connection()
+
+        try:
+            base_where = """
+                [FavCoID] = ?
+                AND [FavBrID] = ?
+                AND [FavActive] = True
+                AND [FavCompany] IS NOT NULL
+                AND LEN([FavCompany]) > 0
+            """
+            params: list = [self.CO_ID, self.BR_ID]
+
+            # Add search filter across company name and address fields
+            if search and search.strip():
+                search_term = f"%{search.strip()}%"
+                base_where += """
+                    AND (
+                        [FavCompany] LIKE ?
+                        OR [FavAddrLn1] LIKE ?
+                        OR [FavCity] LIKE ?
+                        OR [FavState] LIKE ?
+                        OR [FavZip] LIKE ?
+                    )
+                """
+                params.extend([search_term] * 5)
+
+            # Get total count
+            count_sql = f"""
+                SELECT COUNT(*)
+                FROM [HTC300_G060_T010 Addresses]
+                WHERE {base_where}
+            """
+
+            # Get paginated results
+            data_sql = f"""
+                SELECT
+                    [FavID],
+                    [FavCompany],
+                    [FavAddrLn1],
+                    [FavAddrLn2],
+                    [FavCity],
+                    [FavState],
+                    [FavZip]
+                FROM [HTC300_G060_T010 Addresses]
+                WHERE {base_where}
+                ORDER BY [FavCompany]
+            """
+
+            with connection.cursor() as cursor:
+                cursor.execute(count_sql, params)
+                total = cursor.fetchone()[0]
+
+                cursor.execute(data_sql, params)
+                # Manual offset/limit since Access SQL doesn't support OFFSET/FETCH
+                all_rows = cursor.fetchall()
+                rows = all_rows[offset:offset + limit]
+
+            addresses = []
+            for row in rows:
+                fav_id = row[0]
+                company = str(row[1]) if row[1] else ""
+                addr_ln1 = str(row[2]) if row[2] else ""
+                addr_ln2 = str(row[3]) if row[3] else ""
+                city = str(row[4]) if row[4] else ""
+                state = str(row[5]) if row[5] else ""
+                zip_code = str(row[6]) if row[6] else ""
+
+                # Format the address string
+                street = addr_ln1
+                if addr_ln2:
+                    street = f"{addr_ln1} {addr_ln2}"
+                formatted_address = f"{street}, {city}, {state} {zip_code}".strip(", ")
+
+                addresses.append({
+                    "id": int(fav_id) if fav_id else 0,
+                    "name": company,
+                    "address": formatted_address,
+                })
+
+            logger.info(
+                f"Retrieved {len(addresses)} addresses (total={total}, "
+                f"search={search!r}, offset={offset}, limit={limit})"
+            )
+            return addresses, total
+
+        except Exception as e:
+            logger.error(f"Failed to list addresses from HTC database: {e}")
+            return [], 0
+
     def get_aci_letter(self, aci_id: int) -> str:
         """
         Get the ACI zone letter from an ACI ID.
@@ -613,17 +788,8 @@ class HtcLookupUtils:
                         if len(parts) == 3:
                             date_str = f"{parts[2]}-{parts[0].zfill(2)}-{parts[1].zfill(2)}"
 
-                # Time could be a time object or string
-                if time_val:
-                    if hasattr(time_val, 'strftime'):
-                        time_str = time_val.strftime("%H:%M")
-                    else:
-                        time_str = str(time_val).strip()
-                        # Handle HH:MM:SS format
-                        if len(time_str) > 5:
-                            time_str = time_str[:5]
-                else:
-                    time_str = "00:00"
+                # Parse time using robust parser that handles various HTC formats
+                time_str = parse_htc_time(time_val)
 
                 return f"{date_str}T{time_str}:00"
 

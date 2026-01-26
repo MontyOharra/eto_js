@@ -27,6 +27,9 @@ interface ExecutedModuleProps {
     // Optional hover handlers
     onMouseEnter?: () => void;
     onMouseLeave?: () => void;
+
+    // Optional highlight state (for cross-component highlighting)
+    isHighlighted?: boolean;
   };
 }
 
@@ -41,10 +44,12 @@ export function ExecutedModule({ data }: ExecutedModuleProps) {
     error,
     onMouseEnter,
     onMouseLeave,
+    isHighlighted = false,
   } = data;
 
-  // Determine border color based on execution status
+  // Determine border color based on execution status and highlight state
   const getBorderColor = () => {
+    if (isHighlighted) return "border-blue-400";
     if (status === "not_executed") return "border-gray-700";
     return "border-gray-600"; // executed or failed (error shown in body)
   };
@@ -58,10 +63,13 @@ export function ExecutedModule({ data }: ExecutedModuleProps) {
     <div
       className={`bg-gray-800 rounded-lg border-2 ${getBorderColor()} ${
         hasInputs && hasOutputs ? "min-w-[400px] max-w-[500px]" : "min-w-[200px] max-w-[300px]"
-      } ${status === "not_executed" ? "opacity-50" : ""}`}
+      } ${status === "not_executed" ? "opacity-50" : ""} transition-all duration-150`}
       onMouseEnter={onMouseEnter}
       onMouseLeave={onMouseLeave}
-      style={{ pointerEvents: "auto" }}
+      style={{
+        pointerEvents: "auto",
+        boxShadow: isHighlighted ? "0 0 12px rgba(96, 165, 250, 0.6)" : undefined,
+      }}
     >
       <ExecutedModuleHeader
         moduleId={moduleId}

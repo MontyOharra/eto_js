@@ -107,6 +107,7 @@ export function EmailConfigWizard({
         operation: 'contains',
         value: '',
         case_sensitive: false,
+        negate: false,
       },
     ]);
   };

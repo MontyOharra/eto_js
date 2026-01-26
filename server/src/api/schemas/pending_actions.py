@@ -4,7 +4,7 @@ Pending Actions API Schemas
 Pydantic models for pending actions list and detail endpoints.
 """
 from datetime import datetime
-from typing import Any
+from typing import Any, Literal
 
 from pydantic import BaseModel
 
@@ -34,6 +34,7 @@ class PendingActionListItem(BaseModel):
     optional_fields_total: int
     field_names: list[str]  # List of field names (for updates, shown as comma-separated)
     conflict_count: int
+    error_field_count: int  # Count of fields with processing_status='failed'
     error_message: str | None  # Error message for failed actions
     is_read: bool
     created_at: datetime
@@ -66,6 +67,11 @@ class PendingActionFieldItem(BaseModel):
     is_selected: bool
     is_approved_for_update: bool
     sub_run_id: int | None  # None for user-provided values
+    processing_status: Literal["success", "failed"]
+    processing_error: str | None
+    raw_value: str | None
+    contributed_at: datetime | None  # When this value was contributed
+    source_filename: str | None  # PDF filename that contributed this value
 
 
 class ContributingSourceItem(BaseModel):
@@ -74,11 +80,11 @@ class ContributingSourceItem(BaseModel):
 
     Used for displaying source cards and cross-highlighting with fields.
     """
-    sub_run_id: int
+    sub_run_id: int | None  # None for user-provided values
     pdf_filename: str
     template_name: str | None
-    source_type: str  # "email" or "manual"
-    source_identifier: str  # Email address or "Manual Upload"
+    source_type: str  # "email", "manual", or "user"
+    source_identifier: str  # Email address, "Manual Upload", or "Manual Entry"
     fields_contributed: list[str]
     contributed_at: datetime
 
@@ -260,3 +266,49 @@ class SetFieldApprovalResponse(BaseModel):
     is_approved: bool
     success: bool
     message: str | None
+
+
+# =============================================================================
+# Set Field Value (Manual Entry)
+# =============================================================================
+
+class SetFieldValueRequest(BaseModel):
+    """
+    Request for POST /pending-actions/{id}/set-field-value.
+
+    Value format depends on the field's data_type:
+    - string: plain string (e.g., "SOME VALUE")
+    - datetime_range: {"date": "2025-01-27", "startTime": "09:00", "endTime": "17:00"}
+    - location: {"mode": "select", "addressId": 123}
+              or {"mode": "create", "companyName": "Acme Corp", "address": "123 Main St"}
+    - dims: [{"qty": 1, "length": 12, "width": 10, "height": 8, "weight": 25}, ...]
+    """
+    field_name: str
+    value: Any
+
+
+class SetFieldValueResponse(BaseModel):
+    """Response for POST /pending-actions/{id}/set-field-value."""
+    pending_action_id: int
+    field_name: str
+    field_id: int  # ID of the created field record
+    new_status: PendingActionStatus
+    success: bool
+    message: str | None
+
+
+# =============================================================================
+# Addresses (for AddFieldModal dropdowns)
+# =============================================================================
+
+class Address(BaseModel):
+    """Address entry for dropdown lists."""
+    id: int
+    name: str  # Company name
+    address: str  # Formatted address string
+
+
+class GetAddressesResponse(BaseModel):
+    """Response for GET /pending-actions/addresses."""
+    addresses: list[Address]
+    total: int

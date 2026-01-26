@@ -376,6 +376,7 @@ export interface PendingActionListItem {
   optional_fields_total: number;
   field_names: string[];  // List of field names being updated
   conflict_count: number;
+  error_field_count: number;  // Count of fields with processing_status='failed'
   error_message: string | null;  // Error message for failed actions
   is_read: boolean;
   created_at: string;
@@ -404,6 +405,11 @@ export interface PendingActionFieldItem {
   is_selected: boolean;
   is_approved_for_update: boolean;
   sub_run_id: number | null; // null for user-provided values
+  processing_status: 'success' | 'failed';
+  processing_error: string | null;
+  raw_value: string | null;
+  contributed_at: string | null; // When this value was contributed
+  source_filename: string | null; // PDF filename that contributed this value
 }
 
 /**
@@ -411,11 +417,11 @@ export interface PendingActionFieldItem {
  * Used for displaying source cards and cross-highlighting with fields.
  */
 export interface ContributingSourceItem {
-  sub_run_id: number;
+  sub_run_id: number | null; // null for user-provided values
   pdf_filename: string;
   template_name: string | null;
-  source_type: string; // "email", "manual", or "mock"
-  source_identifier: string; // Email address or "Manual Upload"
+  source_type: string; // "email", "manual", "mock", or "user"
+  source_identifier: string; // Email address, "Manual Upload", or "Manual Entry"
   fields_contributed: string[];
   contributed_at: string;
 }

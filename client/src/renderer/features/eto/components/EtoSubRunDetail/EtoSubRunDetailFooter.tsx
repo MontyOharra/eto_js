@@ -15,6 +15,10 @@ interface EtoSubRunDetailFooterProps {
   onSkip?: () => void;
   isReprocessing?: boolean;
   isSkipping?: boolean;
+  /** Optional callback to navigate to the ETO runs page for this run */
+  onViewInEto?: (etoRunId: number) => void;
+  /** Optional callback to navigate to the matched template */
+  onViewTemplate?: (templateId: number) => void;
 }
 
 export function EtoSubRunDetailFooter({
@@ -26,6 +30,8 @@ export function EtoSubRunDetailFooter({
   onSkip,
   isReprocessing = false,
   isSkipping = false,
+  onViewInEto,
+  onViewTemplate,
 }: EtoSubRunDetailFooterProps) {
   const isProcessing = isReprocessing || isSkipping;
 
@@ -71,6 +77,24 @@ export function EtoSubRunDetailFooter({
             className="px-4 py-2 bg-yellow-600 hover:bg-yellow-700 text-white rounded transition-colors text-sm disabled:opacity-50 disabled:cursor-not-allowed"
           >
             {isSkipping ? "Skipping..." : "Skip"}
+          </button>
+        )}
+        {onViewInEto && runDetail?.eto_run_id && (
+          <button
+            type="button"
+            onClick={() => onViewInEto(runDetail.eto_run_id)}
+            className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded transition-colors text-sm"
+          >
+            View in ETO
+          </button>
+        )}
+        {onViewTemplate && runDetail?.template?.id && (
+          <button
+            type="button"
+            onClick={() => onViewTemplate(runDetail.template!.id)}
+            className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded transition-colors text-sm"
+          >
+            View Template
           </button>
         )}
         <button

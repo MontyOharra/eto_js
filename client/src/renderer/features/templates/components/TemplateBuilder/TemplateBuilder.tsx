@@ -12,6 +12,7 @@ import { SignatureObjectsStep } from './SignatureObjectsStep';
 import { ExtractionFieldsStep } from './ExtractionFieldsStep';
 import { PipelineStep } from './PipelineStep';
 import { TestingStep } from './TestingStep';
+import { TemplateCopyModal } from '../TemplateCopyModal';
 import type { PdfObjects, ExtractionField } from '../../types';
 import type { PipelineState, VisualState } from '../../../pipelines/types';
 import { usePdfData, useProcessPdfObjects, createSubsetPdf } from '../../../pdf';
@@ -113,6 +114,9 @@ export function TemplateBuilder({
 
   // Saving state
   const [isSaving, setIsSaving] = useState(false);
+
+  // Copy template modal state
+  const [isCopyModalOpen, setIsCopyModalOpen] = useState(false);
 
   // Track previous selected pages to detect changes
   const prevSelectedPagesRef = useRef<number[]>([]);
@@ -794,6 +798,7 @@ export function TemplateBuilder({
                   onTemplateDescriptionChange={setTemplateDescription}
                   onCustomerIdChange={setCustomerId}
                   onSignatureObjectsChange={setSelectedSignatureObjects}
+                  onCopyFromExisting={() => setIsCopyModalOpen(true)}
                 />
               )}
 
@@ -863,6 +868,26 @@ export function TemplateBuilder({
           onViewModeChange={setViewMode}
         />
       </div>
+
+      {/* Copy Template Modal */}
+      <TemplateCopyModal
+        isOpen={isCopyModalOpen}
+        onClose={() => setIsCopyModalOpen(false)}
+        availablePdfObjects={activePdfData?.objects || {
+          text_words: [],
+          graphic_rects: [],
+          graphic_lines: [],
+          graphic_curves: [],
+          images: [],
+          tables: [],
+        }}
+        onCopyStructure={(signatureObjects, extractionFields, pipelineState, visualState) => {
+          setSelectedSignatureObjects(signatureObjects);
+          setExtractionFields(extractionFields);
+          setPipelineState(pipelineState);
+          setVisualState(visualState);
+        }}
+      />
     </div>
   );
 }

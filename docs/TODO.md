@@ -2,29 +2,76 @@
 
 This document tracks planned features with implementation checklists. Each feature has a detailed plan document in `docs/plans/`.
 
+---
+
+## Quick Start - Feature Development Workflow
+
+### 1. Branch Setup
+
+Before starting any feature work:
+
+1. **Ensure you are on `dev` branch:** `git checkout dev && git pull`
+2. **Create feature branch:** `git checkout -b feature/{feature-name}`
+3. **Push to remote:** `git push -u origin feature/{feature-name}`
+
+**Merge strategy:**
+- Feature branch → `dev`: After implementation AND testing complete
+- `dev` can accumulate multiple completed feature branches
+- `dev` → `master`: Only after all features in dev are conflict-free and pass final integration testing
+- Single feature shortcut: If only one feature in dev, can merge directly to master after testing
+
+### 2. Before Writing Code
+
+For each feature, review in order:
+
+1. **Summary** - Quick overview in the Progress Tracker section below
+2. **Detailed checklist** - Full breakdown in the numbered section for the feature
+3. **Plan document** - Referenced at top of each feature section (e.g., `docs/plans/{feature}.md`)
+
+Then **discuss the plan** before implementation begins.
+
+### 3. Complexity Considerations
+
+**Simple features:** Everything is fully planned with specific code references. Can proceed after brief review.
+
+**Complex features:** Require detailed discussion before implementation.
+
+### 4. Database & Type Changes
+
+**Avoid if possible:** Changes to database schema or persistence-level types should be avoided when feasible.
+
+**If changes are necessary, discuss:**
+- Data integrity implications
+- Migration strategy for existing data
+- For complex JSON columns (e.g., `pipeline_state` with deeply nested structures tied to backend typing):
+  - Option A: Migrate existing data to new format
+  - Option B: Implement backward compatibility in code
+- Test migration on copy of production data before applying
+
+---
+
 ## Progress Tracker
 
 | # | Item | Priority | Complexity | Plan | Implement | Test |
 |---|------|:--------:|:----------:|:----:|:---------:|:----:|
-| 3 | Field Processing Error Handling (Decoupled) | 1 | 4 | [x] | [ ] | [ ] |
-| 13 | Improved Attachment Handling | 1 | 3 | [x] | [ ] | [ ] |
-| 15 | Create Template from Existing | 1 | 4 | [x] | [ ] | [ ] |
-| 19 | Merge Adjacent PDF Text Boxes | 1 | 2 | [x] | [ ] | [ ] |
-| 9 | Summary Page Rework | 2 | 3 | [x] | [ ] | [ ] |
-| 11 | ETO Page: Group Runs by Email | 1 | 5 | [x] | [ ] | [ ] |
-| 12 | Navigate from Order Management to ETO | 2 | 1 | [x] | [ ] | [ ] |
-| 16 | HTC Time Format Parsing | 2 | 2 | [x] | [ ] | [ ] |
-| 18 | Manual Field Entry for Pending Actions | 2 | 3 | [x] | [ ] | [ ] |
+| 3 | Field Processing Error Handling (Decoupled) | 1 | 4 | [x] | [x] | [x] |
+| 13 | Improved Attachment Handling | 1 | 3 | [x] | [x] | [x] |
+| 15 | Create Template from Existing | 1 | 4 | [x] | [x] | [x] |
+| 19 | Merge Adjacent PDF Text Boxes | 1 | 2 | [x] | [x] | [x] |
+| 9 | Summary Page Rework | 2 | 3 | [x] | [x] | [x] |
+| 12 | Navigate from Order Management to ETO | 2 | 1 | [x] | [x] | [x] |
+| 16 | HTC Time Format Parsing | 2 | 2 | [x] | [x] | [x] |
+| 18 | Manual Field Entry for Pending Actions | 2 | 3 | [x] | [x] | [x] |
 | 1 | Template Draft Saving | 3 | 4 | [x] | [ ] | [ ] |
 | 6 | Browse Template Matches / Set New Base | 3 | 3 | [x] | [ ] | [ ] |
 | 14 | Email Filter Rules: NOT/Negation | 3 | 2 | [x] | [ ] | [ ] |
-| 17 | Sub-Run Modal: View Template Button | 4 | 1 | [x] | [ ] | [ ] |
+| 17 | Sub-Run Modal: View Template Button | 4 | 1 | [x] | [x] | [x] |
 | 2 | New Pipeline Modules (Math + LLM) | 5 | 3 | [x] | [ ] | [ ] |
 | 4 | Address Matching with Company Name | 5 | 3 | [x] | [ ] | [ ] |
 | 5 | Extraction Field Rename Syncs to Pipeline | 5 | 2 | [x] | [ ] | [ ] |
 | 7 | Conditional Error/Halt Module | 5 | 2 | [x] | [ ] | [ ] |
-| 8 | Extraction Field ↔ Pipeline Hover Highlighting | 5 | 2 | [x] | [ ] | [ ] |
-| 10 | Extraction Field Popup Overflow Fix | 5 | 1 | [x] | [ ] | [ ] |
+| 8 | Extraction Field ↔ Pipeline Hover Highlighting | 5 | 2 | [x] | [x] | [x] |
+| 10 | Extraction Field Popup Overflow Fix | 5 | 1 | [x] | [x] | [x] |
 | 20 | ETO Bulk Actions | 3 | 2 | [x] | [ ] | [ ] |
 
 **Priority:** 1 = Critical, 2 = High, 3 = Medium, 4 = Low, 5 = Nice to have
@@ -114,18 +161,19 @@ This document tracks planned features with implementation checklists. Each featu
 - LLM fallback for address parsing when usaddress fails
 
 **Database:**
-- [ ] Add `processing_status`, `processing_error`, `raw_value` columns to `pending_action_fields`
-- [ ] Create migration, update types
+- [x] Add `processing_status`, `processing_error`, `raw_value` columns to `pending_action_fields`
+- [x] Create migration, update types
 
 **Backend:**
-- [ ] Update ETO service to not fail sub-run on order management errors
-- [ ] Refactor `process_output_execution()` to never raise, handle per-field
-- [ ] Implement cascading address resolution (usaddress → LLM fallback)
+- [x] Update ETO service to not fail sub-run on order management errors
+- [x] Refactor `process_output_execution()` to never raise, handle per-field
+- [x] Implement cascading address resolution (usaddress → LLM fallback stub)
 
 **API/Frontend:**
-- [ ] Update API schemas with processing status fields
-- [ ] Display field processing errors in UI
-- [ ] Consider retry/manual fix UI for failed fields
+- [x] Update API schemas with processing status fields
+- [x] Display field processing errors in UI
+- [x] Error fields don't count toward required_fields_present
+- [x] Hide error badges for completed/rejected actions
 
 ---
 
@@ -211,11 +259,11 @@ This document tracks planned features with implementation checklists. Each featu
 
 **Summary:** In the viewer modal for completed sub runs and template testing step, hovering over an extraction field on the PDF should highlight the corresponding pipeline entry point, and vice versa. Improves visual connection between extracted data and pipeline inputs.
 
-- [ ] Identify components: PDF extraction field overlay + pipeline entry points
-- [ ] Add hover state that links extraction field name to entry point name
-- [ ] Highlight corresponding entry point when hovering extraction field on PDF
-- [ ] Highlight corresponding extraction field when hovering pipeline entry point
-- [ ] Apply to both sub run viewer and template testing confirmation step
+- [x] Identify components: PDF extraction field overlay + pipeline entry points
+- [x] Add hover state that links extraction field name to entry point name (FieldHighlightContext)
+- [x] Highlight corresponding entry point when hovering extraction field on PDF
+- [x] Highlight corresponding extraction field when hovering pipeline entry point
+- [x] Apply to both sub run viewer and template testing confirmation step
 
 ---
 
@@ -228,11 +276,11 @@ This document tracks planned features with implementation checklists. Each featu
 - Field colors don't have consistent meaning or rhyme/reason
 - Specifics to be worked out during implementation
 
-- [ ] Define logical display order for output channels (group by category: identification, pickup, delivery, cargo, etc.)
-- [ ] Define consistent color scheme with meaning
-- [ ] Implement custom ordering in summary view
-- [ ] Apply to both sub run viewer and template testing step
-- [ ] Ensure consistency between both views
+- [x] Define logical display order for output channels (group by category: identification, pickup, delivery, other)
+- [x] Define consistent color scheme with meaning (unified blue styling for simplicity)
+- [x] Implement custom ordering in summary view
+- [x] Apply to both sub run viewer and template testing step
+- [x] Ensure consistency between both views (shared utilities in `eto/utils/outputChannelFormatters.ts`)
 
 ---
 
@@ -253,58 +301,11 @@ This document tracks planned features with implementation checklists. Each featu
 - Consider as fallback if (A) doesn't work well
 
 **Checklist:**
-- [ ] Identify extraction field popup component
-- [ ] Implement text wrapping within popup
-- [ ] Implement edge detection and auto-shift logic
-- [ ] Test with various text lengths and field positions near all edges
+- [x] Identify extraction field popup component
+- [x] Implement text wrapping within popup
+- [x] Implement edge detection and auto-shift logic
+- [x] Test with various text lengths and field positions near all edges
 - [ ] If (A) insufficient, evaluate (B) approach
-
----
-
-## 11. ETO Page: Group Runs by Email
-
-**Plan:** [`docs/plans/eto-email-grouping.md`](./plans/eto-email-grouping.md)
-
-**Summary:** Visually group ETO runs by their source email. Multi-run emails get a header row with child run rows indented beneath. Single-run emails and manual uploads display as standalone rows (no header). Filtering still applies to runs, but returns all sibling runs from matching emails. No data model changes.
-
-**Key Decisions:**
-- Multi-run emails: Header row (sender, subject, date, PDF count) + indented run rows
-- Single-run emails / manual uploads: Standalone row, no header
-- Filters apply to runs, but return all siblings from matching emails
-- Pagination by source count (each email = 1, each manual upload = 1)
-- Sorting: MAX of time fields for email groups; `pdf_filename` sort removed
-- Runs within groups: always sorted by `last_processed_at` DESC
-- Headers are non-interactive, always expanded
-- Run rows unchanged (all existing fields preserved, slight left indent in groups)
-
-### Backend
-
-- [ ] Update `EtoRunRepository.list()` to return sibling runs from matching emails
-- [ ] Add `source_email_id` and `email_run_count` to `EtoRunListView`
-- [ ] Update pagination to count by source instead of by run
-- [ ] Update sorting to use MAX for time-based fields at email level
-- [ ] Remove `pdf_filename` sort option
-- [ ] Ensure runs within groups sorted by `last_processed_at` DESC
-- [ ] Update API schema with new fields
-
-### Frontend
-
-- [ ] Create `EtoEmailHeaderRow` component (sender, subject, date, PDF count)
-- [ ] Update `EtoRunsTable` to group runs by `source_email_id`
-- [ ] Render header + indented runs for multi-run groups
-- [ ] Render standalone row for single-run groups (no header)
-- [ ] Add left padding to grouped run rows
-- [ ] Update pagination display text
-
-### Testing
-
-- [ ] Test email with single PDF (no header)
-- [ ] Test email with multiple PDFs (header + grouped runs)
-- [ ] Test manual upload (no header)
-- [ ] Test filtering - verify sibling runs included
-- [ ] Test pagination by source count
-- [ ] Test all sort options
-- [ ] Test mixed page (emails + manual uploads)
 
 ---
 
@@ -312,9 +313,9 @@ This document tracks planned features with implementation checklists. Each featu
 
 **Summary:** From the order management page, users can view details of contributing sub-runs in a modal. Add navigation from this modal to the full ETO run page for that sub-run, allowing users to see other associated data (sibling sub-runs, email source, etc.).
 
-- [ ] Add "View in ETO" link/button to sub-run detail modal
-- [ ] Navigate to ETO run page with sub-run highlighted/expanded
-- [ ] Handle modal close / navigation flow
+- [x] Add "View in ETO" link/button to sub-run detail modal
+- [x] Navigate to ETO run page with sub-run highlighted/expanded
+- [x] Handle modal close / navigation flow
 
 ---
 
@@ -378,35 +379,36 @@ This document tracks planned features with implementation checklists. Each featu
 - Extraction fields and pipeline: copied exactly as-is
 
 ### Backend
-- [ ] Verify existing API provides template structure data (sig objects, fields, pipeline)
-- [ ] If needed, add endpoint for template structure
-- [ ] Ensure signature object matching logic is accessible/reusable
+- [x] Verify existing API provides template structure data (sig objects, fields, pipeline)
+- [x] If needed, add endpoint for template structure
+- [x] Ensure signature object matching logic is accessible/reusable
+- [x] Add page_count to template list API response
 
 ### Frontend - Template Builder Integration
-- [ ] Add "Copy from Existing Template" button after step 1 (page selection)
-- [ ] Wire button to open copy modal
-- [ ] Implement state update when copy is performed
+- [x] Add "Copy from Existing Template" button after step 1 (page selection)
+- [x] Wire button to open copy modal
+- [x] Implement state update when copy is performed
 
 ### Frontend - Template Copy Modal
-- [ ] Create modal component (left/right panel layout)
-- [ ] Implement template list with filtering (like main templates page)
-- [ ] Implement PDF preview with signature object + extraction field overlays
-- [ ] Implement source/new PDF toggle
-- [ ] Implement read-only pipeline viewer
-- [ ] Implement "Copy Structure" action
+- [x] Create modal component (left/right panel layout)
+- [x] Implement template list with filtering (like main templates page)
+- [x] Implement PDF preview with signature object + extraction field overlays
+- [ ] Implement source/new PDF toggle (deferred - not needed for MVP)
+- [ ] Implement read-only pipeline viewer (deferred - not needed for MVP)
+- [x] Implement "Copy Structure" action
 
 ### Frontend - State Update Logic
-- [ ] Implement signature object matching against new PDF
-- [ ] Update selectedSignatureObjects based on matches
-- [ ] Deep copy extraction fields from source template
-- [ ] Deep copy pipeline definition from source template
+- [x] Implement signature object matching against new PDF
+- [x] Update selectedSignatureObjects based on matches
+- [x] Deep copy extraction fields from source template
+- [x] Deep copy pipeline definition from source template
 
 ### Testing
-- [ ] Test with template that has matching signature objects
-- [ ] Test with template that has NO matching signature objects
-- [ ] Test extraction field and pipeline copying
-- [ ] Test toggle between source/new PDF views
-- [ ] Test modal close without copying (no side effects)
+- [x] Test with template that has matching signature objects
+- [x] Test with template that has NO matching signature objects
+- [x] Test extraction field and pipeline copying
+- [ ] Test toggle between source/new PDF views (deferred)
+- [x] Test modal close without copying (no side effects)
 
 ---
 
@@ -416,11 +418,11 @@ This document tracks planned features with implementation checklists. Each featu
 
 **Note:** Specific formats to be cataloged during implementation by examining production database.
 
-- [ ] Identify where HTC time values are read/parsed
-- [ ] Query production database to catalog all time format variations
-- [ ] Implement flexible time parser that handles all discovered formats
-- [ ] Add fallback/error handling for unknown formats
-- [ ] Test with various time format samples from production data
+- [x] Identify where HTC time values are read/parsed
+- [x] Query production database to catalog all time format variations
+- [x] Implement flexible time parser that handles all discovered formats
+- [x] Add fallback/error handling for unknown formats
+- [x] Test with various time format samples from production data
 
 ---
 
@@ -428,9 +430,9 @@ This document tracks planned features with implementation checklists. Each featu
 
 **Summary:** Add a button in the sub-run detail modal to navigate to the template it was matched to. Makes it easy to view or edit the template when issues are found.
 
-- [ ] Add "View Template" button to sub-run detail modal
-- [ ] Navigate to template detail/edit page
-- [ ] Handle case where template was deleted or sub-run has no matched template
+- [x] Add "View Template" button to sub-run detail modal
+- [x] Navigate to template detail/edit page
+- [x] Handle case where template was deleted or sub-run has no matched template (button hidden when no template)
 
 ---
 
@@ -497,11 +499,11 @@ This document tracks planned features with implementation checklists. Each featu
 
 **Detection:** Two text boxes should merge if they share a horizontal border (right edge of box A touches left edge of box B, and vertical positions overlap).
 
-- [ ] Identify where PDF objects are extracted (likely pdfplumber processing)
-- [ ] Implement horizontal adjacency detection for text boxes
-- [ ] Merge adjacent boxes: combine text, extend bbox to cover both
-- [ ] Handle chains of multiple adjacent boxes (A-B-C should become one)
-- [ ] Test with PDFs that have fragmented text objects
+- [x] Identify where PDF objects are extracted (likely pdfplumber processing)
+- [x] Implement horizontal adjacency detection for text boxes
+- [x] Merge adjacent boxes: combine text, extend bbox to cover both
+- [x] Handle chains of multiple adjacent boxes (A-B-C should become one)
+- [x] Test with PDFs that have fragmented text objects
 
 ---
 

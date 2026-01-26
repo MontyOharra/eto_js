@@ -231,6 +231,23 @@ class EtoRunRepository(BaseRepository[EtoRunModel]):
 
             return [self._model_to_domain(model) for model in models]
 
+    def get_by_source_email_id(self, source_email_id: int) -> list[EtoRun]:
+        """
+        Get all ETO runs that came from a specific email.
+
+        Args:
+            source_email_id: The source email ID
+
+        Returns:
+            List of EtoRun dataclasses from that email
+        """
+        with self._get_session() as session:
+            models = session.query(self.model_class).filter(
+                self.model_class.source_email_id == source_email_id
+            ).all()
+
+            return [self._model_to_domain(model) for model in models]
+
     def delete(self, run_id: int) -> None:
         """
         Delete ETO run by ID.

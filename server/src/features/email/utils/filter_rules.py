@@ -62,10 +62,11 @@ def apply_filter_rules(
         if email_passes and matched_rule:
             filtered_emails.append(email)
             subject_preview = email.subject[:40] + ('...' if len(email.subject) > 40 else '')
+            negate_prefix = "NOT " if matched_rule.negate else ""
             logger.info(
                 f"[{config_context}] PASSED: UID {email.uid} from '{email.sender_email}' "
                 f"subject='{subject_preview}' "
-                f"- matched rule: {matched_rule.field} {matched_rule.operation} '{matched_rule.value}'"
+                f"- matched rule: {matched_rule.field} {negate_prefix}{matched_rule.operation} '{matched_rule.value}'"
             )
         else:
             subject_preview = email.subject[:40] + ('...' if len(email.subject) > 40 else '')
@@ -91,6 +92,9 @@ def check_filter_rule(email: EmailMessage, rule: FilterRule) -> bool:
     - Boolean field (has_attachments): equals, is
     - DateTime field (received_date): before, after, equals
 
+    When rule.negate is True, the result is inverted (e.g., "contains" becomes
+    "does not contain").
+
     Args:
         email: EmailMessage to check
         rule: FilterRule to apply
@@ -98,6 +102,12 @@ def check_filter_rule(email: EmailMessage, rule: FilterRule) -> bool:
     Returns:
         True if email passes the rule, False otherwise
     """
+    result = _evaluate_filter_rule(email, rule)
+    return not result if rule.negate else result
+
+
+def _evaluate_filter_rule(email: EmailMessage, rule: FilterRule) -> bool:
+    """Evaluate a filter rule without considering negation."""
     # String field operations (sender_email, subject)
     if rule.field in ['sender_email', 'subject']:
         field_value = email.sender_email if rule.field == 'sender_email' else email.subject
