@@ -61,7 +61,7 @@ Then **discuss the plan** before implementation begins.
 | 9 | Summary Page Rework | 2 | 3 | [x] | [x] | [x] |
 | 12 | Navigate from Order Management to ETO | 2 | 1 | [x] | [x] | [x] |
 | 16 | HTC Time Format Parsing | 2 | 2 | [x] | [x] | [x] |
-| 18 | Manual Field Entry for Pending Actions | 2 | 3 | [x] | [ ] | [ ] |
+| 18 | Manual Field Entry for Pending Actions | 2 | 3 | [x] | [x] | [x] |
 | 1 | Template Draft Saving | 3 | 4 | [x] | [ ] | [ ] |
 | 6 | Browse Template Matches / Set New Base | 3 | 3 | [x] | [ ] | [ ] |
 | 14 | Email Filter Rules: NOT/Negation | 3 | 2 | [x] | [ ] | [ ] |
