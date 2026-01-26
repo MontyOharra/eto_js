@@ -32,6 +32,7 @@ class FilterRule(BaseModel):
     operation: FilterRuleOperation
     value: str
     case_sensitive: bool
+    negate: bool = False
 
 
 # =========================

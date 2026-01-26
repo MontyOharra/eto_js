@@ -144,16 +144,30 @@ export function ConfigurationStep({
                     <label className="block text-xs font-medium text-gray-400 mb-1">
                       Operation
                     </label>
-                    <select
-                      value={rule.operation}
-                      onChange={(e) => onUpdateFilterRule(index, 'operation', e.target.value)}
-                      className="w-full px-2 py-1.5 bg-gray-600 border border-gray-500 rounded text-white text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-                    >
-                      <option value="contains">Contains</option>
-                      <option value="equals">Equals</option>
-                      <option value="starts_with">Starts With</option>
-                      <option value="ends_with">Ends With</option>
-                    </select>
+                    <div className="flex gap-1">
+                      <button
+                        type="button"
+                        onClick={() => onUpdateFilterRule(index, 'negate', !rule.negate)}
+                        className={`px-1.5 py-1.5 rounded text-xs font-bold shrink-0 transition-colors ${
+                          rule.negate
+                            ? 'bg-red-600 text-white'
+                            : 'bg-gray-600 text-gray-400 hover:bg-gray-500'
+                        }`}
+                        title={rule.negate ? 'Negated - click to remove' : 'Click to negate this rule'}
+                      >
+                        NOT
+                      </button>
+                      <select
+                        value={rule.operation}
+                        onChange={(e) => onUpdateFilterRule(index, 'operation', e.target.value)}
+                        className="w-full px-2 py-1.5 bg-gray-600 border border-gray-500 rounded text-white text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      >
+                        <option value="contains">Contains</option>
+                        <option value="equals">Equals</option>
+                        <option value="starts_with">Starts With</option>
+                        <option value="ends_with">Ends With</option>
+                      </select>
+                    </div>
                   </div>
 
                   <div className="col-span-4">

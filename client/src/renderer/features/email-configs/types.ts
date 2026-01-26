@@ -27,6 +27,7 @@ export interface FilterRule {
   operation: FilterRuleOperation;
   value: string;
   case_sensitive: boolean;
+  negate: boolean;
 }
 
 // ============================================================================
