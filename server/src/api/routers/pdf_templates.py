@@ -5,7 +5,7 @@ REST endpoints for PDF template creation, management, and versioning
 import logging
 from typing import Literal
 
-from fastapi import APIRouter, Query, status, Depends
+from fastapi import APIRouter, Query, status, Depends, UploadFile, File
 
 from api.schemas.pdf_templates import (
     PdfTemplateResponse,
@@ -17,6 +17,7 @@ from api.schemas.pdf_templates import (
     SimulateTemplateResponse,
     GetCustomersResponse,
     Customer,
+    DebugMatchResponse,
 )
 from api.mappers.pdf_templates import (
     build_template_list,
@@ -237,3 +238,26 @@ async def simulate_template(
     logger.debug(f"Simulation: status={api_response.pipeline_status}, steps={len(api_response.pipeline_steps)}")
 
     return api_response
+
+
+@router.post("/versions/{version_id}/debug-match", response_model=DebugMatchResponse)
+async def debug_match_template(
+    version_id: int,
+    pdf_file: UploadFile = File(...),
+    service: PdfTemplateService = Depends(lambda: ServiceContainer.get_pdf_template_service())
+) -> DebugMatchResponse:
+    """
+    Debug template matching against a test PDF.
+
+    Tests each signature object from the template version against the uploaded PDF
+    and returns detailed match results for diagnostic purposes.
+
+    Used to understand why a PDF does or doesn't match a template.
+    """
+    # Read PDF bytes
+    pdf_bytes = await pdf_file.read()
+
+    # Call service method
+    result = service.debug_match_template(version_id, pdf_bytes)
+
+    return result

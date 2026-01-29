@@ -373,13 +373,6 @@ class PipelineService:
             ServiceError: If compilation fails
         """
         try:
-            # DEBUG: Log pruned_pipeline modules before compilation
-            logger.debug("[COMPILATION DEBUG] Pruned pipeline modules:")
-            for module in pruned_pipeline.modules:
-                logger.debug(f"[COMPILATION DEBUG]   Module {module.module_instance_id}:")
-                for inp in module.inputs:
-                    logger.debug(f"[COMPILATION DEBUG]     Input: node_id={inp.node_id}, name={inp.name}, group_index={inp.group_index}")
-
             # Build indices for compilation
             indices = self._build_indices(pruned_pipeline)
 
@@ -423,24 +416,13 @@ class PipelineService:
             ServiceError: If compilation or persistence fails
         """
         try:
-            # Step 1: Validation (outside transoutput module)
-            logger.info("Validating pipeline structure")
-
-            # DEBUG: Log original pipeline_state before any processing
-            logger.debug("[COMPILATION DEBUG] Original pipeline_state modules:")
-            for module in create_data.pipeline_state.modules:
-                logger.debug(f"[COMPILATION DEBUG]   Module {module.module_instance_id} ({module.module_id}):")
-                for inp in module.inputs:
-                    logger.debug(f"[COMPILATION DEBUG]     Input: node_id={inp.node_id}, name={inp.name}, group_index={inp.group_index}")
-
+            # Step 1: Validation
             self._validate_pipeline(create_data.pipeline_state)
 
             # Step 2: Prune dead branches
-            logger.info("Pruning dead branches")
             pruned_pipeline = self._prune_dead_branches(create_data.pipeline_state)
 
-            # Step 3: Compile to steps (computation, outside transoutput module)
-            logger.info("Compiling pipeline to execution steps")
+            # Step 3: Compile to steps
             steps = self._compile_pipeline(pruned_pipeline)
 
             # Step 4: ATOMIC TRANSoutput module - Create definition and steps together

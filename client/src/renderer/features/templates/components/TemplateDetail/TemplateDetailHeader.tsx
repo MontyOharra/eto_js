@@ -15,6 +15,8 @@ interface TemplateDetailHeaderProps {
   onVersionChange: (versionId: number) => void;
   /** Optional edit handler - if not provided, Edit button is hidden */
   onEdit?: () => void;
+  /** Optional test match handler - if not provided, Test Match button is hidden */
+  onTestMatch?: () => void;
 }
 
 export function TemplateDetailHeader({
@@ -26,6 +28,7 @@ export function TemplateDetailHeader({
   currentVersionId,
   onVersionChange,
   onEdit,
+  onTestMatch,
 }: TemplateDetailHeaderProps) {
   return (
     <div className="flex items-center justify-between p-4 border-b border-gray-700 flex-shrink-0">
@@ -59,28 +62,51 @@ export function TemplateDetailHeader({
         )}
       </div>
 
-      {/* Right side: Edit button (only shown when onEdit is provided) */}
-      {onEdit && (
-        <button
-          onClick={onEdit}
-          className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-colors font-medium flex items-center space-x-2"
-        >
-          <svg
-            className="w-4 h-4"
-            fill="none"
-            viewBox="0 0 24 24"
-            stroke="currentColor"
+      {/* Right side: Action buttons */}
+      <div className="flex items-center space-x-2">
+        {onTestMatch && (
+          <button
+            onClick={onTestMatch}
+            className="px-4 py-2 bg-gray-600 hover:bg-gray-500 text-white rounded-lg transition-colors font-medium flex items-center space-x-2"
           >
-            <path
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              strokeWidth={2}
-              d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"
-            />
-          </svg>
-          <span>Edit</span>
-        </button>
-      )}
+            <svg
+              className="w-4 h-4"
+              fill="none"
+              viewBox="0 0 24 24"
+              stroke="currentColor"
+            >
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth={2}
+                d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4"
+              />
+            </svg>
+            <span>Test Match</span>
+          </button>
+        )}
+        {onEdit && (
+          <button
+            onClick={onEdit}
+            className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-colors font-medium flex items-center space-x-2"
+          >
+            <svg
+              className="w-4 h-4"
+              fill="none"
+              viewBox="0 0 24 24"
+              stroke="currentColor"
+            >
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth={2}
+                d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"
+              />
+            </svg>
+            <span>Edit</span>
+          </button>
+        )}
+      </div>
     </div>
   );
 }

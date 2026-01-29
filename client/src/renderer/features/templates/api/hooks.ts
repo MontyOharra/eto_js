@@ -13,6 +13,7 @@ import {
   UpdateTemplateRequest,
   SimulateTemplateRequest,
   SimulateTemplateResponse,
+  DebugMatchResponse,
 } from './types';
 import { TemplateListItem, TemplateDetail, TemplateVersionDetail } from '../types';
 
@@ -283,6 +284,41 @@ export function useSimulateTemplate() {
         {
           headers: {
             'Content-Type': 'application/json',
+          },
+        }
+      );
+      return response.data;
+    },
+    // No cache invalidation needed - this is a one-off testing operation
+  });
+}
+
+/**
+ * Debug template matching
+ * Tests a PDF against a specific template version and returns detailed match results
+ *
+ * @param versionId - Template version ID to test against
+ * @param pdfFile - PDF file to test (should be subset PDF with selected pages)
+ * @returns Debug match results with per-object match status
+ */
+export function useDebugMatchTemplate() {
+  return useMutation({
+    mutationFn: async ({
+      versionId,
+      pdfFile,
+    }: {
+      versionId: number;
+      pdfFile: File;
+    }): Promise<DebugMatchResponse> => {
+      const formData = new FormData();
+      formData.append('pdf_file', pdfFile);
+
+      const response = await apiClient.post<DebugMatchResponse>(
+        `${baseUrl}/versions/${versionId}/debug-match`,
+        formData,
+        {
+          headers: {
+            'Content-Type': 'multipart/form-data',
           },
         }
       );
