@@ -18,6 +18,7 @@ Usage:
     logger.debug("Standard debug message")
 """
 import logging
+from logging.handlers import RotatingFileHandler
 import os
 import sys
 from typing import Any
@@ -179,6 +180,8 @@ def configure_logging() -> None:
     - LOG_COLORS: Enable console colors (default: true)
     - LOG_TRACEBACKS: Include tracebacks on errors (default: true)
     - LOGS_DIR: Directory for log files (default: logs)
+    - LOG_MAX_BYTES: Max log file size before rotation (default: 10485760 = 10 MB)
+    - LOG_BACKUP_COUNT: Number of backup files to keep (default: 5)
     - THIRD_PARTY_LOG_LEVEL: Log level for third-party libraries (default: WARNING)
 
     Should be called once at application startup.
@@ -220,9 +223,17 @@ def configure_logging() -> None:
     console_handler.setFormatter(console_formatter)
     root_logger.addHandler(console_handler)
 
-    # File handler (always without colors, but with tracebacks)
+    # File handler with rotation (always without colors, but with tracebacks)
+    # Rotates when file reaches max size, keeps backup_count old files
     log_file = os.path.join(logs_dir, "app.log")
-    file_handler = logging.FileHandler(log_file, encoding="utf-8")
+    max_bytes = int(os.getenv("LOG_MAX_BYTES", 10 * 1024 * 1024))  # 10 MB default
+    backup_count = int(os.getenv("LOG_BACKUP_COUNT", 5))  # 5 backups default
+    file_handler = RotatingFileHandler(
+        log_file,
+        maxBytes=max_bytes,
+        backupCount=backup_count,
+        encoding="utf-8"
+    )
     file_handler.setLevel(log_level)
     file_formatter = ColoredFormatter(
         fmt=log_format,
@@ -248,8 +259,7 @@ def configure_logging() -> None:
 
     # Log configuration summary
     logger = get_logger(__name__)
-    logger.info("Logging configured successfully")
-    logger.info(f"Log level: {logging.getLevelName(log_level)}")
-    logger.info(f"Console colors: {use_colors}")
-    logger.info(f"Full tracebacks: {include_traceback}")
-    logger.info(f"Log file: {log_file}")
+    logger.info(
+        f"Logging configured: level={logging.getLevelName(log_level)}, "
+        f"file={log_file}, max_size={max_bytes // 1024 // 1024}MB, backups={backup_count}"
+    )
