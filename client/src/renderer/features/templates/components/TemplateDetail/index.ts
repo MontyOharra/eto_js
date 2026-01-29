@@ -4,3 +4,4 @@ export { TemplateDetailFooter } from './TemplateDetailFooter';
 export { SignatureObjectsView } from './SignatureObjectsView';
 export { ExtractionFieldsView } from './ExtractionFieldsView';
 export { PipelineView } from './PipelineView';
+export { DebugMatchResultsView } from './DebugMatchResultsView';

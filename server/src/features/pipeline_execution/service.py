@@ -311,14 +311,8 @@ class PipelineExecutionService:
             ValueError: Missing required entry values
             RuntimeError: Module not found
         """
-        logger.info(f"Starting pipeline execution with {len(steps)} steps")
-
         # Step 1: Map entry points
         entry_name_to_ids = self._map_entry_names_to_pin_ids_from_state(pipeline_state)
-
-        # Debug: Log entry point mapping for diagnosis
-        logger.debug(f"Pipeline entry points (name -> pin_ids): {entry_name_to_ids}")
-        logger.debug(f"Provided entry values (from extraction): {list(entry_values_by_name.keys())}")
 
         # Step 2: Seed entry values
         producer_of_pin, missing, extras = self._seed_entry_values(
@@ -366,9 +360,6 @@ class PipelineExecutionService:
                     step, producer_of_pin, output_channel_values
                 )
                 task_of_step[step.module_instance_id] = task
-                # No downstream publishing - output channels are terminal nodes
-                channel_type = step.module_config.get("channel_type", "unknown")
-                logger.debug(f"Created output channel collection task: {step.module_instance_id} (channel_type={channel_type})")
             else:
                 # Regular module step - module_id is the DB primary key (int)
                 # Create task for this step
@@ -380,10 +371,7 @@ class PipelineExecutionService:
         try:
             leaves = [t for t in task_of_step.values()] or list(producer_of_pin.values())
             if leaves:
-                logger.info(f"Executing Dask graph with {len(leaves)} leaf tasks")
                 compute(*leaves)
-
-            logger.info("Pipeline execution graph completed")
         except Exception as e:
             # Catch any unexpected errors during graph execution
             logger.exception(f"Unexpected error during pipeline execution: {e}")
@@ -396,31 +384,14 @@ class PipelineExecutionService:
         if not errors:
             status = "success"
             error = None
-            logger.info("Pipeline execution succeeded - all modules completed successfully")
         elif len(errors) == len(collected_steps):
             status = "failed"
             error = f"All {len(errors)} module(s) failed"
-            logger.error(f"Pipeline execution failed completely: {error}")
+            logger.error(f"Pipeline execution failed: {error}")
         else:
             status = "partial"
             error = f"{len(errors)} of {len(collected_steps)} module(s) failed"
-            logger.warning(f"Pipeline execution partially succeeded: {error}")
-
-        # Log detailed error information
-        logger.info(f"Returning pipeline result: status={status}, steps_count={len(collected_steps)}, errors_count={len(errors)}")
-        for step in collected_steps:
-            if step.error:
-                logger.error(f"  Step {step.step_number} ({step.module_instance_id}): FAILED - {step.error}")
-            else:
-                logger.debug(f"  Step {step.step_number} ({step.module_instance_id}): SUCCESS")
-
-        # Step 9: Log collected output channel values
-        if output_channel_values:
-            logger.info(f"Output channel values collected: {list(output_channel_values.keys())}")
-            for channel_type, value in output_channel_values.items():
-                logger.debug(f"  {channel_type}: {value}")
-        else:
-            logger.debug("No output channel values collected")
+            logger.warning(f"Pipeline execution partial failure: {error}")
 
         return PipelineExecutionResult(
             status=status,
@@ -472,8 +443,6 @@ class PipelineExecutionService:
             if entry_point.outputs:
                 entry_name_to_ids[entry_point.name].append(entry_point.outputs[0].node_id)
 
-        logger.debug(f"Mapped {len(entry_name_to_ids)} entry point names to pin IDs")
-
         return entry_name_to_ids
 
     def _seed_entry_values(
@@ -510,11 +479,6 @@ class PipelineExecutionService:
                 v = entry_values_by_name[name]
                 for pin_id in node_ids:
                     producer_of_pin[pin_id] = _const(v)
-
-        logger.debug(
-            f"Seeded {len(producer_of_pin)} entry point pins. "
-            f"Missing: {missing}, Extras: {extras}"
-        )
 
         return producer_of_pin, missing, extras
 
@@ -598,7 +562,6 @@ class PipelineExecutionService:
             cancelled_inputs = [val for val in values if isinstance(val, ExecutionCancelled)]
             if cancelled_inputs:
                 reason = cancelled_inputs[0].reason  # Use first cancellation reason
-                logger.info(f"Skipping module {step.module_instance_id} due to upstream cancellation: {reason}")
 
                 # Create ExecutionCancelled sentinel for all outputs
                 sentinel = ExecutionCancelled(reason)
@@ -612,7 +575,6 @@ class PipelineExecutionService:
             branch_not_taken = [val for val in values if isinstance(val, BranchNotTaken)]
             if branch_not_taken:
                 reason = branch_not_taken[0].reason  # Use first branch reason
-                logger.info(f"Skipping module {step.module_instance_id} due to branch not taken: {reason}")
 
                 # Create BranchNotTaken sentinel for all outputs
                 sentinel = BranchNotTaken(reason)
@@ -632,7 +594,6 @@ class PipelineExecutionService:
                     access_conn_manager=self.access_conn_manager
                 )
                 error = None
-                logger.debug(f"Executed module {step.module_instance_id}")
             except Exception as e:
                 outputs_dict = {}
                 error = f"{type(e).__name__}: {e}"
@@ -659,7 +620,6 @@ class PipelineExecutionService:
                 error=error
             )
             collector.add(step_result)
-            logger.info(f"Collected step result for {step.module_instance_id}: error={error}")
 
             # Branch-isolated error handling: Don't raise, let other branches continue
             # Return ExecutionCancelled sentinels if module failed to prevent downstream execution
@@ -705,8 +665,6 @@ class PipelineExecutionService:
                 return outputs.get(key)
 
             producer_of_pin[node_id] = _select(task, node_id)
-
-        logger.debug(f"Published {len(output_pins)} outputs for {step.module_instance_id}")
 
     def _make_output_channel_collection_task(
         self,
@@ -758,12 +716,10 @@ class PipelineExecutionService:
             """
             # Skip sentinel values (ExecutionCancelled, BranchNotTaken)
             if isinstance(value, (ExecutionCancelled, BranchNotTaken)):
-                logger.debug(f"Output channel {ch_type} received sentinel value, skipping collection")
                 return None
 
             # Store the collected value
             output_channel_values[ch_type] = value
-            logger.info(f"Collected output channel '{ch_type}': {value}")
             return value
 
         return _collect_output_channel(upstream_task, channel_type)

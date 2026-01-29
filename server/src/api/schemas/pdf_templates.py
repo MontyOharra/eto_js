@@ -183,3 +183,23 @@ class Customer(BaseModel):
 class GetCustomersResponse(BaseModel):
     """Response for GET /pdf-templates/customers"""
     customers: list[Customer]
+
+
+# ========== Debug Match ==========
+
+class DebugMatchObjectResult(BaseModel):
+    """Single signature object match result"""
+    page: int  # 1-based page number
+    bbox: tuple[float, float, float, float]  # [x0, y0, x1, y1]
+    object_type: str  # 'text_word', 'graphic_rect', etc.
+    matched: bool  # Whether this object was found in the test PDF
+    expected_text: str | None = None  # For text objects only
+
+
+class DebugMatchResponse(BaseModel):
+    """Response for POST /pdf-templates/versions/{version_id}/debug-match"""
+    page_count_match: bool  # Did page counts match?
+    template_page_count: int  # Number of pages in template
+    pdf_page_count: int  # Number of pages in test PDF
+    overall_match: bool  # Did all objects match?
+    objects: list[DebugMatchObjectResult]  # Per-object match results

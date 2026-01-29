@@ -128,3 +128,31 @@ export interface SimulateTemplateResponse {
   output_channel_values: Record<string, unknown>;  // {channel_type: value} collected from output channels
   pipeline_error: string | null;
 }
+
+// =============================================================================
+// POST /pdf-templates/versions/{version_id}/debug-match - Debug template matching
+// =============================================================================
+
+/**
+ * Single signature object match result
+ * Contains the template's expected object and whether it was found in the test PDF
+ */
+export interface DebugMatchObjectResult {
+  page: number;                                    // 1-based page number
+  bbox: [number, number, number, number];          // [x0, y0, x1, y1]
+  object_type: string;                             // 'text_word', 'graphic_rect', etc.
+  matched: boolean;                                // Whether this object was found in the test PDF
+  expected_text: string | null;                    // For text objects only
+}
+
+/**
+ * Response for POST /pdf-templates/versions/{version_id}/debug-match
+ * Contains detailed matching results for each signature object
+ */
+export interface DebugMatchResponse {
+  page_count_match: boolean;                       // Did page counts match?
+  template_page_count: number;                     // Number of pages in template
+  pdf_page_count: number;                          // Number of pages in test PDF
+  overall_match: boolean;                          // Did all objects match?
+  objects: DebugMatchObjectResult[];               // Per-object match results
+}
