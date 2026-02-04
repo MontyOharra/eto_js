@@ -388,6 +388,28 @@ class HtcAddressUtils:
         state = parsed.get('StateName', '')
         zip_code = parsed.get('ZipCode', '')
 
+        # Reject addresses containing non-address components (e.g., "ORDER #12345")
+        if 'NotAddress' in parsed:
+            logger.warning(f"Address contains non-address component: '{parsed['NotAddress']}' in '{address_string}'")
+            return None
+
+        # Validate SubaddressType is a legitimate address component
+        # usaddress sometimes misidentifies non-address text like "ORDER" as SubaddressType
+        valid_subaddress_types = {
+            'SUITE', 'STE', 'APT', 'APARTMENT', 'UNIT', 'FLOOR', 'FL',
+            'ROOM', 'RM', 'DEPT', 'DEPARTMENT', 'BUILDING', 'BLDG',
+            'DOCK', 'LOT', 'SPACE', 'SPC', 'STOP', 'TRAILER', 'TRLR',
+            'BOX', 'PO BOX', 'PMB', 'PIER', 'SLIP', 'WING', 'HANGAR',
+        }
+        if 'SubaddressType' in parsed:
+            subaddress_type = parsed['SubaddressType'].upper().strip()
+            if subaddress_type not in valid_subaddress_types:
+                logger.warning(
+                    f"Address contains invalid subaddress type: '{subaddress_type}' "
+                    f"(identifier: '{parsed.get('SubaddressIdentifier', '')}') in '{address_string}'"
+                )
+                return None
+
         # Validate we have minimum required components
         if not addr_ln1 or not city or not state or not zip_code:
             logger.debug(f"Missing required components - addr_ln1: '{addr_ln1}', "

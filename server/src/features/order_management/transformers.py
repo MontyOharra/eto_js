@@ -56,11 +56,15 @@ def transform_location_field(source_values: dict[str, Any]) -> LocationValue | N
     if not company_name and not address:
         return None
 
+    # Normalize address: replace newlines with spaces and collapse multiple spaces
+    normalized_address = (address or "").replace('\n', ' ').replace('\r', ' ')
+    normalized_address = ' '.join(normalized_address.split())  # Collapse multiple spaces
+
     # Uppercase string values for HTC compatibility
     return LocationValue(
         address_id=address_id,
         name=(company_name or "").upper(),
-        address=(address or "").upper(),
+        address=normalized_address.upper(),
     )
 
 
