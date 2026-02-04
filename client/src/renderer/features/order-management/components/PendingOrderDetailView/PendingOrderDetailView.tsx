@@ -106,9 +106,10 @@ interface FieldDropdownProps {
   localSelection: { selectedHistoryId: number | null; selectedValue: unknown } | undefined;
   onSelect: (fieldName: string, option: ConflictOption) => void;
   isConflict: boolean; // True if unresolved conflict (needs yellow styling)
+  hasConfirmButton: boolean; // Whether confirm button is shown (affects text wrapping)
 }
 
-function FieldDropdown({ field, localSelection, onSelect, isConflict }: FieldDropdownProps) {
+function FieldDropdown({ field, localSelection, onSelect, isConflict, hasConfirmButton }: FieldDropdownProps) {
   const [isOpen, setIsOpen] = useState(false);
   const options = field.conflict_options ?? [];
 
@@ -142,7 +143,7 @@ function FieldDropdown({ field, localSelection, onSelect, isConflict }: FieldDro
     <div className="relative flex-1 min-w-0">
       <button
         onClick={() => setIsOpen(!isOpen)}
-        className={`w-full flex items-center justify-between gap-2 px-2 py-1 rounded border text-sm text-left ${
+        className={`w-full min-w-0 flex ${hasConfirmButton ? 'items-start' : 'items-center'} justify-between gap-2 px-2 py-1 rounded border text-sm text-left ${
           isSelectedFailed
             ? 'bg-red-500/10 border-red-500/50 text-red-400'
             : isConflict
@@ -150,7 +151,10 @@ function FieldDropdown({ field, localSelection, onSelect, isConflict }: FieldDro
               : 'bg-gray-700 border-gray-600 text-white'
         }`}
       >
-        <span className={`truncate ${isSelectedFailed ? 'italic' : ''}`}>{displayValue || 'Choose value...'}</span>
+        <span
+          className={`min-w-0 ${hasConfirmButton ? 'break-words whitespace-pre-wrap' : 'truncate'} ${isSelectedFailed ? 'italic' : ''}`}
+          style={hasConfirmButton ? { overflowWrap: 'anywhere' } : undefined}
+        >{displayValue || 'Choose value...'}</span>
         <svg
           className={`w-4 h-4 flex-shrink-0 transition-transform ${isOpen ? 'rotate-180' : ''}`}
           fill="none"
@@ -274,7 +278,7 @@ function FieldRow({ field, localSelection, onConflictSelect, onConfirm, isConfir
 
   return (
     <div
-      className={`flex items-center gap-3 py-2 px-3 rounded transition-colors ${
+      className={`flex items-start gap-3 py-2 px-3 rounded transition-colors max-w-full ${
         isHighlighted
           ? 'bg-blue-500/20 ring-1 ring-blue-500/50'
           : isFailed
@@ -289,19 +293,20 @@ function FieldRow({ field, localSelection, onConflictSelect, onConfirm, isConfir
       onMouseLeave={() => onHover(null)}
     >
       {/* Status Icon */}
-      {getStateIcon()}
+      <div className="pt-0.5 flex-shrink-0">{getStateIcon()}</div>
 
       {/* Label */}
-      <span className="text-sm text-gray-400 w-32 flex-shrink-0">{field.label}</span>
+      <span className="text-sm text-gray-400 w-32 flex-shrink-0 pt-0.5">{field.label}</span>
 
       {/* Value display - either dropdown (multiple options) or static text */}
       {showDropdown ? (
-        <>
+        <div className="flex-1 min-w-0 flex items-start gap-2">
           <FieldDropdown
             field={field}
             localSelection={localSelection}
             onSelect={onConflictSelect}
             isConflict={isConflict}
+            hasConfirmButton={canEdit && (isConflict || hasNewSelection)}
           />
           {/* Confirm Button - shown when:
               - Unresolved conflict: must select to resolve
@@ -323,7 +328,7 @@ function FieldRow({ field, localSelection, onConflictSelect, onConfirm, isConfir
               )}
             </button>
           )}
-        </>
+        </div>
       ) : (
         <span
           className={`text-sm flex-1 min-w-0 ${
@@ -332,7 +337,8 @@ function FieldRow({ field, localSelection, onConflictSelect, onConfirm, isConfir
               : hasValue
                 ? 'text-white'
                 : 'text-gray-600 italic'
-          } break-words`}
+          } break-words whitespace-pre-wrap overflow-hidden`}
+          style={{ overflowWrap: 'anywhere' }}
         >
           {(() => {
             // For failed fields, show the error message
@@ -770,9 +776,9 @@ export function PendingOrderDetailView({
       {/* Two Column Layout */}
       <div className="flex-1 min-h-0 flex overflow-hidden">
         {/* Left Column - Order Fields */}
-        <div className="flex-1 min-w-0 overflow-auto p-6 border-r border-gray-700">
+        <div className="flex-1 min-w-0 overflow-y-auto overflow-x-hidden p-6 border-r border-gray-700">
           {/* Required Fields */}
-          <div className="space-y-2">
+          <div className="space-y-2 w-full overflow-hidden">
             <h3 className="text-xs font-medium text-gray-500 uppercase tracking-wider mb-3">
               Required ({presentRequiredCount}/{requiredFields.length})
             </h3>
@@ -792,7 +798,7 @@ export function PendingOrderDetailView({
           </div>
 
           {/* Optional Fields */}
-          <div className="mt-6 space-y-2">
+          <div className="mt-6 space-y-2 w-full overflow-hidden">
             <h3 className="text-xs font-medium text-gray-500 uppercase tracking-wider mb-3">
               Optional ({presentOptionalCount}/{optionalFields.length})
             </h3>

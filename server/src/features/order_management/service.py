@@ -636,6 +636,17 @@ class OrderManagementService:
                         clean_address = f"{parsed['addr_ln1']} {addr_ln2}, {parsed['city']}, {parsed['state']} {parsed['zip_code']}"
                     else:
                         clean_address = f"{parsed['addr_ln1']}, {parsed['city']}, {parsed['state']} {parsed['zip_code']}"
+
+                    # Validate the rebuilt address can be parsed again
+                    # This catches cases where usaddress parsed garbage into addr_ln2
+                    # that makes the rebuilt address unparseable
+                    reparse_check = self.htc_service.parse_address_string(clean_address.upper())
+                    if reparse_check is None:
+                        raise ValueError(
+                            f"Address has ambiguous or conflicting secondary line info "
+                            f"(suite, unit, etc.): '{addr_ln2}' in address '{address}'"
+                        )
+
                     logger.debug(
                         f"Address for {field_name} not found in HTC (new address). "
                         f"Raw: '{address}' -> Clean: '{clean_address}'"
@@ -654,6 +665,15 @@ class OrderManagementService:
                     clean_address = f"{parsed['addr_ln1']} {addr_ln2}, {parsed['city']}, {parsed['state']} {parsed['zip_code']}"
                 else:
                     clean_address = f"{parsed['addr_ln1']}, {parsed['city']}, {parsed['state']} {parsed['zip_code']}"
+
+                # Validate the rebuilt address can be parsed again
+                reparse_check = self.htc_service.parse_address_string(clean_address.upper())
+                if reparse_check is None:
+                    raise ValueError(
+                        f"Address has ambiguous or conflicting secondary line info "
+                        f"(suite, unit, etc.): '{addr_ln2}' in address '{address}'"
+                    )
+
                 return LocationValue(
                     address_id=None,
                     name=location_value.name,
