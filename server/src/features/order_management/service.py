@@ -1653,8 +1653,7 @@ class OrderManagementService:
                 error_message=f"Pending action {pending_action_id} not found",
             )
 
-        # Check status is valid for approval/retry
-        # "failed" is allowed for retry attempts
+        # Check status is valid for approval/reset
         if action.status not in ("ready", "incomplete", "conflict", "failed"):
             logger.warning(
                 f"Cannot approve: pending action {pending_action_id} status is "
@@ -1666,6 +1665,38 @@ class OrderManagementService:
                 action_type=action.action_type,
                 htc_order_number=action.htc_order_number,
                 error_message=f"Cannot approve action with status '{action.status}'",
+            )
+
+        # If status is "failed", reset to proper status instead of executing
+        # This allows users to edit fields before retrying
+        if action.status == "failed":
+            logger.info(f"Resetting failed action {pending_action_id} to editable state")
+
+            # Clear error state and recalculate proper status
+            self.pending_action_repo.update(
+                pending_action_id,
+                PendingActionUpdate(
+                    error_message=None,
+                    error_at=None,
+                ),
+            )
+
+            # Recalculate status based on current fields (ready/incomplete/conflict)
+            updated_action = self._recalculate_action_status(pending_action_id)
+
+            # Broadcast update event
+            order_event_manager.broadcast_sync("pending_action_updated", {
+                "id": pending_action_id,
+                "status": updated_action.status,
+                "action_type": updated_action.action_type,
+            })
+
+            return ExecuteResult(
+                pending_action_id=pending_action_id,
+                success=True,
+                action_type=action.action_type,
+                htc_order_number=action.htc_order_number,
+                error_message=None,
             )
 
         # Delegate to execute_action for the full execution flow

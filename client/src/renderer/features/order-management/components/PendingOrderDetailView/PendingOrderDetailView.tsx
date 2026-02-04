@@ -626,8 +626,8 @@ export function PendingOrderDetailView({
   // Count conflicts
   const conflictCount = transformedFields.filter((f) => f.state === 'conflict').length;
 
-  // Can edit only if order is incomplete or ready
-  const canEdit = order.status === 'incomplete' || order.status === 'ready' || order.status === 'conflict';
+  // Can edit only if order is incomplete, ready, conflict, or failed
+  const canEdit = order.status === 'incomplete' || order.status === 'ready' || order.status === 'conflict' || order.status === 'failed';
 
   // Get status display label
   const getStatusLabel = (status: string): string => {
@@ -649,8 +649,8 @@ export function PendingOrderDetailView({
   const canReject = order.status === 'ready' || order.status === 'incomplete' || order.status === 'conflict';
   // Can approve only if order is ready
   const canApprove = order.status === 'ready';
-  // Can retry only if order is failed
-  const canRetry = order.status === 'failed';
+  // Can reset only if order is failed
+  const canReset = order.status === 'failed';
 
   // Build available fields list for AddFieldModal
   const availableFields = useMemo(() => {
@@ -755,14 +755,14 @@ export function PendingOrderDetailView({
               </button>
             )}
 
-            {/* Retry Button - only when failed */}
-            {canRetry && (
+            {/* Reset Button - only when failed */}
+            {canReset && (
               <button
                 onClick={onApprove}
                 disabled={isApproving}
                 className="px-4 py-1.5 rounded-lg bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors text-sm"
               >
-                {isApproving ? 'Retrying...' : 'Retry'}
+                {isApproving ? 'Resetting...' : 'Reset'}
               </button>
             )}
           </div>
