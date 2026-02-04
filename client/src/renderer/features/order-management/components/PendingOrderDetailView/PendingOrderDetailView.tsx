@@ -645,8 +645,10 @@ export function PendingOrderDetailView({
     return labels[status] ?? status;
   };
 
-  // Can approve/reject only if order is ready
-  const canApproveReject = order.status === 'ready';
+  // Can reject if order is ready or incomplete
+  const canReject = order.status === 'ready' || order.status === 'incomplete' || order.status === 'conflict';
+  // Can approve only if order is ready
+  const canApprove = order.status === 'ready';
   // Can retry only if order is failed
   const canRetry = order.status === 'failed';
 
@@ -729,34 +731,28 @@ export function PendingOrderDetailView({
             </div>
           </div>
 
-          {/* Right: Buttons and extra info */}
+          {/* Right: Buttons */}
           <div className="flex items-center gap-3">
-            {/* Progress info for incomplete status */}
-            {order.status === 'incomplete' && (
-              <span className="text-xs text-gray-400">
-                {presentRequiredCount}/{requiredFields.length} required
-                {conflictCount > 0 && ` · ${conflictCount} conflict${conflictCount > 1 ? 's' : ''}`}
-              </span>
+            {/* Reject Button - when ready or incomplete */}
+            {canReject && (
+              <button
+                onClick={onReject}
+                disabled={isRejecting || isApproving}
+                className="px-4 py-1.5 rounded-lg bg-red-600 text-white hover:bg-red-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors text-sm"
+              >
+                {isRejecting ? 'Rejecting...' : 'Reject'}
+              </button>
             )}
 
-            {/* Approve/Reject Buttons - only when ready */}
-            {canApproveReject && (
-              <>
-                <button
-                  onClick={onReject}
-                  disabled={isRejecting || isApproving}
-                  className="px-4 py-1.5 rounded-lg bg-red-600 text-white hover:bg-red-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors text-sm"
-                >
-                  {isRejecting ? 'Rejecting...' : 'Reject'}
-                </button>
-                <button
-                  onClick={onApprove}
-                  disabled={isApproving || isRejecting}
-                  className="px-4 py-1.5 rounded-lg bg-green-600 text-white hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors text-sm"
-                >
-                  {isApproving ? 'Creating...' : 'Approve'}
-                </button>
-              </>
+            {/* Approve Button - only when ready */}
+            {canApprove && (
+              <button
+                onClick={onApprove}
+                disabled={isApproving || isRejecting}
+                className="px-4 py-1.5 rounded-lg bg-green-600 text-white hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors text-sm"
+              >
+                {isApproving ? 'Creating...' : 'Approve'}
+              </button>
             )}
 
             {/* Retry Button - only when failed */}
@@ -778,7 +774,7 @@ export function PendingOrderDetailView({
         {/* Left Column - Order Fields */}
         <div className="flex-1 min-w-0 overflow-y-auto overflow-x-hidden p-6 border-r border-gray-700">
           {/* Required Fields */}
-          <div className="space-y-2 w-full overflow-hidden">
+          <div className="space-y-2 w-full">
             <h3 className="text-xs font-medium text-gray-500 uppercase tracking-wider mb-3">
               Required ({presentRequiredCount}/{requiredFields.length})
             </h3>
@@ -798,7 +794,7 @@ export function PendingOrderDetailView({
           </div>
 
           {/* Optional Fields */}
-          <div className="mt-6 space-y-2 w-full overflow-hidden">
+          <div className="mt-6 space-y-2 w-full">
             <h3 className="text-xs font-medium text-gray-500 uppercase tracking-wider mb-3">
               Optional ({presentOptionalCount}/{optionalFields.length})
             </h3>
