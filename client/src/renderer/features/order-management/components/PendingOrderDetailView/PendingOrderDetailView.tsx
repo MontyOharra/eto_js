@@ -32,6 +32,7 @@ interface FieldDetail {
   sub_run_id: number | null; // For cross-highlighting with source cards
   processing_status: 'success' | 'failed';
   processing_error: string | null;
+  is_approved_for_update: boolean; // Whether this field will be included in create
 }
 
 interface ConflictOption {
@@ -63,6 +64,8 @@ interface PendingOrderDetailViewProps {
   onReject?: () => void; // Reject the pending order
   isApproving?: boolean; // True while approve is in progress
   isRejecting?: boolean; // True while reject is in progress
+  onToggleFieldApproval?: (fieldName: string, isApproved: boolean) => void; // Toggle field inclusion
+  togglingApprovalFields?: Set<string>; // Fields currently toggling approval
 }
 
 interface LocalFieldState {
@@ -140,7 +143,7 @@ function FieldDropdown({ field, localSelection, onSelect, isConflict, hasConfirm
   const activeHistoryId = localSelection?.selectedHistoryId ?? field.source?.history_id ?? null;
 
   return (
-    <div className="relative flex-1 min-w-0">
+    <div className="relative flex-1 min-w-0 overflow-visible">
       <button
         onClick={() => setIsOpen(!isOpen)}
         className={`w-full min-w-0 flex ${hasConfirmButton ? 'items-start' : 'items-center'} justify-between gap-2 px-2 py-1 rounded border text-sm text-left ${
@@ -152,7 +155,7 @@ function FieldDropdown({ field, localSelection, onSelect, isConflict, hasConfirm
         }`}
       >
         <span
-          className={`min-w-0 ${hasConfirmButton ? 'break-words whitespace-pre-wrap' : 'truncate'} ${isSelectedFailed ? 'italic' : ''}`}
+          className={`min-w-0 flex-1 ${'break-words whitespace-pre-wrap'} ${isSelectedFailed ? 'italic' : ''}`}
           style={hasConfirmButton ? { overflowWrap: 'anywhere' } : undefined}
         >{displayValue || 'Choose value...'}</span>
         <svg
@@ -223,17 +226,21 @@ interface FieldRowProps {
   localSelection: { selectedHistoryId: number | null; selectedValue: unknown } | undefined;
   onConflictSelect: (fieldName: string, option: ConflictOption) => void;
   onConfirm: (fieldName: string, historyId: number) => void;
+  onToggleApproval?: (fieldName: string, isApproved: boolean) => void;
   isConfirming: boolean;
+  isTogglingApproval: boolean;
   canEdit: boolean;
   isHighlighted: boolean;
   onHover: (fieldName: string | null) => void;
 }
 
-function FieldRow({ field, localSelection, onConflictSelect, onConfirm, isConfirming, canEdit, isHighlighted, onHover }: FieldRowProps) {
+function FieldRow({ field, localSelection, onConflictSelect, onConfirm, onToggleApproval, isConfirming, isTogglingApproval, canEdit, isHighlighted, onHover }: FieldRowProps) {
   const isConflict = field.state === 'conflict';
   const hasMultipleOptions = (field.conflict_options?.length ?? 0) > 1;
   const hasLocalSelection = localSelection?.selectedHistoryId !== null && localSelection?.selectedHistoryId !== undefined;
   const hasValue = field.value !== null && field.value !== undefined;
+  const isApproved = field.is_approved_for_update;
+  const isOptional = !field.required;
 
   // Determine if user has changed selection from the current confirmed value
   const hasNewSelection = hasLocalSelection &&
@@ -272,85 +279,125 @@ function FieldRow({ field, localSelection, onConflictSelect, onConfirm, isConfir
     }
   };
 
+  const handleToggleApproval = () => {
+    if (onToggleApproval) {
+      onToggleApproval(field.name, !isApproved);
+    }
+  };
+
   // Show dropdown if there are multiple options (conflict or confirmed with history)
   // But only if the order is editable (not created/processing/failed)
   const showDropdown = hasMultipleOptions && canEdit;
 
+  // Show exclude toggle for optional fields that have a value
+  const showExcludeToggle = isOptional && hasValue && canEdit && onToggleApproval;
+
   return (
-    <div
-      className={`flex items-start gap-3 py-2 px-3 rounded transition-colors max-w-full ${
-        isHighlighted
-          ? 'bg-blue-500/20 ring-1 ring-blue-500/50'
-          : isFailed
-            ? 'bg-red-500/10 border border-red-500/30'
-            : isConflict
-              ? 'bg-yellow-500/10'
-              : !hasValue
-                ? 'bg-gray-800/50'
-                : 'bg-gray-800'
-      }`}
-      onMouseEnter={() => onHover(field.name)}
-      onMouseLeave={() => onHover(null)}
-    >
-      {/* Status Icon */}
-      <div className="pt-0.5 flex-shrink-0">{getStateIcon()}</div>
+    <div className="flex items-stretch gap-2">
+      {/* Main Row Content */}
+      <div
+        className={`flex-1 flex items-start gap-3 py-2 px-3 rounded transition-colors min-w-0 ${
+          !isApproved
+            ? 'bg-gray-800/30 border border-gray-700/50'
+            : isHighlighted
+              ? 'bg-blue-500/20 ring-1 ring-blue-500/50'
+              : isFailed
+                ? 'bg-red-500/10 border border-red-500/30'
+                : isConflict
+                  ? 'bg-yellow-500/10'
+                  : !hasValue
+                    ? 'bg-gray-800/50'
+                    : 'bg-gray-800'
+        }`}
+        onMouseEnter={() => onHover(field.name)}
+        onMouseLeave={() => onHover(null)}
+      >
+        {/* Status Icon */}
+        <div className={`pt-0.5 flex-shrink-0 ${!isApproved ? 'opacity-50' : ''}`}>{getStateIcon()}</div>
 
-      {/* Label */}
-      <span className="text-sm text-gray-400 w-32 flex-shrink-0 pt-0.5">{field.label}</span>
+        {/* Label */}
+        <span className={`text-sm w-32 flex-shrink-0 pt-0.5 ${!isApproved ? 'text-gray-500 line-through' : 'text-gray-400'}`}>{field.label}</span>
 
-      {/* Value display - either dropdown (multiple options) or static text */}
-      {showDropdown ? (
-        <div className="flex-1 min-w-0 flex items-start gap-2">
-          <FieldDropdown
-            field={field}
-            localSelection={localSelection}
-            onSelect={onConflictSelect}
-            isConflict={isConflict}
-            hasConfirmButton={canEdit && (isConflict || hasNewSelection)}
-          />
-          {/* Confirm Button - shown when:
-              - Unresolved conflict: must select to resolve
-              - Confirmed field with new selection: user wants to change the value */}
-          {canEdit && (isConflict || hasNewSelection) && (
-            <button
-              onClick={handleConfirm}
-              disabled={!hasLocalSelection || isConfirming}
-              className={`px-3 py-1 text-sm rounded font-medium transition-colors flex-shrink-0 ${
-                hasLocalSelection && !isConfirming
-                  ? 'bg-blue-600 hover:bg-blue-700 text-white'
-                  : 'bg-gray-700 text-gray-500 cursor-not-allowed'
-              }`}
-            >
-              {isConfirming ? (
-                <span className="inline-block w-4 h-4 border-2 border-gray-500 border-t-white rounded-full animate-spin" />
-              ) : (
-                'Confirm'
-              )}
-            </button>
-          )}
-        </div>
-      ) : (
-        <span
-          className={`text-sm flex-1 min-w-0 ${
-            isFailed
-              ? 'text-red-400 italic'
-              : hasValue
-                ? 'text-white'
-                : 'text-gray-600 italic'
-          } break-words whitespace-pre-wrap overflow-hidden`}
-          style={{ overflowWrap: 'anywhere' }}
+        {/* Value display - either dropdown (multiple options) or static text */}
+        {showDropdown ? (
+          <div className={`flex-1 min-w-0 flex items-start gap-2 ${!isApproved ? 'opacity-50' : ''}`}>
+            <FieldDropdown
+              field={field}
+              localSelection={localSelection}
+              onSelect={onConflictSelect}
+              isConflict={isConflict}
+              hasConfirmButton={canEdit && (isConflict || hasNewSelection)}
+            />
+            {/* Confirm Button - shown when:
+                - Unresolved conflict: must select to resolve
+                - Confirmed field with new selection: user wants to change the value */}
+            {canEdit && (isConflict || hasNewSelection) && (
+              <button
+                onClick={handleConfirm}
+                disabled={!hasLocalSelection || isConfirming}
+                className={`px-3 py-1 text-sm rounded font-medium transition-colors flex-shrink-0 ${
+                  hasLocalSelection && !isConfirming
+                    ? 'bg-blue-600 hover:bg-blue-700 text-white'
+                    : 'bg-gray-700 text-gray-500 cursor-not-allowed'
+                }`}
+              >
+                {isConfirming ? (
+                  <span className="inline-block w-4 h-4 border-2 border-gray-500 border-t-white rounded-full animate-spin" />
+                ) : (
+                  'Confirm'
+                )}
+              </button>
+            )}
+          </div>
+        ) : (
+          <span
+            className={`text-sm flex-1 min-w-0 ${
+              !isApproved
+                ? 'text-gray-500 opacity-50'
+                : isFailed
+                  ? 'text-red-400 italic'
+                  : hasValue
+                    ? 'text-white'
+                    : 'text-gray-600 italic'
+            } break-words whitespace-pre-wrap overflow-hidden`}
+            style={{ overflowWrap: 'anywhere' }}
+          >
+            {(() => {
+              // For failed fields, show the error message
+              if (isFailed && field.processing_error) {
+                return `Error: ${field.processing_error}`;
+              }
+              const formatted = formatFieldValue(field.value, field.data_type);
+              if (formatted) return formatted;
+              // Distinguish between null/undefined (Missing) and empty string (Empty)
+              return field.value === '' ? 'Empty' : 'Missing';
+            })()}
+          </span>
+        )}
+      </div>
+
+      {/* Include/Exclude Toggle Button - for optional fields with values */}
+      {showExcludeToggle && (
+        <button
+          onClick={handleToggleApproval}
+          disabled={isTogglingApproval}
+          className={`flex-shrink-0 w-20 rounded-lg border text-sm font-medium transition-colors flex items-center justify-center ${
+            isTogglingApproval
+              ? 'bg-gray-700 border-gray-600 text-gray-500 cursor-not-allowed'
+              : isApproved
+                ? 'bg-gray-700 border-gray-600 hover:bg-gray-600 text-gray-300'
+                : 'bg-green-700 border-green-600 hover:bg-green-600 text-white'
+          }`}
+          title={isApproved ? 'Exclude this field from order' : 'Include this field in order'}
         >
-          {(() => {
-            // For failed fields, show the error message
-            if (isFailed && field.processing_error) {
-              return `Error: ${field.processing_error}`;
-            }
-            const formatted = formatFieldValue(field.value, field.data_type);
-            if (formatted) return formatted;
-            // Distinguish between null/undefined (Missing) and empty string (Empty)
-            return field.value === '' ? 'Empty' : 'Missing';
-          })()}
-        </span>
+          {isTogglingApproval ? (
+            <span className="inline-block w-4 h-4 border-2 border-gray-500 border-t-white rounded-full animate-spin" />
+          ) : isApproved ? (
+            'Exclude'
+          ) : (
+            'Include'
+          )}
+        </button>
       )}
     </div>
   );
@@ -452,6 +499,8 @@ export function PendingOrderDetailView({
   onReject,
   isApproving = false,
   isRejecting = false,
+  onToggleFieldApproval,
+  togglingApprovalFields = new Set(),
 }: PendingOrderDetailViewProps) {
   // Track local conflict selections (before submitting to API)
   const [localSelections, setLocalSelections] = useState<LocalFieldState>({});
@@ -495,6 +544,7 @@ export function PendingOrderDetailView({
           sub_run_id: null,
           processing_status: 'success', // Completed actions are always successful
           processing_error: null,
+          is_approved_for_update: true, // Completed fields were all approved
         });
       }
 
@@ -568,6 +618,10 @@ export function PendingOrderDetailView({
       const processingStatus = selectedItem?.processing_status ?? (fieldItems.length === 1 ? fieldItems[0].processing_status : 'success');
       const processingError = selectedItem?.processing_error ?? (fieldItems.length === 1 ? fieldItems[0].processing_error : null);
 
+      // Get is_approved_for_update - all values for a field share the same approval status
+      // Default to true if no field items exist
+      const isApprovedForUpdate = fieldItems.length > 0 ? fieldItems[0].is_approved_for_update : true;
+
       result.push({
         name: fieldName,
         label,
@@ -581,6 +635,7 @@ export function PendingOrderDetailView({
         sub_run_id: subRunId,
         processing_status: processingStatus ?? 'success',
         processing_error: processingError ?? null,
+        is_approved_for_update: isApprovedForUpdate,
       });
     }
 
@@ -772,9 +827,10 @@ export function PendingOrderDetailView({
       {/* Two Column Layout */}
       <div className="flex-1 min-h-0 flex overflow-hidden">
         {/* Left Column - Order Fields */}
-        <div className="flex-1 min-w-0 overflow-y-auto overflow-x-hidden p-6 border-r border-gray-700">
+        <div className="flex-1 min-w-0 overflow-hidden border-r border-gray-700">
+          <div className="h-full w-full overflow-y-auto p-6">
           {/* Required Fields */}
-          <div className="space-y-2 w-full">
+          <div className="space-y-2 w-full min-w-0">
             <h3 className="text-xs font-medium text-gray-500 uppercase tracking-wider mb-3">
               Required ({presentRequiredCount}/{requiredFields.length})
             </h3>
@@ -785,7 +841,9 @@ export function PendingOrderDetailView({
                 localSelection={localSelections[field.name]}
                 onConflictSelect={handleConflictSelect}
                 onConfirm={handleFieldConfirm}
+                onToggleApproval={onToggleFieldApproval}
                 isConfirming={confirmingFields.has(field.name)}
+                isTogglingApproval={togglingApprovalFields.has(field.name)}
                 canEdit={canEdit}
                 isHighlighted={hoveredFieldName === field.name || (hoveredSubRunId !== null && field.sub_run_id === hoveredSubRunId)}
                 onHover={setHoveredFieldName}
@@ -794,7 +852,7 @@ export function PendingOrderDetailView({
           </div>
 
           {/* Optional Fields */}
-          <div className="mt-6 space-y-2 w-full">
+          <div className="mt-6 space-y-2 w-full min-w-0">
             <h3 className="text-xs font-medium text-gray-500 uppercase tracking-wider mb-3">
               Optional ({presentOptionalCount}/{optionalFields.length})
             </h3>
@@ -805,7 +863,9 @@ export function PendingOrderDetailView({
                 localSelection={localSelections[field.name]}
                 onConflictSelect={handleConflictSelect}
                 onConfirm={handleFieldConfirm}
+                onToggleApproval={onToggleFieldApproval}
                 isConfirming={confirmingFields.has(field.name)}
+                isTogglingApproval={togglingApprovalFields.has(field.name)}
                 canEdit={canEdit}
                 isHighlighted={hoveredFieldName === field.name || (hoveredSubRunId !== null && field.sub_run_id === hoveredSubRunId)}
                 onHover={setHoveredFieldName}
@@ -824,6 +884,7 @@ export function PendingOrderDetailView({
               </button>
             </div>
           )}
+          </div>
         </div>
 
         {/* Right Column - Data Sources */}

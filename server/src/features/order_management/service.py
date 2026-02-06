@@ -536,6 +536,7 @@ class OrderManagementService:
             logger.warning(f"Field '{field_name}' processing failed: {e}")
 
             # Store the failed field with error info
+            # Required fields stay approved (can't be excluded), optional fields get excluded
             try:
                 self._store_field_value(
                     pending_action_id=pending_action_id,
@@ -545,7 +546,7 @@ class OrderManagementService:
                     raw_value=raw_value_json,
                     processing_status="failed",
                     processing_error=str(e),
-                    is_approved_for_update=False,  # Failed fields not approved
+                    is_approved_for_update=field_def.required,  # Required fields can't be excluded
                 )
             except Exception as store_error:
                 logger.error(f"Failed to store error for field '{field_name}': {store_error}")
@@ -814,7 +815,7 @@ class OrderManagementService:
                     field_name=field_name,
                     value=value,
                     is_selected=False,  # Failed fields are never selected
-                    is_approved_for_update=False,
+                    is_approved_for_update=is_approved_for_update,  # Use passed value (required fields stay approved)
                     processing_status=processing_status,
                     processing_error=processing_error,
                     raw_value=raw_value,
@@ -1832,6 +1833,8 @@ class OrderManagementService:
             })
 
             # Get fields to send
+            # For updates: only include approved fields
+            # For creates: include all required fields + approved optional fields
             selected_fields = self.pending_action_field_repo.get_selected_fields_for_action(pending_action_id)
             if action.action_type == "update":
                 fields_to_send = {
@@ -1839,7 +1842,11 @@ class OrderManagementService:
                     if field.is_approved_for_update
                 }
             else:
-                fields_to_send = selected_fields
+                # Creates: required fields always included, optional fields respect approval
+                fields_to_send = {
+                    name: field for name, field in selected_fields.items()
+                    if name in REQUIRED_ORDER_FIELDS or field.is_approved_for_update
+                }
 
             logger.info(f"Fields to send: {list(fields_to_send.keys())}")
             # Extract typed field values from fields_to_send
@@ -3056,36 +3063,41 @@ class OrderManagementService:
         is_approved: bool,
     ) -> bool:
         """
-        Toggle whether a field should be included in an update.
+        Toggle whether a field should be included in execution.
 
         Sets is_approved_for_update on ALL values for this field (approval is
-        per-field-name, not per-value). Only relevant for action_type='update'.
+        per-field-name, not per-value).
+
+        For updates: any field can be excluded.
+        For creates: only optional fields can be excluded.
 
         Args:
             pending_action_id: ID of the pending action
             field_name: Name of the field to toggle
-            is_approved: Whether the field should be included in the update
+            is_approved: Whether the field should be included
 
         Returns:
             The new approval status
 
         Raises:
-            ValueError: If action not found or is not an update type
+            ValueError: If action not found or trying to exclude a required field on create
         """
         logger.info(
             f"Setting field approval for action {pending_action_id}, "
             f"field {field_name}, approved={is_approved}"
         )
 
-        # Verify the action exists and is an update type
+        # Verify the action exists
         action = self.pending_action_repo.get_by_id(pending_action_id)
         if action is None:
             raise ValueError(f"Pending action {pending_action_id} not found")
 
-        if action.action_type != "update":
-            raise ValueError(
-                f"Field approval only applies to updates, not {action.action_type}"
-            )
+        # For creates, only optional fields can be excluded
+        if action.action_type == "create" and not is_approved:
+            if field_name in REQUIRED_ORDER_FIELDS:
+                raise ValueError(
+                    f"Cannot exclude required field '{field_name}' from create action"
+                )
 
         # Update approval for all values of this field
         rows_updated = self.pending_action_field_repo.set_approval_for_field(

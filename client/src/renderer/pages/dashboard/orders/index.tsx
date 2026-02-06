@@ -350,6 +350,8 @@ function OrdersPage() {
             onReject={handleRejectPendingOrder}
             isApproving={approveAction.isPending}
             isRejecting={rejectAction.isPending}
+            onToggleFieldApproval={handleToggleFieldApproval}
+            togglingApprovalFields={togglingApprovalFields}
           />
           <EtoSubRunDetailViewer
             isOpen={viewingSubRunId !== null}
