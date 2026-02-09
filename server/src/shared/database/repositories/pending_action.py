@@ -362,3 +362,38 @@ class PendingActionRepository(BaseRepository[PendingActionModel]):
             ]
 
             return result, total
+
+    def get_ready_creates_after(
+        self,
+        created_after: datetime,
+        limit: int = 50,
+    ) -> list[PendingAction]:
+        """
+        Get create actions in "ready" status created after the given timestamp.
+
+        Used by the auto-create worker to find eligible actions for automatic approval.
+        Returns actions in FIFO order (oldest first).
+
+        Args:
+            created_after: Only return actions created after this timestamp
+            limit: Maximum number of actions to return
+
+        Returns:
+            List of PendingAction dataclasses ordered by created_at ASC
+        """
+        with self._get_session() as session:
+            models = (
+                session.query(self.model_class)
+                .filter(
+                    and_(
+                        self.model_class.action_type == "create",
+                        self.model_class.status == "ready",
+                        self.model_class.created_at > created_after,
+                    )
+                )
+                .order_by(self.model_class.created_at.asc())
+                .limit(limit)
+                .all()
+            )
+
+            return [self._model_to_domain(model) for model in models]

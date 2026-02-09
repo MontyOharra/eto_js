@@ -220,6 +220,17 @@ async def initialize_services() -> None:
         except Exception as service_error:
             logger.warning(f"ETO processing worker startup failed: {service_error}")
 
+        # Start auto-create worker (background polling for pending actions)
+        try:
+            order_management_service = ServiceContainer.get_order_management_service()
+            auto_create_started = await order_management_service.startup()
+            if auto_create_started:
+                logger.info("Auto-create worker started successfully")
+            else:
+                logger.warning("Auto-create worker failed to start")
+        except Exception as service_error:
+            logger.warning(f"Auto-create worker startup failed: {service_error}")
+
 
     except Exception as e:
         logger.error(f"Failed to initialize services: {e}", exc_info=True)
@@ -255,6 +266,15 @@ async def cleanup_services() -> None:
                 logger.info("Email service shutdown complete (pollers stopped)")
             except Exception as e:
                 logger.warning(f"Failed to stop email service: {e}")
+
+            # Stop auto-create worker if running
+            try:
+                order_management_service = ServiceContainer.get_order_management_service()
+                if hasattr(order_management_service, 'shutdown'):
+                    await order_management_service.shutdown(graceful=True)
+                    logger.info("Auto-create worker stopped gracefully")
+            except Exception as e:
+                logger.warning(f"Failed to stop auto-create worker: {e}")
 
             # Stop ETO processing worker if running
             try:

@@ -5,6 +5,8 @@ REST endpoints for application-wide settings management.
 """
 
 import logging
+from datetime import datetime, timezone
+
 from fastapi import APIRouter, Depends, HTTPException, status
 
 from api.schemas.system_settings import (
@@ -26,6 +28,7 @@ router = APIRouter(prefix="/settings", tags=["System Settings"])
 # Setting keys
 EMAIL_DEFAULT_SENDER_ACCOUNT_ID = "email.default_sender_account_id"
 ORDER_MANAGEMENT_AUTO_CREATE_ENABLED = "order_management.auto_create_enabled"
+ORDER_MANAGEMENT_AUTO_CREATE_ENABLED_AT = "order_management.auto_create_enabled_at"
 
 
 def get_connection_manager() -> DatabaseConnectionManager:
@@ -113,8 +116,12 @@ async def get_order_management_settings(
     # Default to True if not set
     auto_create_enabled = auto_create_str.lower() == "true" if auto_create_str else True
 
+    enabled_at_str = repo.get(ORDER_MANAGEMENT_AUTO_CREATE_ENABLED_AT)
+    enabled_at = datetime.fromisoformat(enabled_at_str) if enabled_at_str else None
+
     return OrderManagementSettingsResponse(
         auto_create_enabled=auto_create_enabled,
+        auto_create_enabled_at=enabled_at,
     )
 
 
@@ -135,8 +142,28 @@ async def update_order_management_settings(
     value = "true" if request.auto_create_enabled else "false"
     settings_repo.set(ORDER_MANAGEMENT_AUTO_CREATE_ENABLED, value)
 
+    # Track enabled_at timestamp for the auto-create worker
+    # Only set on OFF→ON transitions (when currently None); clear on disable
+    enabled_at: datetime | None = None
+    if request.auto_create_enabled:
+        current_enabled_at = settings_repo.get(ORDER_MANAGEMENT_AUTO_CREATE_ENABLED_AT)
+        if current_enabled_at is None:
+            # OFF→ON transition: set fresh timestamp
+            enabled_at = datetime.now(timezone.utc)
+            settings_repo.set(
+                ORDER_MANAGEMENT_AUTO_CREATE_ENABLED_AT,
+                enabled_at.isoformat(),
+            )
+        else:
+            # Already ON: preserve existing timestamp
+            enabled_at = datetime.fromisoformat(current_enabled_at)
+    else:
+        # Disabling: clear enabled_at so re-enable gets a fresh timestamp
+        settings_repo.set(ORDER_MANAGEMENT_AUTO_CREATE_ENABLED_AT, None)
+
     logger.info(f"Updated order_management.auto_create_enabled to {request.auto_create_enabled}")
 
     return OrderManagementSettingsResponse(
         auto_create_enabled=request.auto_create_enabled,
+        auto_create_enabled_at=enabled_at,
     )

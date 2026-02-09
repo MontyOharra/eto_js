@@ -3,6 +3,8 @@ System Settings API Schemas
 
 Pydantic models for system settings API requests and responses.
 """
+from datetime import datetime
+
 from pydantic import BaseModel, Field
 
 
@@ -31,6 +33,10 @@ class OrderManagementSettingsResponse(BaseModel):
     auto_create_enabled: bool = Field(
         True,
         description="Whether orders are automatically created when ready (default: True)"
+    )
+    auto_create_enabled_at: datetime | None = Field(
+        None,
+        description="When auto-create was last enabled (only actions created after this are auto-approved)"
     )
 
 

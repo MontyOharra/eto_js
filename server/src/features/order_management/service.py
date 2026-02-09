@@ -57,6 +57,7 @@ from features.htc_integration import HtcIntegrationService
 from features.htc_integration.attachment_utils import PdfSource
 from shared.events.order_events import order_event_manager
 
+from .auto_create_worker import AutoCreateWorker
 from .transformers import FIELD_TRANSFORMERS
 
 logger = logging.getLogger(__name__)
@@ -3673,3 +3674,67 @@ class OrderManagementService:
             Tuple of (list of address dicts, total matching count)
         """
         return self.htc_service.list_addresses(search=search, limit=limit, offset=offset)
+
+    # ========== Auto-Create Worker Lifecycle ==========
+
+    def _get_auto_create_settings(self) -> tuple[bool, datetime | None]:
+        """
+        Read auto-create settings from the system settings repository.
+
+        Returns:
+            Tuple of (enabled, enabled_at). Worker only processes actions when
+            both enabled is True and enabled_at is not None.
+        """
+        from api.routers.system_settings import (
+            ORDER_MANAGEMENT_AUTO_CREATE_ENABLED,
+            ORDER_MANAGEMENT_AUTO_CREATE_ENABLED_AT,
+        )
+
+        enabled_str = self._system_settings_repo.get(ORDER_MANAGEMENT_AUTO_CREATE_ENABLED)
+        enabled = enabled_str.lower() == "true" if enabled_str else True
+
+        enabled_at_str = self._system_settings_repo.get(ORDER_MANAGEMENT_AUTO_CREATE_ENABLED_AT)
+        enabled_at = datetime.fromisoformat(enabled_at_str) if enabled_at_str else None
+
+        return (enabled, enabled_at)
+
+    def _get_eligible_auto_create_actions(self, created_after: datetime) -> list[PendingAction]:
+        """
+        Get pending create actions eligible for auto-approval.
+
+        Delegates to the repository method that filters for:
+        - action_type == "create"
+        - status == "ready"
+        - created_at > created_after
+        """
+        return self.pending_action_repo.get_ready_creates_after(created_after)
+
+    async def startup(self) -> bool:
+        """
+        Start the auto-create background worker.
+        Called during application startup.
+
+        Returns:
+            True if worker started, False if already running
+        """
+        self._auto_create_worker = AutoCreateWorker(
+            get_eligible_actions=self._get_eligible_auto_create_actions,
+            approve_action=self.approve_action,
+            get_auto_create_settings=self._get_auto_create_settings,
+        )
+        return await self._auto_create_worker.startup()
+
+    async def shutdown(self, graceful: bool = True) -> bool:
+        """
+        Stop the auto-create background worker.
+        Called during application shutdown.
+
+        Args:
+            graceful: If True, wait for current action to complete
+
+        Returns:
+            True if stopped successfully
+        """
+        if not hasattr(self, '_auto_create_worker') or self._auto_create_worker is None:
+            return False
+        return await self._auto_create_worker.shutdown(graceful=graceful)
