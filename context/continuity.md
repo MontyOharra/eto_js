@@ -1,119 +1,135 @@
 # Session Continuity Notes
 
-## Current Session: 2026-01-06  Code Cleanup: Pydantic Refactoring
+## Current Session: 2026-02-09 — Pending Actions UX Improvements
 
-### Branch: `code_cleanup`
+### Branch: `dev`
 
-### What We've Been Working On
+### Status: TESTING MODE
 
-We are performing a systematic codebase cleanup focused on:
-1. Converting domain types from dataclasses to **Pydantic models**
-2. Using Python 3.10+ typing syntax (`T | None` instead of `Optional[T]`, `list[T]` instead of `List[T]`)
-3. Consolidating API schemas to **reuse domain types** instead of duplicating definitions
-4. Removing unnecessary mapper files when API uses domain types directly
-5. Ensuring utility functions are **pure** (no database/repository dependencies)
+The following features have been implemented and committed. The user is performing end-to-end testing before merging to `master`. The next session should:
+1. Help troubleshoot any issues found during testing
+2. Make fixes as needed
+3. Assist with the merge to `master` once testing is complete
 
-### Key Technical Decisions Made
+---
 
-**Pydantic for Domain Types:**
-- Using `BaseModel` with `ConfigDict(frozen=True)` for immutable domain types
-- Using `model_fields_set` to solve the "update DTO problem"  distinguishing between "field not provided" vs "field explicitly set to None"
-- Using `model_dump()` for serialization instead of `__dict__`
+### What Was Implemented This Session
 
-**Update DTO Pattern:**
-```python
-class EmailIngestionConfigUpdate(BaseModel):
-    """Update DTO - uses model_fields_set to track which fields were explicitly set"""
-    name: str | None = None
-    folder_name: str | None = None
-    # ... other optional fields
+We completed 3 of 4 items from `TODO-TEMP.md` (Pending Actions UX Improvements):
 
-# In repository:
-def update(self, config_id: int, config_update: EmailIngestionConfigUpdate):
-    for field_name in config_update.model_fields_set:  # Only fields explicitly set
-        value = getattr(config_update, field_name)
-        setattr(model, field_name, value)
+#### 1. Incomplete Orders Should Be Rejectable (commit `ebed88d6`)
+- **Problem**: Only "ready" orders could be rejected. Users couldn't reject incomplete orders even if they knew the data was garbage.
+- **Solution**:
+  - Frontend: Added separate `canReject` logic to show Reject button for "incomplete" and "conflict" statuses
+  - Backend: Already allowed rejecting these statuses, just needed frontend change
+- **Files changed**: `PendingOrderDetailView.tsx`
+
+#### 2. Failed Orders Should Reset to Ready (commit `9a450f67`)
+- **Problem**: Failed orders could only retry immediately. Users couldn't modify field values after failure.
+- **Solution**:
+  - Backend: `approve_action()` now detects failed status and resets to "ready" instead of executing
+  - Clears `error_message` and `error_at` when resetting
+  - Frontend: Added 'failed' to `canEdit` statuses, renamed "Retry" button to "Reset"
+- **Files changed**: `service.py`, `PendingOrderDetailView.tsx`
+
+#### 3. Optional Fields Should Be Excludable on Create Actions (commit `ad21e720`)
+- **Problem**: Only update actions allowed fields to be excluded via `is_approved_for_update`. Create actions included all fields.
+- **Solution**:
+  - Backend: Modified `set_field_approval()` to allow create actions (not just updates)
+  - Backend: Added validation to prevent excluding required fields on creates
+  - Backend: Modified execution logic to filter optional fields by `is_approved_for_update` for creates
+  - Backend: Fixed bug where failed required fields got `is_approved_for_update=false` — now uses `field_def.required`
+  - Frontend: Added Exclude/Include toggle button for optional fields with values in `PendingOrderDetailView`
+- **Files changed**: `service.py`, `PendingOrderDetailView.tsx`, `orders/index.tsx`
+
+#### 4. Excluded Fields Should Not Require Conflict Resolution — SKIPPED
+- User decided this feature wasn't necessary after reviewing the implementation complexity.
+
+---
+
+### Recent Commits (newest first)
+
+```
+ad21e720 feat: Allow excluding optional fields on create actions
+9a450f67 feat: Reset failed orders to editable state instead of immediate retry
+ebed88d6 feat: Allow rejecting incomplete and conflict status orders
 ```
 
-**Removed Fields from Update DTOs:**
-- `clear_errors`  replaced with explicit `last_error_message=None, last_error_at=None`
-- `reset_last_processed_uid`  replaced with explicit `last_processed_uid=None`
+---
 
-### Files Completed This Session
+### Key Code Locations
 
-**Types (Pydantic conversion):**
-- `shared/types/email_accounts.py`  Includes `ProviderType = Literal["standard"]`
-- `shared/types/email.py`
-- `shared/types/email_ingestion_configs.py`
-- `shared/types/email_integrations.py`
+**Backend (`server/src/features/order_management/service.py`):**
+- `approve_action()` (~line 1622) — Handles approval, now detects failed status for reset
+- `_process_single_field()` (~line 460) — Field processing, sets `is_approved_for_update=field_def.required` for failed fields
+- `_store_field_value()` (~line 776) — Stores field values, uses passed `is_approved_for_update` for failed fields
+- `set_field_approval()` (~line 3059) — Toggles field inclusion, now works for create actions
+- `execute_action()` (~line 1710) — Filters fields by `is_approved_for_update` during execution
 
-**Repositories (updated for Pydantic):**
-- `shared/database/repositories/email_account.py`
-- `shared/database/repositories/email_ingestion_config.py`
-- `shared/database/repositories/email.py`
+**Frontend (`client/src/renderer/features/order-management/components/PendingOrderDetailView/`):**
+- `PendingOrderDetailView.tsx` — Main component with exclude toggle, reject button logic
+- Props: `onToggleFieldApproval`, `togglingApprovalFields` for exclude toggle
 
-**API Layer (consolidated):**
-- `api/schemas/email_accounts.py`  Now reuses domain types
-- `api/schemas/email_ingestion_configs.py`  Now reuses domain types
-- `api/routers/email_accounts.py`  Removed mapper usage
-- `api/routers/email_ingestion_configs.py`  Removed mapper usage
-- `api/mappers/email_accounts.py`  **DELETED** (unnecessary)
-- `api/mappers/email_ingestion_configs.py`  **DELETED** (unnecessary)
+**Frontend (`client/src/renderer/pages/dashboard/orders/index.tsx`):**
+- Passes `handleToggleFieldApproval` and `togglingApprovalFields` to `PendingOrderDetailView`
 
-**Features (email domain):**
-- `features/email/service.py`  Fixed broken `clear_errors` and `reset_last_processed_uid` usage
-- `features/email/poller.py`  Updated to pass `existing_message_ids` to deduplication
-- `features/email/processing.py`  Fixed f-string readability
-- `features/email/integrations/*`  All files reviewed and marked complete
-- `features/email/utils/filter_rules.py`  Fixed f-string syntax
-- `features/email/utils/deduplication.py`  Refactored to be pure (takes `set[str]` instead of repository)
+---
 
-**Utils:**
-- `shared/utils/__init__.py`
-- `shared/utils/datetime.py`
+### Testing Notes
 
-### Current Progress
+**Test scenarios to verify:**
 
-See `docs/CODEBASE_CLEANUP_CHECKLIST.md` for full tracking:
-- **Total files:** 172 (2 deleted)
-- **Completed:** 24
-- **Remaining:** 148
+1. **Reject incomplete order**: Open an order with status "incomplete", verify Reject button is visible and works
+2. **Reject conflict order**: Open an order with status "conflict", verify Reject button is visible and works
+3. **Reset failed order**:
+   - Create an order that will fail (e.g., invalid data)
+   - Verify "Reset" button appears (not "Retry")
+   - Click Reset, verify status goes to "ready" and fields are editable
+4. **Exclude optional field on create**:
+   - Open a create action with optional fields that have values
+   - Verify Exclude/Include button appears for optional fields
+   - Click Exclude, verify field is grayed out with strikethrough
+   - Approve the order, verify excluded field is not sent to HTC
+5. **Required fields cannot be excluded**:
+   - Verify no Exclude button appears for required fields
+   - Verify failed required fields still show `is_approved_for_update=true` in API response
 
-### Where to Continue
-
-The entire **email domain** is now complete. Next logical areas to tackle:
-
-1. **`features/eto_runs/`**  ETO runs service and related types
-2. **`shared/types/eto_runs.py`** and related types
-3. **`api/` layer** for eto_runs (schemas, routers, mappers)
-
-### Important Patterns to Follow
-
-1. **Always re-read `docs/CODEBASE_CLEANUP_CHECKLIST.md`** before and after making changes
-2. **Check with user before making code changes** (per checklist workflow rules)
-3. **Domain types** � Pydantic `BaseModel` with `ConfigDict(frozen=True)`
-4. **Update DTOs** � Pydantic `BaseModel` (mutable), use `model_fields_set` in repository
-5. **API schemas** � Reuse domain types via type aliases where possible
-6. **Mappers** � Delete if unnecessary (API can use domain types directly)
-7. **Utils** � Must be pure functions, no repository/database dependencies
-8. **Commit after each file or set of related files**
-
-### Commands to Verify State
-
+**Mock endpoint for testing:**
 ```bash
-# Check current branch and status
-git status
-git log --oneline -10
-
-# Run type checking (if applicable)
-cd server && python -m mypy src/
-
-# Verify Python syntax
-python -m py_compile server/src/features/email/service.py
+curl -X POST http://localhost:8000/api/pending-actions/mock \
+  -H "Content-Type: application/json" \
+  -d '{
+    "customer_id": 195,
+    "hawb": "TEST-FULL-CREATE-001",
+    "pdf_filename": "test_full_create.pdf",
+    "output_channel_data": {
+      "pickup_address_id": null,
+      "pickup_company_name": "PICKUP WAREHOUSE INC",
+      "pickup_address": "100 Industrial Blvd\nDallas TX 75201",
+      "pickup_time_start": "2026-02-10T09:00:00",
+      "pickup_time_end": "2026-02-10T12:00:00",
+      "delivery_address_id": null,
+      "delivery_company_name": "DESTINATION CORP",
+      "delivery_address": "500 Commerce St\nFort Worth TX 76102",
+      "delivery_time_start": "2026-02-10T14:00:00",
+      "delivery_time_end": "2026-02-10T18:00:00",
+      "mawb": "123-45678901",
+      "dims": [{"length": 24, "width": 18, "height": 12, "qty": 3, "weight": 45.5}]
+    }
+  }'
 ```
 
-### Notes
+---
 
-- The app is small (3 users) so Pydantic overhead is acceptable
-- `ProviderType = Literal["standard"]` is used with SQLAlchemy `SAEnum` for type-safe DB columns
-- Two param builder methods exist in service.py (`_build_integration_params` and `_build_validation_params`)  slight duplication is acceptable since they serve different purposes (one takes `EmailAccount`, other takes individual params)
+### Known Issues / Notes
+
+- **Old test data**: Some old test records may have incorrect `is_approved_for_update=false` for required fields due to bug that existed before fix. This only affects data created before commit `ad21e720`. New data will be correct.
+
+---
+
+### Files to Review if Issues Found
+
+- `TODO-TEMP.md` — Original requirements for this work
+- `server/src/features/order_management/service.py` — All backend logic
+- `client/src/renderer/features/order-management/components/PendingOrderDetailView/PendingOrderDetailView.tsx` — Create action detail view
+- `client/src/renderer/pages/dashboard/orders/index.tsx` — Page component that wires up handlers

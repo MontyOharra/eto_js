@@ -571,14 +571,16 @@ async def set_field_approval(
     service: OrderManagementService = Depends(lambda: ServiceContainer.get_order_management_service())
 ) -> SetFieldApprovalResponse:
     """
-    Set whether a field should be included in an update.
+    Set whether a field should be included in execution.
 
-    Only applicable for pending actions with action_type='update'.
+    For updates: any field can be excluded.
+    For creates: only optional fields can be excluded (required fields will error).
+
     This toggles the is_approved_for_update flag for ALL values of the field
     (approval is per-field-name, not per-value).
 
-    When is_approved=True, the field will be included when the update is executed.
-    When is_approved=False, the field will be skipped during update execution.
+    When is_approved=True, the field will be included when executed.
+    When is_approved=False, the field will be skipped during execution.
     """
     logger.info(
         f"Set field approval: action={action_id}, "
