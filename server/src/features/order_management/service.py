@@ -429,11 +429,20 @@ class OrderManagementService:
         """
         results: list[FieldProcessingResult] = []
 
+        # Sanitize string values: replace newlines/carriage returns with spaces
+        sanitized_data: dict[str, Any] = {}
+        for key, value in output_channel_data.items():
+            if isinstance(value, str):
+                sanitized = value.replace('\n', ' ').replace('\r', ' ')
+                sanitized_data[key] = ' '.join(sanitized.split())
+            else:
+                sanitized_data[key] = value
+
         # Iterate over all defined order fields
         for field_name, field_def in ORDER_FIELDS.items():
             # Extract source channel values for this field
             source_values = {
-                channel: output_channel_data.get(channel)
+                channel: sanitized_data.get(channel)
                 for channel in field_def.source_channels
             }
 
