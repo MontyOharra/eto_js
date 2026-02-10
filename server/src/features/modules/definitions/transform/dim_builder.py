@@ -132,6 +132,14 @@ class DimBuilder(BaseModule):
             elif group_index == 4:  # weight
                 weight = float(value) if value is not None else 0.0
 
+        # Get output node ID
+        output_node_id = context.outputs[0].node_id
+
+        # If all dimension values are zero, return None (dim doesn't exist)
+        if length == 0 and width == 0 and height == 0 and weight == 0:
+            logger.info("All dimension values are zero, returning None")
+            return {output_node_id: None}
+
         # Build the dim object
         # Note: dim_weight is NOT included here - it's calculated at HTC write time only
         dim_obj: DimObject = {
@@ -143,9 +151,6 @@ class DimBuilder(BaseModule):
         }
 
         logger.info(f"Built dim object: {dim_obj}")
-
-        # Get output node ID
-        output_node_id = context.outputs[0].node_id
 
         return {
             output_node_id: dim_obj
