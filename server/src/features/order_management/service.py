@@ -6,6 +6,7 @@ from output executions and manual input, execution against HTC, and user interac
 """
 import json
 import logging
+import os
 import threading
 from dataclasses import asdict, dataclass, field
 from datetime import datetime, timezone
@@ -716,27 +717,144 @@ class OrderManagementService:
         raw_source_values: dict[str, Any],
     ) -> LocationValue | None:
         """
-        Use LLM to parse address when primary methods fail.
+        Use LLM to clean extraneous text from an address that usaddress couldn't parse.
 
-        This is a STUB for future implementation. Currently returns None
-        to indicate the fallback is not available.
-
-        TODO: Implement LLM-based address parsing:
-        1. Extract address string from raw_source_values
-        2. Call OpenAI API to parse address components
-        3. Look up or create address in HTC
-        4. Return LocationValue with resolved address_id
+        Sends the raw address text to OpenAI and asks it to return only the
+        address portion, stripping order numbers, reference codes, tracking
+        numbers, and other non-address text. The cleaned address is then run
+        back through the normal parse_address_string → HTC lookup flow.
 
         Args:
             field_name: Name of the location field (for logging)
             raw_source_values: Original source values containing address data
 
         Returns:
-            LocationValue with resolved address_id, or None if unavailable
+            LocationValue with resolved address, or None if LLM couldn't help
         """
-        # STUB: LLM address parsing not yet implemented
-        logger.debug(f"LLM address fallback not implemented for {field_name}")
-        return None
+        # Extract the address string from raw source values
+        address = None
+        company_name = None
+        for key, value in raw_source_values.items():
+            if value is None:
+                continue
+            if "address_id" in key:
+                continue
+            elif "company_name" in key:
+                company_name = str(value).upper()
+            elif "address" in key:
+                address = str(value)
+
+        if not address:
+            return None
+
+        # Import OpenAI lazily
+        try:
+            from openai import OpenAI
+        except ImportError:
+            logger.warning("openai library not installed, LLM address fallback unavailable")
+            return None
+
+        api_key = os.getenv("OPENAI_API_KEY")
+        if not api_key:
+            logger.warning("OPENAI_API_KEY not set, LLM address fallback unavailable")
+            return None
+
+        system_prompt = (
+            "You are an address extraction tool. You will receive text that contains "
+            "a US address mixed with extraneous content such as order numbers, reference "
+            "codes, tracking numbers, invoice numbers, customer names, PO numbers, or "
+            "other non-address text.\n\n"
+            "Your job is to extract ONLY the clean US mailing address from the text.\n\n"
+            "Rules:\n"
+            "- Return the address in standard format: Street, City, State ZIP\n"
+            "- Include suite/unit/apt numbers if they are part of the address\n"
+            "- Remove everything that is not part of the physical address\n"
+            "- If you cannot identify a valid US address in the text, return null\n"
+            "- Do NOT guess or fabricate address components\n\n"
+            'Return JSON: {"address": "cleaned address string or null"}'
+        )
+
+        logger.info(f"[LLM_ADDRESS] Calling OpenAI for {field_name}: '{address}'")
+
+        try:
+            client = OpenAI(api_key=api_key)
+            response = client.chat.completions.create(
+                model="gpt-4o-mini",
+                messages=[
+                    {"role": "system", "content": system_prompt},
+                    {"role": "user", "content": address},
+                ],
+                temperature=0.0,
+                response_format={"type": "json_object"},
+            )
+
+            content = response.choices[0].message.content
+            if content is None:
+                logger.warning(f"[LLM_ADDRESS] Empty response from OpenAI for {field_name}")
+                return None
+
+            result = json.loads(content)
+            cleaned_address = result.get("address")
+
+            if not cleaned_address:
+                logger.warning(f"[LLM_ADDRESS] LLM returned null address for {field_name}")
+                return None
+
+            logger.info(f"[LLM_ADDRESS] Cleaned: '{address}' -> '{cleaned_address}'")
+
+        except Exception as e:
+            logger.error(f"[LLM_ADDRESS] OpenAI call failed for {field_name}: {e}")
+            return None
+
+        # Run the cleaned address back through usaddress parsing
+        parsed = self.htc_service.parse_address_string(cleaned_address.upper())
+        if parsed is None:
+            logger.warning(
+                f"[LLM_ADDRESS] Cleaned address still failed parsing for {field_name}: "
+                f"'{cleaned_address}'"
+            )
+            return None
+
+        logger.info(f"[LLM_ADDRESS] Cleaned address parsed successfully for {field_name}")
+
+        # Try HTC lookup on the cleaned address
+        try:
+            address_id = self.htc_service.find_address_id(cleaned_address.upper())
+            if address_id is not None:
+                logger.info(f"[LLM_ADDRESS] Found HTC address for {field_name}: ID={address_id}")
+                addr_info = self.htc_service.get_address_info(address_id)
+                if addr_info:
+                    formatted_address = addr_info.addr_ln1
+                    if addr_info.addr_ln2:
+                        formatted_address = f"{addr_info.addr_ln1} {addr_info.addr_ln2}"
+                    formatted_address = f"{formatted_address}, {addr_info.city}, {addr_info.state} {addr_info.zip_code}"
+                    return LocationValue(
+                        address_id=int(address_id),
+                        name=addr_info.company,
+                        address=formatted_address,
+                    )
+                else:
+                    return LocationValue(
+                        address_id=int(address_id),
+                        name=company_name or "",
+                        address=cleaned_address.upper(),
+                    )
+        except Exception as e:
+            logger.warning(f"[LLM_ADDRESS] HTC lookup failed for {field_name}: {e}")
+
+        # Not found in HTC — valid new address from cleaned text
+        addr_ln2 = parsed.get('addr_ln2', '')
+        if addr_ln2:
+            clean_final = f"{parsed['addr_ln1']} {addr_ln2}, {parsed['city']}, {parsed['state']} {parsed['zip_code']}"
+        else:
+            clean_final = f"{parsed['addr_ln1']}, {parsed['city']}, {parsed['state']} {parsed['zip_code']}"
+
+        logger.info(f"[LLM_ADDRESS] Resolved {field_name} as new address: '{clean_final}'")
+        return LocationValue(
+            address_id=None,
+            name=company_name or "",
+            address=clean_final.upper(),
+        )
 
     def _is_field_changed(
         self,
