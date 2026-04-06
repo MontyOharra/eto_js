@@ -19,7 +19,7 @@ router = APIRouter(
 
 
 @router.post("/sync-modules", response_model=SyncModulesResponse, status_code=status.HTTP_200_OK)
-async def sync_modules(
+def sync_modules(
     refresh: bool = Query(False, description="Re-scan codebase for new modules before syncing"),
     modules_service: ModulesService = Depends(lambda: ServiceContainer.get_modules_service())
 ) -> SyncModulesResponse:
@@ -61,7 +61,7 @@ async def sync_modules(
 
 
 @router.post("/sync-output-channels", response_model=SyncOutputChannelsResponse, status_code=status.HTTP_200_OK)
-async def sync_output_channels(
+def sync_output_channels(
     modules_service: ModulesService = Depends(lambda: ServiceContainer.get_modules_service())
 ) -> SyncOutputChannelsResponse:
     """

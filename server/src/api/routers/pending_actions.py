@@ -114,7 +114,7 @@ async def pending_action_events_stream(request: Request):
 
 
 @router.get("", response_model=GetPendingActionsResponse)
-async def list_pending_actions(
+def list_pending_actions(
     status: Literal["incomplete", "conflict", "ambiguous", "ready", "processing", "completed", "failed", "rejected"] | None = Query(
         None,
         description="Filter by status"
@@ -217,7 +217,7 @@ async def list_pending_actions(
 
 
 @router.get("/addresses", response_model=GetAddressesResponse)
-async def get_addresses(
+def get_addresses(
     search: str | None = Query(None, description="Search by company name or address"),
     limit: int = Query(50, ge=1, le=200, description="Number of items to return"),
     offset: int = Query(0, ge=0, description="Number of items to skip"),
@@ -247,7 +247,7 @@ async def get_addresses(
 
 
 @router.post("/mock", response_model=CreateMockOutputResponse)
-async def create_mock_output(
+def create_mock_output(
     request: CreateMockOutputRequest,
     service: OrderManagementService = Depends(lambda: ServiceContainer.get_order_management_service())
 ) -> CreateMockOutputResponse:
@@ -301,7 +301,7 @@ async def create_mock_output(
 
 
 @router.get("/{action_id}", response_model=GetPendingActionDetailResponse)
-async def get_pending_action_detail(
+def get_pending_action_detail(
     action_id: int,
     service: OrderManagementService = Depends(lambda: ServiceContainer.get_order_management_service())
 ) -> GetPendingActionDetailResponse:
@@ -411,7 +411,7 @@ async def get_pending_action_detail(
 
 
 @router.patch("/{action_id}/read-status", response_model=SetReadStatusResponse)
-async def set_read_status(
+def set_read_status(
     action_id: int,
     request: SetReadStatusRequest,
     service: OrderManagementService = Depends(lambda: ServiceContainer.get_order_management_service())
@@ -435,7 +435,7 @@ async def set_read_status(
 
 
 @router.post("/{action_id}/approve", response_model=ApproveActionResponse)
-async def approve_action(
+def approve_action(
     action_id: int,
     request: ApproveActionRequest,
     service: OrderManagementService = Depends(lambda: ServiceContainer.get_order_management_service())
@@ -492,7 +492,7 @@ async def approve_action(
 
 
 @router.post("/{action_id}/reject", response_model=RejectActionResponse)
-async def reject_action(
+def reject_action(
     action_id: int,
     request: RejectActionRequest,
     service: OrderManagementService = Depends(lambda: ServiceContainer.get_order_management_service())
@@ -524,7 +524,7 @@ async def reject_action(
 
 
 @router.post("/{action_id}/select-field", response_model=SelectFieldValueResponse)
-async def select_field_value(
+def select_field_value(
     action_id: int,
     request: SelectFieldValueRequest,
     service: OrderManagementService = Depends(lambda: ServiceContainer.get_order_management_service())
@@ -565,7 +565,7 @@ async def select_field_value(
 
 
 @router.post("/{action_id}/set-field-approval", response_model=SetFieldApprovalResponse)
-async def set_field_approval(
+def set_field_approval(
     action_id: int,
     request: SetFieldApprovalRequest,
     service: OrderManagementService = Depends(lambda: ServiceContainer.get_order_management_service())
@@ -606,7 +606,7 @@ async def set_field_approval(
 
 
 @router.post("/{action_id}/set-field-value", response_model=SetFieldValueResponse)
-async def set_field_value(
+def set_field_value(
     action_id: int,
     request: SetFieldValueRequest,
     service: OrderManagementService = Depends(lambda: ServiceContainer.get_order_management_service())

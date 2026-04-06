@@ -19,7 +19,7 @@ router = APIRouter(
 
 
 @router.get("", response_model=list[ModuleResponse])
-async def list_modules(
+def list_modules(
     kind: Optional[str] = Query(None, description="Filter by module kind (transform, action, logic, comparator)"),
     only_active: bool = Query(True, description="Only return active modules"),
     modules_service: ModulesService = Depends(lambda: ServiceContainer.get_modules_service())
@@ -51,7 +51,7 @@ async def list_modules(
 
 
 @router.get("/output-channels", response_model=list[OutputChannel])
-async def list_output_channels(
+def list_output_channels(
     modules_service: ModulesService = Depends(lambda: ServiceContainer.get_modules_service())
 ) -> list[OutputChannel]:
     """

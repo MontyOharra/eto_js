@@ -41,7 +41,7 @@ router = APIRouter(
 
 
 @router.get("", response_model=PaginatedTemplateListResponse)
-async def list_pdf_templates(
+def list_pdf_templates(
     status_filter: Literal["active", "inactive"] | None = Query(None, description="Filter by status"),
     customer_id: int | None = Query(None, description="Filter by customer ID"),
     autoskip_filter: Literal["all", "processable", "skip"] | None = Query(None, description="Filter by autoskip"),
@@ -76,7 +76,7 @@ async def list_pdf_templates(
 
 
 @router.get("/customers", response_model=GetCustomersResponse)
-async def get_customers(
+def get_customers(
     service: PdfTemplateService = Depends(lambda: ServiceContainer.get_pdf_template_service())
 ) -> GetCustomersResponse:
     """
@@ -96,7 +96,7 @@ async def get_customers(
 
 
 @router.get("/{id}", response_model=PdfTemplateResponse)
-async def get_pdf_template(
+def get_pdf_template(
     id: int,
     service: PdfTemplateService = Depends(lambda: ServiceContainer.get_pdf_template_service())
 ) -> PdfTemplateResponse:
@@ -113,7 +113,7 @@ async def get_pdf_template(
 
 
 @router.post("", response_model=PdfTemplateResponse, status_code=status.HTTP_201_CREATED)
-async def create_pdf_template(
+def create_pdf_template(
     request: CreatePdfTemplateRequest,
     template_service: PdfTemplateService = Depends(lambda: ServiceContainer.get_pdf_template_service())
 ) -> PdfTemplateResponse:
@@ -146,7 +146,7 @@ async def create_pdf_template(
 
 
 @router.put("/{id}", response_model=PdfTemplateResponse, status_code=status.HTTP_200_OK)
-async def update_pdf_template(
+def update_pdf_template(
     id: int,
     request: UpdatePdfTemplateRequest,
     service: PdfTemplateService = Depends(lambda: ServiceContainer.get_pdf_template_service())
@@ -171,7 +171,7 @@ async def update_pdf_template(
 
 
 @router.post("/{id}/activate", response_model=PdfTemplateResponse)
-async def activate_pdf_template(
+def activate_pdf_template(
     id: int,
     service: PdfTemplateService = Depends(lambda: ServiceContainer.get_pdf_template_service())
 ) -> PdfTemplateResponse:
@@ -184,7 +184,7 @@ async def activate_pdf_template(
 
 
 @router.post("/{id}/deactivate", response_model=PdfTemplateResponse)
-async def deactivate_pdf_template(
+def deactivate_pdf_template(
     id: int,
     service: PdfTemplateService = Depends(lambda: ServiceContainer.get_pdf_template_service())
 ) -> PdfTemplateResponse:
@@ -197,7 +197,7 @@ async def deactivate_pdf_template(
 
 
 @router.get("/versions/{version_id}", response_model=GetTemplateVersionResponse)
-async def get_template_version(
+def get_template_version(
     version_id: int,
     service: PdfTemplateService = Depends(lambda: ServiceContainer.get_pdf_template_service())
 ) -> GetTemplateVersionResponse:
@@ -217,7 +217,7 @@ async def get_template_version(
 
 
 @router.post("/simulate", response_model=SimulateTemplateResponse)
-async def simulate_template(
+def simulate_template(
     request: SimulateTemplateRequest,
     template_service: PdfTemplateService = Depends(
         lambda: ServiceContainer.get_pdf_template_service()

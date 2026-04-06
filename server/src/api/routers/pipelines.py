@@ -31,7 +31,7 @@ router = APIRouter(
 
 
 @router.get("", response_model=PipelineListResponse)
-async def list_pipelines(
+def list_pipelines(
     sort_by: Literal["id", "created_at"] = "created_at",
     sort_order: Literal["asc", "desc"] = "desc",
     limit: int = 50,
@@ -68,7 +68,7 @@ async def list_pipelines(
 
 
 @router.get("/{id}", response_model=PipelineDetailResponse)
-async def get_pipeline(
+def get_pipeline(
     id: int,
     pipeline_service: PipelineService = Depends(
         lambda: ServiceContainer.get_pipeline_service()
@@ -83,7 +83,7 @@ async def get_pipeline(
 
 
 @router.post("", response_model=CreatePipelineResponse, status_code=status.HTTP_201_CREATED)
-async def create_pipeline(
+def create_pipeline(
     request: CreatePipelineRequest,
     pipeline_service: PipelineService = Depends(
         lambda: ServiceContainer.get_pipeline_service()
@@ -112,7 +112,7 @@ async def create_pipeline(
 
 
 @router.post("/validate", response_model=ValidatePipelineResponse)
-async def validate_pipeline(
+def validate_pipeline(
     request: ValidatePipelineRequest,
     pipeline_service: PipelineService = Depends(
         lambda: ServiceContainer.get_pipeline_service()

@@ -30,7 +30,7 @@ router = APIRouter(prefix="/email-ingestion-configs", tags=["Email Ingestion Con
     summary="Validate ingestion config",
     description="Validate that an ingestion config can be created for the given account and folder.",
 )
-async def validate_config(
+def validate_config(
     request: ValidateIngestionConfigRequest,
     service: EmailService = Depends(lambda: ServiceContainer.get_email_service()),
 ) -> ValidateIngestionConfigResponse:
@@ -53,7 +53,7 @@ async def validate_config(
     summary="List ingestion configs",
     description="Get all ingestion configs with account information.",
 )
-async def list_configs(
+def list_configs(
     order_by: str = Query("name", description="Field to sort by"),
     desc: bool = Query(False, description="Sort descending"),
     service: EmailService = Depends(lambda: ServiceContainer.get_email_service()),
@@ -69,7 +69,7 @@ async def list_configs(
     summary="Get ingestion config",
     description="Get a single ingestion config by ID.",
 )
-async def get_config(
+def get_config(
     config_id: int,
     service: EmailService = Depends(lambda: ServiceContainer.get_email_service()),
 ) -> IngestionConfigResponse:
@@ -90,7 +90,7 @@ async def get_config(
     summary="Create ingestion config",
     description="Create a new ingestion config. The config is created in inactive state.",
 )
-async def create_config(
+def create_config(
     request: CreateIngestionConfigRequest,
     service: EmailService = Depends(lambda: ServiceContainer.get_email_service()),
 ) -> IngestionConfigResponse:
@@ -110,7 +110,7 @@ async def create_config(
     summary="Update ingestion config",
     description="Update an ingestion config. Cannot update an active config.",
 )
-async def update_config(
+def update_config(
     config_id: int,
     request: UpdateIngestionConfigRequest,
     service: EmailService = Depends(lambda: ServiceContainer.get_email_service()),
@@ -133,7 +133,7 @@ async def update_config(
     summary="Delete ingestion config",
     description="Delete an ingestion config. Cannot delete an active config.",
 )
-async def delete_config(
+def delete_config(
     config_id: int,
     service: EmailService = Depends(lambda: ServiceContainer.get_email_service()),
 ) -> IngestionConfigResponse:
@@ -153,7 +153,7 @@ async def delete_config(
     summary="Activate ingestion config",
     description="Activate an ingestion config and start polling for new emails.",
 )
-async def activate_config(
+def activate_config(
     config_id: int,
     service: EmailService = Depends(lambda: ServiceContainer.get_email_service()),
 ) -> IngestionConfigResponse:
@@ -175,7 +175,7 @@ async def activate_config(
     summary="Deactivate ingestion config",
     description="Deactivate an ingestion config and stop polling.",
 )
-async def deactivate_config(
+def deactivate_config(
     config_id: int,
     service: EmailService = Depends(lambda: ServiceContainer.get_email_service()),
 ) -> IngestionConfigResponse:

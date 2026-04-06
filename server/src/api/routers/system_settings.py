@@ -42,7 +42,7 @@ def get_connection_manager() -> DatabaseConnectionManager:
     summary="Get email settings",
     description="Get email-related system settings including the default sender account.",
 )
-async def get_email_settings(
+def get_email_settings(
     connection_manager: DatabaseConnectionManager = Depends(get_connection_manager),
 ) -> EmailSettingsResponse:
     """Get email settings."""
@@ -62,7 +62,7 @@ async def get_email_settings(
     summary="Update email settings",
     description="Update email-related system settings. Set default_sender_account_id to null to clear.",
 )
-async def update_email_settings(
+def update_email_settings(
     request: UpdateEmailSettingsRequest,
     connection_manager: DatabaseConnectionManager = Depends(get_connection_manager),
 ) -> EmailSettingsResponse:
@@ -106,7 +106,7 @@ async def update_email_settings(
     summary="Get order management settings",
     description="Get order management settings including auto-create toggle.",
 )
-async def get_order_management_settings(
+def get_order_management_settings(
     connection_manager: DatabaseConnectionManager = Depends(get_connection_manager),
 ) -> OrderManagementSettingsResponse:
     """Get order management settings."""
@@ -131,7 +131,7 @@ async def get_order_management_settings(
     summary="Update order management settings",
     description="Update order management settings.",
 )
-async def update_order_management_settings(
+def update_order_management_settings(
     request: UpdateOrderManagementSettingsRequest,
     connection_manager: DatabaseConnectionManager = Depends(get_connection_manager),
 ) -> OrderManagementSettingsResponse:

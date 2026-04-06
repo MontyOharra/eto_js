@@ -34,7 +34,7 @@ router = APIRouter(prefix="/email-accounts", tags=["Email Accounts"])
     description="Test email server connection without creating an account. "
                 "Use this to validate credentials before creating an account.",
 )
-async def validate_connection(
+def validate_connection(
     request: ValidateConnectionRequest,
     service: EmailService = Depends(lambda: ServiceContainer.get_email_service()),
 ) -> ValidationResultResponse:
@@ -54,7 +54,7 @@ async def validate_connection(
     summary="List email accounts",
     description="Get all email accounts as summaries (credentials excluded).",
 )
-async def list_accounts(
+def list_accounts(
     order_by: str = Query("name", description="Field to sort by"),
     desc: bool = Query(False, description="Sort descending"),
     validated_only: bool = Query(False, description="Only validated accounts"),
@@ -76,7 +76,7 @@ async def list_accounts(
     description="List available folders/mailboxes for an email account. "
                 "Connects to the server to retrieve the folder list.",
 )
-async def list_account_folders(
+def list_account_folders(
     account_id: int,
     service: EmailService = Depends(lambda: ServiceContainer.get_email_service()),
 ) -> FolderListResponse:
@@ -96,7 +96,7 @@ async def list_account_folders(
     summary="Get email account",
     description="Get a single email account by ID.",
 )
-async def get_account(
+def get_account(
     account_id: int,
     service: EmailService = Depends(lambda: ServiceContainer.get_email_service()),
 ) -> EmailAccountResponse:
@@ -116,7 +116,7 @@ async def get_account(
     description="Create a new email account. The account should have been validated "
                 "via the /validate endpoint first.",
 )
-async def create_account(
+def create_account(
     request: CreateEmailAccountRequest,
     service: EmailService = Depends(lambda: ServiceContainer.get_email_service()),
 ) -> EmailAccountResponse:
@@ -137,7 +137,7 @@ async def create_account(
     description="Update an email account. If credentials are changed, "
                 "re-validate using /validate endpoint.",
 )
-async def update_account(
+def update_account(
     account_id: int,
     request: UpdateEmailAccountRequest,
     service: EmailService = Depends(lambda: ServiceContainer.get_email_service()),
@@ -158,7 +158,7 @@ async def update_account(
     summary="Delete email account",
     description="Delete an email account. Will fail if account has active ingestion configs.",
 )
-async def delete_account(
+def delete_account(
     account_id: int,
     service: EmailService = Depends(lambda: ServiceContainer.get_email_service()),
 ) -> EmailAccountResponse:
@@ -179,7 +179,7 @@ async def delete_account(
     description="Send an email using the specified account. This endpoint can be used "
                 "to test SMTP configuration before integrating into automated workflows.",
 )
-async def send_email(
+def send_email(
     account_id: int,
     request: SendEmailRequest,
     service: EmailService = Depends(lambda: ServiceContainer.get_email_service()),

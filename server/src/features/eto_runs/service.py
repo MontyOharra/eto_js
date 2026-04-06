@@ -384,6 +384,39 @@ class EtoRunsService:
             logger.error(f"Failed to list ETO runs with relations: {e}", exc_info=True)
             raise ServiceError(f"Failed to list ETO runs with relations: {str(e)}") from e
 
+    def count_runs(
+        self,
+        is_read: bool | None = None,
+        has_sub_run_status: str | None = None,
+        search_query: str | None = None,
+        date_from: datetime | None = None,
+        date_to: datetime | None = None,
+    ) -> int:
+        """
+        Count ETO runs matching the given filters using a lightweight COUNT query.
+
+        Args:
+            is_read: Filter by read status (optional)
+            has_sub_run_status: Filter runs with sub-runs having this status (optional)
+            search_query: Search in filename, email sender, subject (optional)
+            date_from: Filter runs created on or after this date (optional)
+            date_to: Filter runs created on or before this date (optional)
+
+        Returns:
+            Total count of matching runs
+        """
+        try:
+            return self.eto_run_repo.count_with_filters(
+                is_read=is_read,
+                has_sub_run_status=has_sub_run_status,
+                search_query=search_query,
+                date_from=date_from,
+                date_to=date_to,
+            )
+        except Exception as e:
+            logger.error(f"Failed to count ETO runs: {e}", exc_info=True)
+            raise ServiceError(f"Failed to count ETO runs: {str(e)}") from e
+
     def get_run(self, run_id: int) -> EtoRun:
         """
         Get ETO run by ID.

@@ -66,7 +66,7 @@ async def upload_pdf_file(
 
 
 @router.get("/{id}", response_model=PdfFileResponse)
-async def get_pdf_file(
+def get_pdf_file(
     id: int,
     pdf_service: PdfFilesService = Depends(
         lambda: ServiceContainer.get_pdf_files_service()
@@ -78,7 +78,7 @@ async def get_pdf_file(
 
 
 @router.get("/{id}/download")
-async def download_pdf(
+def download_pdf(
     id: int,
     pdf_service: PdfFilesService = Depends(
         lambda: ServiceContainer.get_pdf_files_service()
@@ -97,7 +97,7 @@ async def download_pdf(
 
 
 @router.get("/{id}/objects", response_model=GetPdfObjectsResponse)
-async def get_pdf_objects(
+def get_pdf_objects(
     id: int,
     object_type: str | None = Query(None),
     pdf_service: PdfFilesService = Depends(

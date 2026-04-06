@@ -37,7 +37,7 @@ def get_auth_service() -> AuthService:
 # ==================== Endpoints ====================
 
 @router.post("/auto-login", response_model=AuthResponse)
-async def auto_login(
+def auto_login(
     request: AutoLoginRequest,
     auth_service: AuthService = Depends(get_auth_service)
 ) -> AuthResponse:
@@ -67,7 +67,7 @@ async def auto_login(
 
 
 @router.post("/login", response_model=AuthResponse)
-async def login(
+def login(
     request: LoginRequest,
     auth_service: AuthService = Depends(get_auth_service)
 ) -> AuthResponse:
@@ -90,7 +90,7 @@ async def login(
 
 
 @router.get("/status", response_model=AuthStatusResponse)
-async def auth_status(
+def auth_status(
     auth_service: AuthService = Depends(get_auth_service)
 ) -> AuthStatusResponse:
     """

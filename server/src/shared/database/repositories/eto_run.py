@@ -269,6 +269,87 @@ class EtoRunRepository(BaseRepository[EtoRunModel]):
 
             logger.debug(f"Deleted ETO run {run_id}")
 
+    def _build_base_filters(self, session, is_read, has_sub_run_status, search_query, date_from, date_to):
+        """
+        Build the shared filter conditions used by both list and count queries.
+
+        Returns a list of SQLAlchemy filter expressions to apply to a query
+        that already has EtoRunModel joined with PdfFileModel and EmailModel.
+        """
+        from sqlalchemy import exists, and_, or_
+
+        filters = []
+
+        if is_read is not None:
+            filters.append(EtoRunModel.is_read == is_read)
+
+        if has_sub_run_status is not None:
+            exists_subquery = exists().where(
+                and_(
+                    EtoSubRunModel.eto_run_id == EtoRunModel.id,
+                    EtoSubRunModel.status == has_sub_run_status
+                )
+            )
+            filters.append(exists_subquery)
+
+        if search_query:
+            search_pattern = f"%{search_query}%"
+            filters.append(
+                or_(
+                    PdfFileModel.original_filename.ilike(search_pattern),
+                    EmailModel.sender_email.ilike(search_pattern),
+                    EmailModel.subject.ilike(search_pattern),
+                )
+            )
+
+        if date_from is not None:
+            filters.append(EtoRunModel.created_at >= date_from)
+        if date_to is not None:
+            filters.append(EtoRunModel.created_at <= date_to)
+
+        return filters
+
+    def count_with_filters(
+        self,
+        is_read: bool | None = None,
+        has_sub_run_status: str | None = None,
+        search_query: str | None = None,
+        date_from: datetime | None = None,
+        date_to: datetime | None = None,
+    ) -> int:
+        """
+        Count ETO runs matching the given filters using a lightweight SQL COUNT query.
+
+        Uses the same filter logic as get_all_with_relations but only returns the count,
+        avoiding the expensive N+1 sub-run aggregation queries.
+
+        Args:
+            is_read: Filter by read status (optional)
+            has_sub_run_status: Filter runs with sub-runs having this status (optional)
+            search_query: Search in filename, email sender, and subject (optional)
+            date_from: Filter runs created on or after this date (optional)
+            date_to: Filter runs created on or before this date (optional)
+
+        Returns:
+            Total count of matching ETO runs
+        """
+        from sqlalchemy import func
+
+        with self._get_session() as session:
+            count_query = (
+                session.query(func.count(EtoRunModel.id))
+                .join(PdfFileModel, EtoRunModel.pdf_file_id == PdfFileModel.id)
+                .outerjoin(EmailModel, EtoRunModel.source_email_id == EmailModel.id)
+            )
+
+            filters = self._build_base_filters(
+                session, is_read, has_sub_run_status, search_query, date_from, date_to
+            )
+            for f in filters:
+                count_query = count_query.filter(f)
+
+            return count_query.scalar()
+
     def get_all_with_relations(
         self,
         is_read: bool | None = None,
@@ -284,10 +365,8 @@ class EtoRunRepository(BaseRepository[EtoRunModel]):
         """
         Get all ETO runs with aggregated sub-run data.
 
-        Performs JOINs and aggregates to collect:
-        - pdf_files (required)
-        - emails (optional - NULL for manual uploads)
-        - eto_sub_runs (aggregated counts and page arrays)
+        Performs JOINs to collect run, PDF, and email data, then uses a single
+        batch query to aggregate sub-run counts and page arrays for all runs.
 
         Args:
             is_read: Filter by read status (optional)
@@ -307,7 +386,7 @@ class EtoRunRepository(BaseRepository[EtoRunModel]):
         from sqlalchemy import func, case, exists, and_, or_, select
 
         with self._get_session() as session:
-            # First, get base run data with PDF and email info
+            # Build base query with run + PDF + email data
             base_query = (
                 session.query(
                     # ETO run fields
@@ -340,36 +419,12 @@ class EtoRunRepository(BaseRepository[EtoRunModel]):
                 .outerjoin(EmailModel, EtoRunModel.source_email_id == EmailModel.id)
             )
 
-            # Apply is_read filter
-            if is_read is not None:
-                base_query = base_query.filter(EtoRunModel.is_read == is_read)
-
-            # Apply sub-run status filter (runs that have at least one sub-run with this status)
-            if has_sub_run_status is not None:
-                exists_subquery = exists().where(
-                    and_(
-                        EtoSubRunModel.eto_run_id == EtoRunModel.id,
-                        EtoSubRunModel.status == has_sub_run_status
-                    )
-                )
-                base_query = base_query.filter(exists_subquery)
-
-            # Apply search filter
-            if search_query:
-                search_pattern = f"%{search_query}%"
-                base_query = base_query.filter(
-                    or_(
-                        PdfFileModel.original_filename.ilike(search_pattern),
-                        EmailModel.sender_email.ilike(search_pattern),
-                        EmailModel.subject.ilike(search_pattern),
-                    )
-                )
-
-            # Apply date range filters (on created_at)
-            if date_from is not None:
-                base_query = base_query.filter(EtoRunModel.created_at >= date_from)
-            if date_to is not None:
-                base_query = base_query.filter(EtoRunModel.created_at <= date_to)
+            # Apply shared filters
+            filters = self._build_base_filters(
+                session, is_read, has_sub_run_status, search_query, date_from, date_to
+            )
+            for f in filters:
+                base_query = base_query.filter(f)
 
             # Apply ordering - handle special sort fields from joined tables
             if order_by == "pdf_filename":
@@ -397,29 +452,43 @@ class EtoRunRepository(BaseRepository[EtoRunModel]):
             # Execute query
             rows = base_query.all()
 
-            # For each run, fetch and aggregate sub-run data
+            if not rows:
+                return []
+
+            # Batch fetch all sub-runs for the returned runs in a single query
+            run_ids = [row.id for row in rows]
+            sub_runs = (
+                session.query(
+                    EtoSubRunModel.eto_run_id,
+                    EtoSubRunModel.status,
+                    EtoSubRunModel.matched_pages,
+                )
+                .filter(EtoSubRunModel.eto_run_id.in_(run_ids))
+                .all()
+            )
+
+            # Group sub-runs by run ID
+            sub_runs_by_run = {}
+            for sr in sub_runs:
+                sub_runs_by_run.setdefault(sr.eto_run_id, []).append(sr)
+
+            # Build result with aggregated sub-run data
             result = []
             for row in rows:
-                # Query sub-runs for this run to get aggregations
-                sub_runs = (
-                    session.query(EtoSubRunModel)
-                    .filter(EtoSubRunModel.eto_run_id == row.id)
-                    .all()
-                )
+                run_sub_runs = sub_runs_by_run.get(row.id, [])
 
                 # Aggregate sub-run counts
-                sub_run_success_count = sum(1 for sr in sub_runs if sr.status == "success")
-                sub_run_failure_count = sum(1 for sr in sub_runs if sr.status == "failure")
-                sub_run_needs_template_count = sum(1 for sr in sub_runs if sr.status == "needs_template")
-                sub_run_skipped_count = sum(1 for sr in sub_runs if sr.status == "skipped")
+                sub_run_success_count = sum(1 for sr in run_sub_runs if sr.status == "success")
+                sub_run_failure_count = sum(1 for sr in run_sub_runs if sr.status == "failure")
+                sub_run_needs_template_count = sum(1 for sr in run_sub_runs if sr.status == "needs_template")
+                sub_run_skipped_count = sum(1 for sr in run_sub_runs if sr.status == "skipped")
 
                 # Aggregate page arrays
                 pages_matched = []
                 pages_unmatched = []
                 pages_skipped = []
 
-                for sr in sub_runs:
-                    # Parse matched_pages JSON string
+                for sr in run_sub_runs:
                     try:
                         pages = json.loads(sr.matched_pages) if sr.matched_pages else []
 
@@ -427,10 +496,10 @@ class EtoRunRepository(BaseRepository[EtoRunModel]):
                             pages_skipped.extend(pages)
                         elif sr.status == "needs_template":
                             pages_unmatched.extend(pages)
-                        else:  # Has template (success, failure, matched, processing, not_started)
+                        else:
                             pages_matched.extend(pages)
                     except (json.JSONDecodeError, TypeError) as e:
-                        logger.warning(f"Failed to parse matched_pages for sub-run {sr.id}: {e}")
+                        logger.warning(f"Failed to parse matched_pages for sub-run: {e}")
 
                 result.append(EtoRunListView(
                     # Core ETO run fields
@@ -448,7 +517,7 @@ class EtoRunRepository(BaseRepository[EtoRunModel]):
                     pdf_file_id=row.pdf_file_id,
                     pdf_original_filename=row.original_filename,
                     pdf_file_size=row.file_size,
-                    pdf_page_count=row.page_count or 0,  # Default to 0 for legacy PDFs without page_count
+                    pdf_page_count=row.page_count or 0,
                     # Source info (email fields - all None if manual upload)
                     email_id=row.email_id,
                     email_sender_email=row.sender_email,

@@ -47,7 +47,7 @@ router = APIRouter(
 
 
 @router.get("", response_model=GetEtoRunsResponse)
-async def list_eto_runs(
+def list_eto_runs(
     is_read: bool | None = Query(
         None,
         description="Filter by read status (true=read, false=unread)"
@@ -97,7 +97,7 @@ async def list_eto_runs(
     """
     logger.debug(f"List ETO runs: is_read={is_read}, has_sub_run_status={has_sub_run_status}, search={search}, limit={limit}, offset={offset}")
 
-    # Get runs with all related data using efficient SQL joins
+    # Get paginated runs with all related data
     runs = service.list_runs_with_relations(
         is_read=is_read,
         has_sub_run_status=has_sub_run_status,
@@ -110,18 +110,14 @@ async def list_eto_runs(
         desc=(sort_order == "desc")
     )
 
-    # Get total count for pagination (using same filters but no limit/offset)
-    # TODO: Optimize this with a COUNT query instead of fetching all
-    all_runs = service.list_runs_with_relations(
+    # Get total count using lightweight COUNT query (no N+1 sub-run fetches)
+    total = service.count_runs(
         is_read=is_read,
         has_sub_run_status=has_sub_run_status,
         search_query=search,
         date_from=date_from,
         date_to=date_to,
-        limit=None,
-        offset=None
     )
-    total = len(all_runs)
 
     # Convert domain objects to API schema
     items = eto_run_list_to_api(runs)
@@ -206,7 +202,7 @@ async def eto_run_events_stream(request: Request):
 
 
 @router.get("/{id}", response_model=EtoRunDetail)
-async def get_eto_run(
+def get_eto_run(
     id: int,
     service = Depends(lambda: ServiceContainer.get_eto_runs_service()),
     template_service = Depends(lambda: ServiceContainer.get_pdf_template_service())
@@ -244,7 +240,7 @@ async def get_eto_run(
 
 
 @router.patch("/{id}", status_code=status.HTTP_204_NO_CONTENT)
-async def update_eto_run(
+def update_eto_run(
     id: int,
     request: UpdateEtoRunRequest,
     service = Depends(lambda: ServiceContainer.get_eto_runs_service())
@@ -276,7 +272,7 @@ async def update_eto_run(
 
 
 @router.post("", status_code=status.HTTP_201_CREATED, response_model=CreateEtoRunResponse)
-async def create_eto_run(
+def create_eto_run(
     request: CreateEtoRunRequest,
     service = Depends(lambda: ServiceContainer.get_eto_runs_service())
 ) -> CreateEtoRunResponse:
@@ -316,7 +312,7 @@ async def create_eto_run(
 
 
 @router.post("/reprocess", status_code=status.HTTP_204_NO_CONTENT)
-async def reprocess_eto_runs(
+def reprocess_eto_runs(
     request: BulkRunIdsRequest,
     service: EtoRunsService = Depends(lambda: ServiceContainer.get_eto_runs_service())
 ) -> None:
@@ -348,7 +344,7 @@ async def reprocess_eto_runs(
 
 
 @router.post("/skip", status_code=status.HTTP_204_NO_CONTENT)
-async def skip_eto_runs(
+def skip_eto_runs(
     request: BulkRunIdsRequest,
     service: EtoRunsService = Depends(lambda: ServiceContainer.get_eto_runs_service())
 ) -> None:
@@ -381,7 +377,7 @@ async def skip_eto_runs(
 
 
 @router.delete("", status_code=status.HTTP_204_NO_CONTENT)
-async def delete_eto_runs(
+def delete_eto_runs(
     request: BulkRunIdsRequest,
     service: EtoRunsService = Depends(lambda: ServiceContainer.get_eto_runs_service())
 ) -> None:
@@ -423,7 +419,7 @@ async def delete_eto_runs(
 # =============================================================================
 
 @router.get("/sub-runs/{sub_run_id}", response_model=EtoSubRunFullDetail)
-async def get_sub_run_detail(
+def get_sub_run_detail(
     sub_run_id: int,
     service: EtoRunsService = Depends(lambda: ServiceContainer.get_eto_runs_service()),
     template_service = Depends(lambda: ServiceContainer.get_pdf_template_service())
@@ -456,7 +452,7 @@ async def get_sub_run_detail(
 
 
 @router.get("/sub-runs/{sub_run_id}/reprocess-warnings", response_model=ReprocessWarningsResponse)
-async def get_reprocess_warnings(
+def get_reprocess_warnings(
     sub_run_id: int,
     service: EtoRunsService = Depends(lambda: ServiceContainer.get_eto_runs_service())
 ) -> ReprocessWarningsResponse:
@@ -514,7 +510,7 @@ async def get_reprocess_warnings(
 
 
 @router.post("/sub-runs/{sub_run_id}/reprocess", response_model=SubRunOperationResponse)
-async def reprocess_sub_run(
+def reprocess_sub_run(
     sub_run_id: int,
     service: EtoRunsService = Depends(lambda: ServiceContainer.get_eto_runs_service())
 ) -> SubRunOperationResponse:
@@ -560,7 +556,7 @@ async def reprocess_sub_run(
 
 
 @router.post("/sub-runs/{sub_run_id}/skip", response_model=SubRunOperationResponse)
-async def skip_sub_run(
+def skip_sub_run(
     sub_run_id: int,
     service: EtoRunsService = Depends(lambda: ServiceContainer.get_eto_runs_service())
 ) -> SubRunOperationResponse:
@@ -608,7 +604,7 @@ async def skip_sub_run(
 # =============================================================================
 
 @router.post("/{run_id}/reprocess", response_model=RunOperationResponse)
-async def reprocess_run(
+def reprocess_run(
     run_id: int,
     service: EtoRunsService = Depends(lambda: ServiceContainer.get_eto_runs_service())
 ) -> RunOperationResponse:
@@ -653,7 +649,7 @@ async def reprocess_run(
 
 
 @router.post("/{run_id}/skip", response_model=RunOperationResponse)
-async def skip_run(
+def skip_run(
     run_id: int,
     service: EtoRunsService = Depends(lambda: ServiceContainer.get_eto_runs_service())
 ) -> RunOperationResponse:
