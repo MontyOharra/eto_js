@@ -3,6 +3,7 @@ import { useState, useEffect } from 'react';
 import {
   useEmailAccountsApi,
   type EmailAccountSummary,
+  type EmailAccountResponse,
   type ValidationResultResponse,
 } from '../../../features/email-accounts';
 import { useSystemSettingsApi } from '../../../features/system-settings';
@@ -80,7 +81,9 @@ function SettingsPage() {
 function EmailConnectionsSettings() {
   const {
     getEmailAccounts,
+    getEmailAccount,
     createEmailAccount,
+    updateEmailAccount,
     deleteEmailAccount,
     validateConnection,
     isLoading,
@@ -88,6 +91,7 @@ function EmailConnectionsSettings() {
 
   const [connections, setConnections] = useState<EmailAccountSummary[]>([]);
   const [showCreateModal, setShowCreateModal] = useState(false);
+  const [editingAccount, setEditingAccount] = useState<EmailAccountResponse | null>(null);
   const [deletingId, setDeletingId] = useState<number | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
   const [loadError, setLoadError] = useState<string | null>(null);
@@ -141,6 +145,47 @@ function EmailConnectionsSettings() {
       await loadConnections();
     } catch (err) {
       // Error is handled in the modal
+      throw err;
+    }
+  };
+
+  const handleEdit = async (id: number) => {
+    try {
+      const account = await getEmailAccount(id);
+      setEditingAccount(account);
+    } catch (err) {
+      console.error('Failed to load account details:', err);
+    }
+  };
+
+  const handleUpdate = async (data: {
+    name: string;
+    imap_host: string;
+    imap_port: number;
+    smtp_host: string;
+    smtp_port: number;
+    password: string;
+    use_ssl: boolean;
+  }) => {
+    if (!editingAccount) return;
+    try {
+      await updateEmailAccount(editingAccount.id, {
+        name: data.name,
+        provider_settings: {
+          imap_host: data.imap_host,
+          imap_port: data.imap_port,
+          smtp_host: data.smtp_host,
+          smtp_port: data.smtp_port,
+          use_ssl: data.use_ssl,
+        },
+        credentials: {
+          type: 'password',
+          password: data.password,
+        },
+      });
+      setEditingAccount(null);
+      await loadConnections();
+    } catch (err) {
       throw err;
     }
   };
@@ -295,15 +340,26 @@ function EmailConnectionsSettings() {
                     </span>
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-right">
-                    <button
-                      onClick={() => setDeletingId(connection.id)}
-                      className="text-red-400 hover:text-red-300 transition-colors"
-                      title="Delete connection"
-                    >
-                      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                      </svg>
-                    </button>
+                    <div className="flex items-center justify-end gap-2">
+                      <button
+                        onClick={() => handleEdit(connection.id)}
+                        className="text-gray-400 hover:text-blue-400 transition-colors"
+                        title="Edit connection"
+                      >
+                        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                        </svg>
+                      </button>
+                      <button
+                        onClick={() => setDeletingId(connection.id)}
+                        className="text-gray-400 hover:text-red-400 transition-colors"
+                        title="Delete connection"
+                      >
+                        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                        </svg>
+                      </button>
+                    </div>
                   </td>
                 </tr>
               ))}
@@ -317,6 +373,16 @@ function EmailConnectionsSettings() {
         <CreateEmailConnectionModal
           onClose={() => setShowCreateModal(false)}
           onCreate={handleCreate}
+          onTestConnection={handleTestConnection}
+        />
+      )}
+
+      {/* Edit Modal */}
+      {editingAccount && (
+        <EditEmailConnectionModal
+          account={editingAccount}
+          onClose={() => setEditingAccount(null)}
+          onUpdate={handleUpdate}
           onTestConnection={handleTestConnection}
         />
       )}
@@ -787,6 +853,354 @@ function CreateEmailConnectionModal({
               </button>
             </>
           )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// Edit Email Connection Modal
+function EditEmailConnectionModal({
+  account,
+  onClose,
+  onUpdate,
+  onTestConnection,
+}: {
+  account: EmailAccountResponse;
+  onClose: () => void;
+  onUpdate: (data: {
+    name: string;
+    imap_host: string;
+    imap_port: number;
+    smtp_host: string;
+    smtp_port: number;
+    password: string;
+    use_ssl: boolean;
+  }) => Promise<void>;
+  onTestConnection: (data: {
+    provider_type: string;
+    email_address: string;
+    imap_host: string;
+    imap_port: number;
+    smtp_host: string;
+    smtp_port: number;
+    password: string;
+    use_ssl: boolean;
+  }) => Promise<ValidationResultResponse>;
+}) {
+  const [formData, setFormData] = useState({
+    name: account.name,
+    imap_host: account.provider_settings.imap_host,
+    imap_port: account.provider_settings.imap_port,
+    smtp_host: account.provider_settings.smtp_host,
+    smtp_port: account.provider_settings.smtp_port,
+    password: '',
+    use_ssl: account.provider_settings.use_ssl,
+  });
+  const [isTestingConnection, setIsTestingConnection] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
+  const [connectionTestResult, setConnectionTestResult] = useState<ValidationResultResponse | null>(null);
+  const [saveError, setSaveError] = useState<string | null>(null);
+
+  const handleFieldChange = (field: string, value: string | number | boolean) => {
+    setFormData({ ...formData, [field]: value });
+    setConnectionTestResult(null);
+  };
+
+  const handleTestConnection = async () => {
+    setIsTestingConnection(true);
+    setConnectionTestResult(null);
+
+    try {
+      const result = await onTestConnection({
+        provider_type: account.provider_type,
+        email_address: account.email_address,
+        imap_host: formData.imap_host,
+        imap_port: formData.imap_port,
+        smtp_host: formData.smtp_host,
+        smtp_port: formData.smtp_port,
+        password: formData.password,
+        use_ssl: formData.use_ssl,
+      });
+      setConnectionTestResult(result);
+    } catch (err) {
+      setConnectionTestResult({
+        success: false,
+        message: err instanceof Error ? err.message : 'Connection test failed',
+        capabilities: [],
+      });
+    } finally {
+      setIsTestingConnection(false);
+    }
+  };
+
+  const handleSubmit = async () => {
+    setIsSaving(true);
+    setSaveError(null);
+
+    try {
+      await onUpdate({
+        name: formData.name,
+        imap_host: formData.imap_host,
+        imap_port: formData.imap_port,
+        smtp_host: formData.smtp_host,
+        smtp_port: formData.smtp_port,
+        password: formData.password,
+        use_ssl: formData.use_ssl,
+      });
+    } catch (err) {
+      setSaveError(err instanceof Error ? err.message : 'Failed to update connection');
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  const isValid = formData.name && formData.password;
+  const canSave = isValid && connectionTestResult?.success;
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center">
+      <div className="absolute inset-0 bg-black/60" onClick={onClose} />
+
+      <div className="relative bg-gray-800 rounded-xl shadow-2xl w-full max-w-lg mx-4 border border-gray-700">
+        {/* Header */}
+        <div className="flex items-center justify-between px-6 py-4 border-b border-gray-700">
+          <h2 className="text-lg font-semibold text-white">Edit Connection</h2>
+          <button
+            onClick={onClose}
+            className="text-gray-400 hover:text-gray-300 transition-colors"
+          >
+            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+            </svg>
+          </button>
+        </div>
+
+        {/* Content */}
+        <div className="px-6 py-4 max-h-[60vh] overflow-y-auto">
+          <div className="space-y-4">
+            {/* Email Address (read-only) */}
+            <div>
+              <label className="block text-sm font-medium text-gray-300 mb-2">
+                Email Address
+              </label>
+              <input
+                type="email"
+                value={account.email_address}
+                disabled
+                className="w-full px-3 py-2 bg-gray-900/50 border border-gray-700 rounded-lg text-gray-500 cursor-not-allowed"
+              />
+            </div>
+
+            {/* Connection Name */}
+            <div>
+              <label className="block text-sm font-medium text-gray-300 mb-2">
+                Connection Name <span className="text-red-500">*</span>
+              </label>
+              <input
+                type="text"
+                value={formData.name}
+                onChange={(e) => handleFieldChange('name', e.target.value)}
+                className="w-full px-3 py-2 bg-gray-900 border border-gray-700 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-600 focus:border-transparent"
+              />
+            </div>
+
+            {/* Incoming Mail (IMAP) */}
+            <div className="p-4 bg-gray-900/50 rounded-lg border border-gray-700">
+              <h4 className="text-sm font-medium text-gray-300 mb-3 flex items-center gap-2">
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20 13V6a2 2 0 00-2-2H6a2 2 0 00-2 2v7m16 0v5a2 2 0 01-2 2H6a2 2 0 01-2-2v-5m16 0h-2.586a1 1 0 00-.707.293l-2.414 2.414a1 1 0 01-.707.293h-3.172a1 1 0 01-.707-.293l-2.414-2.414A1 1 0 006.586 13H4" />
+                </svg>
+                Incoming Mail (IMAP)
+              </h4>
+              <div className="grid grid-cols-3 gap-3">
+                <div className="col-span-2">
+                  <label className="block text-xs font-medium text-gray-400 mb-1">Server</label>
+                  <input
+                    type="text"
+                    value={formData.imap_host}
+                    onChange={(e) => handleFieldChange('imap_host', e.target.value)}
+                    className="w-full px-3 py-2 bg-gray-800 border border-gray-600 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-600 focus:border-transparent text-sm"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-gray-400 mb-1">Port</label>
+                  <input
+                    type="text"
+                    value={formData.imap_port}
+                    onChange={(e) => handleFieldChange('imap_port', parseInt(e.target.value) || 993)}
+                    className="w-full px-3 py-2 bg-gray-800 border border-gray-600 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-600 focus:border-transparent text-sm"
+                  />
+                </div>
+              </div>
+            </div>
+
+            {/* Outgoing Mail (SMTP) */}
+            <div className="p-4 bg-gray-900/50 rounded-lg border border-gray-700">
+              <h4 className="text-sm font-medium text-gray-300 mb-3 flex items-center gap-2">
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" />
+                </svg>
+                Outgoing Mail (SMTP)
+              </h4>
+              <div className="grid grid-cols-3 gap-3">
+                <div className="col-span-2">
+                  <label className="block text-xs font-medium text-gray-400 mb-1">Server</label>
+                  <input
+                    type="text"
+                    value={formData.smtp_host}
+                    onChange={(e) => handleFieldChange('smtp_host', e.target.value)}
+                    className="w-full px-3 py-2 bg-gray-800 border border-gray-600 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-600 focus:border-transparent text-sm"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-gray-400 mb-1">Port</label>
+                  <input
+                    type="text"
+                    value={formData.smtp_port}
+                    onChange={(e) => handleFieldChange('smtp_port', parseInt(e.target.value) || 587)}
+                    className="w-full px-3 py-2 bg-gray-800 border border-gray-600 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-600 focus:border-transparent text-sm"
+                  />
+                </div>
+              </div>
+            </div>
+
+            {/* New Password */}
+            <div className="p-4 bg-gray-900/50 rounded-lg border border-gray-700">
+              <h4 className="text-sm font-medium text-gray-300 mb-3 flex items-center gap-2">
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 7a2 2 0 012 2m4 0a6 6 0 01-7.743 5.743L11 17H9v2H7v2H4a1 1 0 01-1-1v-2.586a1 1 0 01.293-.707l5.964-5.964A6 6 0 1121 9z" />
+                </svg>
+                Credentials
+              </h4>
+              <div className="space-y-3">
+                <div>
+                  <label className="block text-xs font-medium text-gray-400 mb-1">
+                    New Password <span className="text-red-500">*</span>
+                  </label>
+                  <input
+                    type="password"
+                    value={formData.password}
+                    onChange={(e) => handleFieldChange('password', e.target.value)}
+                    placeholder="Enter new password"
+                    className="w-full px-3 py-2 bg-gray-800 border border-gray-600 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-600 focus:border-transparent text-sm"
+                  />
+                </div>
+                <div className="flex items-center pt-1">
+                  <input
+                    type="checkbox"
+                    id="edit_use_ssl"
+                    checked={formData.use_ssl}
+                    onChange={(e) => handleFieldChange('use_ssl', e.target.checked)}
+                    className="w-4 h-4 bg-gray-800 border-gray-600 rounded text-blue-600 focus:ring-2 focus:ring-blue-600"
+                  />
+                  <label htmlFor="edit_use_ssl" className="ml-2 text-sm text-gray-300">
+                    Use SSL/TLS (recommended)
+                  </label>
+                </div>
+              </div>
+            </div>
+
+            {/* Test Connection */}
+            <div className="pt-2">
+              <button
+                onClick={handleTestConnection}
+                disabled={isTestingConnection || !isValid}
+                className="w-full px-4 py-2 bg-gray-700 hover:bg-gray-600 disabled:bg-gray-800 disabled:cursor-not-allowed text-white rounded-lg transition-colors font-medium"
+              >
+                {isTestingConnection ? (
+                  <span className="flex items-center justify-center">
+                    <svg className="animate-spin -ml-1 mr-2 h-4 w-4 text-white" fill="none" viewBox="0 0 24 24">
+                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                    </svg>
+                    Testing Connection...
+                  </span>
+                ) : (
+                  'Test Connection'
+                )}
+              </button>
+            </div>
+
+            {/* Test Result */}
+            {connectionTestResult && (
+              <div
+                className={`p-4 rounded-lg border ${
+                  connectionTestResult.success
+                    ? 'bg-green-600/10 border-green-600/30'
+                    : 'bg-red-600/10 border-red-600/30'
+                }`}
+              >
+                <div className="flex items-start space-x-3">
+                  <div className={connectionTestResult.success ? 'text-green-400' : 'text-red-400'}>
+                    {connectionTestResult.success ? (
+                      <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
+                        <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
+                      </svg>
+                    ) : (
+                      <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
+                        <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clipRule="evenodd" />
+                      </svg>
+                    )}
+                  </div>
+                  <div className="flex-1">
+                    <h5 className={`text-sm font-medium mb-1 ${connectionTestResult.success ? 'text-green-400' : 'text-red-400'}`}>
+                      {connectionTestResult.success ? 'Connection Successful' : 'Connection Failed'}
+                    </h5>
+                    <p className="text-sm text-gray-300">{connectionTestResult.message}</p>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* Save Error */}
+            {saveError && (
+              <div className="p-4 rounded-lg border bg-red-600/10 border-red-600/30">
+                <div className="flex items-center gap-2 text-red-400">
+                  <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
+                    <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clipRule="evenodd" />
+                  </svg>
+                  <span className="text-sm">{saveError}</span>
+                </div>
+              </div>
+            )}
+
+            {/* Must test hint */}
+            {!connectionTestResult?.success && isValid && (
+              <div className="p-3 rounded-lg bg-blue-600/10 border border-blue-600/30">
+                <p className="text-xs text-blue-300">
+                  Please test the connection before saving.
+                </p>
+              </div>
+            )}
+          </div>
+        </div>
+
+        {/* Footer */}
+        <div className="flex items-center justify-between px-6 py-4 border-t border-gray-700 bg-gray-900/50">
+          <button
+            onClick={onClose}
+            className="px-4 py-2 text-gray-400 hover:text-gray-300 transition-colors"
+          >
+            Cancel
+          </button>
+          <button
+            onClick={handleSubmit}
+            disabled={!canSave || isSaving}
+            className="px-4 py-2 bg-blue-600 hover:bg-blue-700 disabled:bg-gray-600 disabled:cursor-not-allowed text-white rounded-lg transition-colors font-medium"
+          >
+            {isSaving ? (
+              <span className="flex items-center">
+                <svg className="animate-spin -ml-1 mr-2 h-4 w-4 text-white" fill="none" viewBox="0 0 24 24">
+                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                </svg>
+                Saving...
+              </span>
+            ) : (
+              'Save Changes'
+            )}
+          </button>
         </div>
       </div>
     </div>
