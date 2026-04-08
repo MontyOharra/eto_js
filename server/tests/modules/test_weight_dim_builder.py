@@ -18,6 +18,18 @@ class TestWeightDimBuilder:
         assert dim["width"] == 1
         assert dim["height"] == 1
 
+    def test_string_inputs(self, run_module):
+        result = run_module(
+            WeightDimBuilder,
+            config={},
+            inputs={"count": "3", "weight": "500.0"},
+            output_pins={"dim": "dim"},
+        )
+
+        dim = result["dim"]
+        assert dim["qty"] == 3
+        assert dim["weight"] == 500.0
+
     def test_zero_weight_returns_none(self, run_module):
         result = run_module(
             WeightDimBuilder,
@@ -28,13 +40,52 @@ class TestWeightDimBuilder:
 
         assert result["dim"] is None
 
-    def test_default_count_is_1(self, run_module):
+    def test_zero_count_returns_none(self, run_module):
         result = run_module(
             WeightDimBuilder,
             config={},
-            inputs={"count": None, "weight": 100.0},
+            inputs={"count": 0, "weight": 500.0},
             output_pins={"dim": "dim"},
         )
 
-        assert result["dim"]["qty"] == 1
-        assert result["dim"]["weight"] == 100.0
+        assert result["dim"] is None
+
+    def test_empty_string_weight_returns_none(self, run_module):
+        result = run_module(
+            WeightDimBuilder,
+            config={},
+            inputs={"count": "2", "weight": ""},
+            output_pins={"dim": "dim"},
+        )
+
+        assert result["dim"] is None
+
+    def test_empty_string_count_returns_none(self, run_module):
+        result = run_module(
+            WeightDimBuilder,
+            config={},
+            inputs={"count": "", "weight": "500"},
+            output_pins={"dim": "dim"},
+        )
+
+        assert result["dim"] is None
+
+    def test_none_inputs_returns_none(self, run_module):
+        result = run_module(
+            WeightDimBuilder,
+            config={},
+            inputs={"count": None, "weight": None},
+            output_pins={"dim": "dim"},
+        )
+
+        assert result["dim"] is None
+
+    def test_whitespace_only_returns_none(self, run_module):
+        result = run_module(
+            WeightDimBuilder,
+            config={},
+            inputs={"count": "  ", "weight": "  "},
+            output_pins={"dim": "dim"},
+        )
+
+        assert result["dim"] is None

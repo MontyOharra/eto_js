@@ -72,24 +72,50 @@ class WeightDimBuilder(BaseModule):
             )
         )
 
+    @staticmethod
+    def _parse_int(value: Any) -> int | None:
+        if value is None:
+            return None
+        if isinstance(value, str):
+            value = value.strip()
+            if not value:
+                return None
+        try:
+            return int(float(value))
+        except (ValueError, TypeError):
+            return None
+
+    @staticmethod
+    def _parse_float(value: Any) -> float | None:
+        if value is None:
+            return None
+        if isinstance(value, str):
+            value = value.strip()
+            if not value:
+                return None
+        try:
+            return float(value)
+        except (ValueError, TypeError):
+            return None
+
     def run(self, inputs: Dict[str, Any], cfg: WeightDimBuilderConfig, context: Any, access_conn_manager: AccessConnectionManager | None = None) -> Dict[str, Any]:
-        qty = 1
-        weight = 0.0
+        qty = None
+        weight = None
 
         for input_node in context.inputs:
             node_id = input_node.node_id
             group_index = input_node.group_index
-            value = inputs.get(node_id, 0)
+            value = inputs.get(node_id)
 
             if group_index == 0:  # count
-                qty = int(value) if value is not None else 1
+                qty = self._parse_int(value)
             elif group_index == 1:  # weight
-                weight = float(value) if value is not None else 0.0
+                weight = self._parse_float(value)
 
         output_node_id = context.outputs[0].node_id
 
-        if weight == 0:
-            logger.info("Weight is zero, returning None")
+        if not qty or not weight:
+            logger.info("Count or weight is empty/zero, returning None")
             return {output_node_id: None}
 
         dim_obj: DimObject = {
