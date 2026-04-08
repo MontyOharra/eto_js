@@ -39,17 +39,28 @@ class ModuleTestHarness:
         Returns:
             Dict of {pin_label: value} from the module's output
         """
+        # Look up IO shape from module meta to assign correct group indices
+        meta = module_class.meta()
+        input_groups = meta.io_shape.inputs.nodes if meta.io_shape.inputs else []
+        output_groups = meta.io_shape.outputs.nodes if meta.io_shape.outputs else []
+
+        # Build a mapping from group label -> group_index for inputs
+        input_group_labels = {g.label: idx for idx, g in enumerate(input_groups)}
+        output_group_labels = {g.label: idx for idx, g in enumerate(output_groups)}
+
         # Build input NodeInstances and the inputs dict keyed by node_id
         input_nodes = []
         inputs_by_node_id = {}
         for i, (name, value) in enumerate(inputs.items()):
             node_id = f"test_in_{i}"
+            # Match input name to a group label, default to group 0
+            group_index = input_group_labels.get(name, 0)
             input_nodes.append(NodeInstance(
                 node_id=node_id,
                 type="str",
                 name=name,
                 position_index=i,
-                group_index=0,
+                group_index=group_index,
             ))
             inputs_by_node_id[node_id] = value
 
@@ -57,12 +68,13 @@ class ModuleTestHarness:
         output_nodes = []
         for i, (name, pin_type) in enumerate(output_pins.items()):
             node_id = f"test_out_{i}"
+            group_index = output_group_labels.get(name, 0)
             output_nodes.append(NodeInstance(
                 node_id=node_id,
                 type=pin_type,
                 name=name,
                 position_index=i,
-                group_index=0,
+                group_index=group_index,
             ))
 
         # Build execution context
