@@ -47,13 +47,13 @@ class WeightDimBuilder(BaseModule):
                     nodes=[
                         NodeGroup(
                             label="count",
-                            typing=NodeTypeRule(allowed_types=["int"]),
+                            typing=NodeTypeRule(allowed_types=["int", "str"]),
                             min_count=1,
                             max_count=1,
                         ),
                         NodeGroup(
                             label="weight",
-                            typing=NodeTypeRule(allowed_types=["float", "int"]),
+                            typing=NodeTypeRule(allowed_types=["float", "int", "str"]),
                             min_count=1,
                             max_count=1,
                         ),
