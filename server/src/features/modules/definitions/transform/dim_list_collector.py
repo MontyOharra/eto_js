@@ -47,7 +47,7 @@ class DimListCollector(BaseModule):
                     nodes=[
                         NodeGroup(
                             label="dim",
-                            typing=NodeTypeRule(allowed_types=["dim"]),
+                            typing=NodeTypeRule(allowed_types=["dim", "list[dim]"]),
                             min_count=1,
                             max_count=None  # Unlimited dim inputs
                         )
@@ -85,12 +85,19 @@ class DimListCollector(BaseModule):
             node_id = input_node.node_id
             dim_obj = inputs.get(node_id)
 
-            if dim_obj is not None:
-                # Validate it's a dict with expected structure
-                if isinstance(dim_obj, dict):
-                    dim_list.append(dim_obj)
-                else:
-                    logger.warning(f"Skipping invalid dim input (not a dict): {dim_obj}")
+            if dim_obj is None:
+                continue
+
+            if isinstance(dim_obj, list):
+                for item in dim_obj:
+                    if isinstance(item, dict):
+                        dim_list.append(item)
+                    else:
+                        logger.warning(f"Skipping non-dict item in list: {item}")
+            elif isinstance(dim_obj, dict):
+                dim_list.append(dim_obj)
+            else:
+                logger.warning(f"Skipping invalid dim input (not a dict or list): {dim_obj}")
 
         logger.info(f"Collected {len(dim_list)} dim objects into list")
 
