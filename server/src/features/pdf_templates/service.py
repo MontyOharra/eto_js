@@ -1104,7 +1104,7 @@ class PdfTemplateService:
 
     def _find_text_word_match(self, pdf_words: list, template_word) -> bool:
         """Find matching text word with content and position tolerance"""
-        position_tolerance = 10.0
+        position_tolerance = 2.0
         content_similarity_threshold = 0.8
 
         for pdf_word in pdf_words:
@@ -1123,7 +1123,7 @@ class PdfTemplateService:
 
     def _find_graphic_rect_match(self, pdf_rects: list, template_rect) -> bool:
         """Find matching graphic rectangle by position and size"""
-        position_tolerance = 5.0  # Tighter tolerance for graphics
+        position_tolerance = 2.0
 
         for pdf_rect in pdf_rects:
             if pdf_rect.page != template_rect.page:
@@ -1135,7 +1135,7 @@ class PdfTemplateService:
 
     def _find_graphic_line_match(self, pdf_lines: list, template_line) -> bool:
         """Find matching graphic line by position"""
-        position_tolerance = 5.0
+        position_tolerance = 2.0
 
         for pdf_line in pdf_lines:
             if pdf_line.page != template_line.page:
@@ -1147,7 +1147,7 @@ class PdfTemplateService:
 
     def _find_graphic_curve_match(self, pdf_curves: list, template_curve) -> bool:
         """Find matching graphic curve by position"""
-        position_tolerance = 8.0  # Curves might have slight variations
+        position_tolerance = 2.0
 
         for pdf_curve in pdf_curves:
             if pdf_curve.page != template_curve.page:
@@ -1159,7 +1159,7 @@ class PdfTemplateService:
 
     def _find_image_match(self, pdf_images: list, template_image) -> bool:
         """Find matching image by position and size"""
-        position_tolerance = 3.0  # Very tight tolerance for images
+        position_tolerance = 2.0
 
         for pdf_image in pdf_images:
             if pdf_image.page != template_image.page:
@@ -1171,7 +1171,7 @@ class PdfTemplateService:
 
     def _find_table_match(self, pdf_tables: list, template_table) -> bool:
         """Find matching table by position"""
-        position_tolerance = 10.0  # Tables might have slight layout variations
+        position_tolerance = 2.0
 
         for pdf_table in pdf_tables:
             if pdf_table.page != template_table.page:
