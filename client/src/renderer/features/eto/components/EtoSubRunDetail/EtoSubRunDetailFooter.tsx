@@ -85,7 +85,7 @@ export function EtoSubRunDetailFooter({
             onClick={() => onViewInEto(runDetail.eto_run_id)}
             className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded transition-colors text-sm"
           >
-            View in ETO
+            View PDF Details Page
           </button>
         )}
         {onViewTemplate && runDetail?.template?.id && (

@@ -19,7 +19,6 @@ import {
   useSkipRun,
   useDeleteRuns,
   useUpdateEtoRun,
-  EtoRunDetail,
 } from '../../index';
 import { apiClient } from '../../../../shared/api/client';
 import { API_CONFIG } from '../../../../shared/api/config';
@@ -28,43 +27,6 @@ import type { ReprocessWarningsResponse } from '../../api/types';
 interface EtoRunDetailViewWrapperProps {
   runId: number;
   onBack: () => void;
-}
-
-/**
- * Format milliseconds to human-readable duration
- */
-function formatDuration(ms: number): string {
-  const seconds = Math.floor(ms / 1000);
-  const minutes = Math.floor(seconds / 60);
-  const hours = Math.floor(minutes / 60);
-
-  if (hours > 0) {
-    return `${hours}h ${minutes % 60}m ${seconds % 60}s`;
-  } else if (minutes > 0) {
-    return `${minutes}m ${seconds % 60}s`;
-  } else {
-    return `${seconds}s`;
-  }
-}
-
-/**
- * Get display string for source type
- */
-function getSourceDisplay(detail: EtoRunDetail): string {
-  if (detail.source.type === 'email') {
-    return `Email from ${detail.source.sender_email}`;
-  }
-  return 'Manual Upload';
-}
-
-/**
- * Get timestamp for source (received_at for email, created_at for manual)
- */
-function getSourceDate(detail: EtoRunDetail): string {
-  if (detail.source.type === 'email') {
-    return detail.source.received_at;
-  }
-  return detail.source.created_at;
 }
 
 export function EtoRunDetailViewWrapper({ runId, onBack }: EtoRunDetailViewWrapperProps) {
@@ -303,11 +265,6 @@ export function EtoRunDetailViewWrapper({ runId, onBack }: EtoRunDetailViewWrapp
   // Compute derived values
   const hasFailedRuns = matchedSubRuns.some(sr => sr.status === 'failure');
   const hasNeedsTemplate = needsTemplateSubRuns.length > 0;
-  const sourceDisplay = getSourceDisplay(detail);
-  const sourceDate = getSourceDate(detail);
-  const processingTime = detail.overview.processing_time_ms
-    ? formatDuration(detail.overview.processing_time_ms)
-    : '-';
 
   return (
     <div className="p-6 h-full overflow-auto">
@@ -322,12 +279,8 @@ export function EtoRunDetailViewWrapper({ runId, onBack }: EtoRunDetailViewWrapp
         <div className="col-span-3 flex flex-col gap-6">
           {/* Overview Stats */}
           <EtoRunDetailOverview
-            source={sourceDisplay}
-            sourceDate={sourceDate}
+            source={detail.source}
             status={detail.status}
-            totalPages={detail.pdf.page_count}
-            templatesMatched={detail.overview.templates_matched_count}
-            processingTime={processingTime}
           />
 
           {/* Sub-runs Section - Matched Templates */}
@@ -356,7 +309,6 @@ export function EtoRunDetailViewWrapper({ runId, onBack }: EtoRunDetailViewWrapp
         {/* Sidebar - 1 column */}
         <EtoRunDetailSidebar
           pdf={detail.pdf}
-          sourceDate={sourceDate}
           pageStatuses={detail.page_statuses}
           hasFailedRuns={hasFailedRuns}
           hasNeedsTemplate={hasNeedsTemplate}

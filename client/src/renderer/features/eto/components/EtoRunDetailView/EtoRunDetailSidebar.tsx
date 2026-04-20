@@ -1,8 +1,8 @@
 import { EtoPdfInfo, PageStatus as PageStatusType, EtoSubRunStatus } from '../../types';
+import { getPdfDownloadUrl } from '../../../pdf';
 
 interface EtoRunDetailSidebarProps {
   pdf: EtoPdfInfo;
-  sourceDate: string;
   pageStatuses: PageStatusType[];
   hasFailedRuns: boolean;
   hasNeedsTemplate: boolean;
@@ -39,7 +39,6 @@ function formatFileSize(bytes: number | null): string {
 
 export function EtoRunDetailSidebar({
   pdf,
-  sourceDate,
   pageStatuses,
   hasFailedRuns,
   hasNeedsTemplate,
@@ -54,6 +53,7 @@ export function EtoRunDetailSidebar({
   const pageStatusMap = new Map(
     pageStatuses.map(ps => [ps.page_number, ps.status])
   );
+
 
   return (
     <div className="space-y-6">
@@ -110,10 +110,15 @@ export function EtoRunDetailSidebar({
             <p className="text-gray-400 text-sm">Total Pages</p>
             <p className="text-white">{pdf.page_count}</p>
           </div>
-          <div>
-            <p className="text-gray-400 text-sm">Received</p>
-            <p className="text-white">{sourceDate}</p>
-          </div>
+          <a
+            href={getPdfDownloadUrl(pdf.id, true)}
+            className="w-full mt-2 px-3 py-2 bg-gray-700 hover:bg-gray-600 text-gray-300 rounded-md text-sm transition-colors flex items-center justify-center gap-2"
+          >
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v2a2 2 0 002 2h12a2 2 0 002-2v-2M7 10l5 5 5-5M12 15V3" />
+            </svg>
+            Download PDF
+          </a>
         </div>
       </div>
 

@@ -80,18 +80,23 @@ def get_pdf_file(
 @router.get("/{id}/download")
 def download_pdf(
     id: int,
+    disposition: str = Query("inline", pattern="^(inline|attachment)$"),
     pdf_service: PdfFilesService = Depends(
         lambda: ServiceContainer.get_pdf_files_service()
     )
 ):
-    """Download or stream PDF file bytes for viewing"""
+    """Download or stream PDF file bytes.
+
+    Pass `?disposition=attachment` to force a browser download rather than
+    inline preview.
+    """
     file_bytes, filename = pdf_service.get_pdf_file_bytes(id)
 
     return Response(
         content=file_bytes,
         media_type="application/pdf",
         headers={
-            "Content-Disposition": f'inline; filename="{filename}"'
+            "Content-Disposition": f'{disposition}; filename="{filename}"'
         }
     )
 

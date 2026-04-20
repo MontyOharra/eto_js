@@ -173,8 +173,13 @@ export function useProcessPdfObjects() {
 
 /**
  * Get PDF download URL for a given PDF file ID
- * No API call needed - just constructs the URL
+ * No API call needed - just constructs the URL.
+ *
+ * Pass `asAttachment: true` to force the browser to download the file
+ * instead of rendering it inline (needed for download buttons since
+ * the HTML `download` attribute is ignored cross-origin).
  */
-export function getPdfDownloadUrl(pdfFileId: number): string {
-  return `${API_CONFIG.BASE_URL}${baseUrl}/${pdfFileId}/download`;
+export function getPdfDownloadUrl(pdfFileId: number, asAttachment = false): string {
+  const base = `${API_CONFIG.BASE_URL}${baseUrl}/${pdfFileId}/download`;
+  return asAttachment ? `${base}?disposition=attachment` : base;
 }
