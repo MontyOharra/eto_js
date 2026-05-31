@@ -224,6 +224,7 @@ class PdfTemplateService:
         metadata_changed = (
             update_data.name is not None or
             update_data.description is not None or
+            update_data.customer_id is not None or
             update_data.is_autoskip is not None
         )
         signature_changed = update_data.signature_objects is not None
@@ -239,6 +240,8 @@ class PdfTemplateService:
                 updates["name"] = update_data.name
             if update_data.description is not None:
                 updates["description"] = update_data.description
+            if update_data.customer_id is not None:
+                updates["customer_id"] = update_data.customer_id
             if update_data.is_autoskip is not None:
                 updates["is_autoskip"] = update_data.is_autoskip
 
@@ -315,6 +318,8 @@ class PdfTemplateService:
                 updates["name"] = update_data.name
             if update_data.description is not None:
                 updates["description"] = update_data.description
+            if update_data.customer_id is not None:
+                updates["customer_id"] = update_data.customer_id
             if update_data.is_autoskip is not None:
                 updates["is_autoskip"] = update_data.is_autoskip
 
