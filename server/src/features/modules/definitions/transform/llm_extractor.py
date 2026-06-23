@@ -17,6 +17,7 @@ from shared.types import ModuleMeta, IOShape, IOSideShape, NodeGroup, NodeTypeRu
 from features.modules.registry import register
 from features.modules.base import BaseModule
 from shared.database.access_connection import AccessConnectionManager
+from shared.utils.numeric import to_float, to_int
 
 logger = logging.getLogger(__name__)
 
@@ -234,10 +235,10 @@ class LlmExtractor(BaseModule):
                 return str(value)
 
             if target_type == "int":
-                return int(float(value))
+                return to_int(value)
 
             if target_type == "float":
-                return float(value)
+                return to_float(value)
 
             if target_type == "bool":
                 if isinstance(value, bool):

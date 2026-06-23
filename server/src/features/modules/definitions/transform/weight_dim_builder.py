@@ -11,6 +11,7 @@ from shared.types import ModuleMeta, IOShape, IOSideShape, NodeGroup, NodeTypeRu
 from features.modules.registry import register
 from features.modules.base import BaseModule
 from shared.database.access_connection import AccessConnectionManager
+from shared.utils.numeric import try_float, try_int
 
 logger = logging.getLogger(__name__)
 
@@ -74,29 +75,13 @@ class WeightDimBuilder(BaseModule):
 
     @staticmethod
     def _parse_int(value: Any) -> int | None:
-        if value is None:
-            return None
-        if isinstance(value, str):
-            value = value.strip()
-            if not value:
-                return None
-        try:
-            return int(float(value))
-        except (ValueError, TypeError):
-            return None
+        # Tolerates formatted numeric strings (e.g. '1,259'); None on failure.
+        return try_int(value)
 
     @staticmethod
     def _parse_float(value: Any) -> float | None:
-        if value is None:
-            return None
-        if isinstance(value, str):
-            value = value.strip()
-            if not value:
-                return None
-        try:
-            return float(value)
-        except (ValueError, TypeError):
-            return None
+        # Tolerates formatted numeric strings (e.g. '1,259.00'); None on failure.
+        return try_float(value)
 
     def run(self, inputs: Dict[str, Any], cfg: WeightDimBuilderConfig, context: Any, access_conn_manager: AccessConnectionManager | None = None) -> Dict[str, Any]:
         qty = None

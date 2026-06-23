@@ -10,6 +10,7 @@ from pydantic import BaseModel, Field
 from features.modules.base import BaseModule
 from features.modules.registry import register
 from shared.types import IOShape, IOSideShape, ModuleMeta, NodeGroup, NodeTypeRule
+from shared.utils.numeric import to_float
 
 if TYPE_CHECKING:
     from shared.database.access_connection import AccessConnectionManager
@@ -101,7 +102,7 @@ class MathSubtract(BaseModule):
             if value is None:
                 value = 0.0
             else:
-                value = float(value)
+                value = to_float(value)
 
             values.append(value)
 

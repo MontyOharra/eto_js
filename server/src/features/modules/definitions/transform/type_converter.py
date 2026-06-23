@@ -9,6 +9,7 @@ from shared.types import ModuleMeta, IOShape, IOSideShape, NodeGroup, NodeTypeRu
 from features.modules.registry import register
 from features.modules.base import BaseModule
 from shared.database.access_connection import AccessConnectionManager
+from shared.utils.numeric import to_float, to_int
 
 
 class TypeConverterConfig(BaseModel):
@@ -135,7 +136,7 @@ class TypeConverter(BaseModule):
                 elif value.lower() in ["false", "no", "0", ""]:
                     return 0.0
                 else:
-                    return float(value)
+                    return to_float(value)
             elif isinstance(value, bool):
                 return float(value)
             elif isinstance(value, datetime):
@@ -153,7 +154,7 @@ class TypeConverter(BaseModule):
                     return 0
                 else:
                     # Try to parse as float first, then convert to int
-                    return int(float(value))
+                    return to_int(value)
             elif isinstance(value, bool):
                 return int(value)
             elif isinstance(value, datetime):
