@@ -5,6 +5,7 @@ Manages PDF file storage, object extraction, and retrieval
 import hashlib
 import logging
 import tempfile
+import uuid
 from collections import defaultdict
 from datetime import datetime, timezone
 from io import BytesIO
@@ -37,8 +38,9 @@ class PdfFilesService:
     """
     PDF file management service.
 
-    Handles PDF file storage with SHA-256 hash-based deduplication,
-    date-based filesystem organization, and automatic object extraction using pdfplumber.
+    Handles PDF file storage (one record + file per upload, no hash-based
+    deduplication), date-based filesystem organization, and automatic object
+    extraction using pdfplumber.
     """
 
     connection_manager: DatabaseConnectionManager
@@ -325,18 +327,15 @@ class PdfFilesService:
         filename: str
     ) -> PdfFile:
         """
-        Store PDF file with hash-based deduplication and extract objects.
+        Store PDF file and extract objects.
 
         Process:
         1. Validate PDF
-        2. Calculate SHA-256 hash
-        3. Check if hash already exists (deduplication)
-        4. If exists: return existing file record
-        5. If new:
-           - Save file to date-based path (YYYY/MM/DD/hash.pdf)
-           - Extract objects using pdfplumber (returns typed PdfObjects)
-           - Create database record with typed extracted_objects
-           - Return file record
+        2. Calculate SHA-256 hash (stored as metadata only)
+        3. Save file to a unique date-based path (YYYY/MM/DD/hash[-suffix].pdf)
+        4. Extract objects using pdfplumber (returns typed PdfObjects)
+        5. Create database record with typed extracted_objects
+        6. Return file record
 
         Args:
             file_bytes: Raw PDF file bytes
@@ -346,8 +345,11 @@ class PdfFilesService:
             PdfFile dataclass with complete file data
 
         Note:
-            Source tracking (email/manual) is now handled at the eto_runs level,
-            not at the PDF file level. PDFs are deduplicated storage entities only.
+            Hash-based deduplication was intentionally removed: every upload
+            creates its own record and its own file on disk, so re-uploading a
+            file (e.g. to rebuild a template after the original was lost) no
+            longer re-references a stale/broken path. Source tracking
+            (email/manual) is handled at the eto_runs level, not here.
 
         Raises:
             ValidationError: If PDF is invalid (400)
@@ -359,27 +361,32 @@ class PdfFilesService:
             if not is_valid:
                 raise ValidationError(f"Invalid PDF: {error_msg}")
 
-            # Calculate hash
+            # Calculate hash (retained for metadata/lookup, not for deduplication)
             file_hash = hashlib.sha256(file_bytes).hexdigest()
 
-            # Check for existing PDF with same hash
-            existing = self.pdf_repository.get_by_hash(file_hash)
-            if existing:
-                logger.info(f"PDF {filename} already exists (hash: {file_hash[:8]}...)")
-                return existing
+            # NOTE: Hash-based deduplication was intentionally removed. Previously a
+            # matching hash short-circuited here and returned the existing record,
+            # which meant a re-upload could never replace a broken/missing file on
+            # disk. Every upload now creates a fresh record with its own file on
+            # disk. Existing records are unaffected (they keep their stored path).
 
             # Generate storage path: YYYY/MM/DD/hash.pdf
             now = datetime.now(timezone.utc)
-            relative_path = Path(
-                str(now.year),
-                f"{now.month:02d}",
-                f"{now.day:02d}",
-                f"{file_hash}.pdf"
-            )
-            full_path = self.base_storage_path / relative_path
+            date_dir = self.base_storage_path / str(now.year) / f"{now.month:02d}" / f"{now.day:02d}"
 
             # Create directory structure
-            full_path.parent.mkdir(parents=True, exist_ok=True)
+            date_dir.mkdir(parents=True, exist_ok=True)
+
+            # Use the hash as the base filename, but guarantee uniqueness on disk so a
+            # re-upload of the same bytes never overwrites a prior file. Existing DB
+            # records point at their own paths and are never touched by this.
+            filename_stem = file_hash
+            full_path = date_dir / f"{filename_stem}.pdf"
+            while full_path.exists():
+                filename_stem = f"{file_hash}-{uuid.uuid4().hex[:8]}"
+                full_path = date_dir / f"{filename_stem}.pdf"
+
+            relative_path = full_path.relative_to(self.base_storage_path)
 
             # Write file to filesystem
             with open(full_path, 'wb') as f:

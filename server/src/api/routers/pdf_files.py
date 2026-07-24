@@ -41,10 +41,13 @@ async def upload_pdf_file(
 
     Process:
     - Validates PDF format
-    - Calculates SHA-256 hash for deduplication
-    - Stores file in date-based directory structure (YYYY/MM/DD/hash.pdf)
+    - Calculates SHA-256 hash (stored as metadata; not used for deduplication)
+    - Stores file in date-based directory structure (YYYY/MM/DD/hash[-suffix].pdf)
     - Extracts objects using pdfplumber
     - Returns complete PDF metadata
+
+    Note: Each upload creates a fresh record and file on disk. Re-uploading the
+    same bytes will not re-reference an existing record.
 
     Note: email_id is not accepted here - only set by email ingestion service
     """
@@ -55,7 +58,7 @@ async def upload_pdf_file(
     # Read file bytes
     pdf_bytes = await pdf_file.read()
 
-    # Store PDF (service handles validation, extraction, deduplication)
+    # Store PDF (service handles validation and extraction)
     # Note: Source tracking (manual vs email) is now on eto_runs, not pdf_files
     pdf = pdf_service.store_pdf(
         file_bytes=pdf_bytes,
