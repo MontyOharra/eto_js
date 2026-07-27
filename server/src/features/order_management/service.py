@@ -57,11 +57,20 @@ from shared.types.pending_actions import (
 from features.htc_integration import HtcIntegrationService
 from features.htc_integration.attachment_utils import PdfSource
 from shared.events.order_events import order_event_manager
+from shared.utils.address import address_has_suspicious_content, sanitize_secondary_line
 
 from .auto_create_worker import AutoCreateWorker
 from .transformers import FIELD_TRANSFORMERS
 
 logger = logging.getLogger(__name__)
+
+# Pre-clean address blobs with the LLM when they contain obvious non-address
+# content, instead of only falling back after usaddress fails outright.
+# Set ADDRESS_LLM_PRECLEAN=false to disable (falls back to the old behaviour).
+_LLM_ADDRESS_PRECLEAN_ENABLED = os.getenv("ADDRESS_LLM_PRECLEAN", "true").lower() != "false"
+
+# Bound on the in-memory cache of LLM-cleaned address strings
+_LLM_ADDRESS_CACHE_MAX_ENTRIES = 512
 
 
 # =============================================================================
@@ -155,6 +164,12 @@ class OrderManagementService:
         # Prevents duplicate actions when multiple sub-runs for same order process concurrently
         self._action_locks: dict[tuple[int, str], threading.Lock] = {}
         self._action_locks_lock = threading.Lock()  # Protects the _action_locks dict itself
+
+        # Cache of LLM-cleaned address strings (raw address -> cleaned address or None).
+        # The same address blob repeats across sub-runs of a multi-page PDF, so this
+        # keeps the pre-clean pass from re-billing the same text.
+        self._llm_address_cache: dict[str, str | None] = {}
+        self._llm_address_cache_lock = threading.Lock()
 
     def _get_email_service(self) -> "EmailService | None":
         """
@@ -578,9 +593,14 @@ class OrderManagementService:
         Resolve address ID for a location field with cascading fallback.
 
         Strategy:
-        1. First check if address can be parsed (validate format)
-        2. If parsing fails → try LLM fallback, then raise error
-        3. If parsing succeeds → try HTC lookup
+        0. If the raw text carries obvious non-address content (order numbers,
+           reference codes), pre-clean it with the LLM before parsing. usaddress
+           can silently absorb such text into a parse that *looks* successful,
+           which is how reference numbers end up in address line 2 and mint a
+           duplicate HTC address per order number.
+        1. Check if the address can be parsed (validate format)
+        2. If parsing fails → try LLM cleanup, then raise error
+        3. If parsing succeeds → rebuild a clean address, then try HTC lookup
            - Found in HTC → return with address_id
            - Not found in HTC → return WITHOUT address_id (new address is OK!)
 
@@ -591,7 +611,7 @@ class OrderManagementService:
         Args:
             field_name: Name of the location field
             location_value: Transformed LocationValue to resolve
-            raw_source_values: Original source values for LLM fallback
+            raw_source_values: Original source values for LLM cleanup
 
         Returns:
             LocationValue with resolved address_id (if found) or None (if new address)
@@ -608,6 +628,27 @@ class OrderManagementService:
             # No address to resolve - return as-is
             return location_value
 
+        llm_attempted = False
+
+        # Step 0: Pre-clean blobs that obviously carry non-address content
+        if _LLM_ADDRESS_PRECLEAN_ENABLED and address_has_suspicious_content(address):
+            llm_attempted = True
+            logger.info(
+                f"Address for {field_name} contains non-address content, "
+                f"pre-cleaning with LLM: '{address}'"
+            )
+            try:
+                llm_result = self._resolve_address_via_llm(
+                    field_name=field_name,
+                    raw_source_values=raw_source_values,
+                )
+                if llm_result is not None:
+                    logger.debug(f"Pre-cleaned {field_name} address via LLM: {llm_result}")
+                    return llm_result
+            except Exception as e:
+                logger.warning(f"LLM address pre-clean failed for {field_name}: {e}")
+            # LLM unavailable or unhelpful - fall through to normal parsing
+
         # Step 1: Check if address can be parsed (validate format)
         parsed = self.htc_service.parse_address_string(address)
 
@@ -615,100 +656,155 @@ class OrderManagementService:
             # Parsing succeeded - address format is valid
             logger.debug(f"Address for {field_name} parsed successfully: {parsed}")
 
-            # Step 2: Try to find existing address in HTC
+            # Step 2: Rebuild a clean address from the parsed components, dropping
+            # any secondary line that is really a reference number. The HTC lookup
+            # uses this cleaned text so a dirty blob still matches the existing
+            # address instead of creating a near-duplicate.
+            clean_address = self._build_clean_address(
+                parsed=parsed,
+                original_address=address,
+                field_name=field_name,
+            )
+
+            # Step 3: Try to find existing address in HTC
             try:
-                address_id = self.htc_service.find_address_id(address)
-                if address_id is not None:
-                    logger.debug(f"Resolved {field_name} address_id via HTC lookup: {address_id}")
-                    # Get canonical address info from HTC
-                    addr_info = self.htc_service.get_address_info(address_id)
-                    if addr_info:
-                        formatted_address = addr_info.addr_ln1
-                        if addr_info.addr_ln2:
-                            formatted_address = f"{addr_info.addr_ln1} {addr_info.addr_ln2}"
-                        formatted_address = f"{formatted_address}, {addr_info.city}, {addr_info.state} {addr_info.zip_code}"
-
-                        return LocationValue(
-                            address_id=int(address_id),
-                            name=addr_info.company,
-                            address=formatted_address,
-                        )
-                    else:
-                        return LocationValue(
-                            address_id=int(address_id),
-                            name=location_value.name,
-                            address=location_value.address,
-                        )
-                else:
-                    # Not found in HTC - but that's OK! It's a valid new address
-                    # Rebuild clean address from parsed components (filters out garbage like "Order #100000")
-                    # Include addr_ln2 (suite, dock, etc.) if present
-                    addr_ln2 = parsed.get('addr_ln2', '')
-                    if addr_ln2:
-                        clean_address = f"{parsed['addr_ln1']} {addr_ln2}, {parsed['city']}, {parsed['state']} {parsed['zip_code']}"
-                    else:
-                        clean_address = f"{parsed['addr_ln1']}, {parsed['city']}, {parsed['state']} {parsed['zip_code']}"
-
-                    # Validate the rebuilt address can be parsed again
-                    # This catches cases where usaddress parsed garbage into addr_ln2
-                    # that makes the rebuilt address unparseable
-                    reparse_check = self.htc_service.parse_address_string(clean_address.upper())
-                    if reparse_check is None:
-                        raise ValueError(
-                            f"Address has ambiguous or conflicting secondary line info "
-                            f"(suite, unit, etc.): '{addr_ln2}' in address '{address}'"
-                        )
-
-                    logger.debug(
-                        f"Address for {field_name} not found in HTC (new address). "
-                        f"Raw: '{address}' -> Clean: '{clean_address}'"
-                    )
-                    return LocationValue(
-                        address_id=None,
-                        name=location_value.name,
-                        address=clean_address.upper(),
-                    )
+                address_id = self.htc_service.find_address_id(clean_address)
             except Exception as e:
+                # Lookup itself failed (DB error etc) - still a valid new address
                 logger.warning(f"HTC address lookup failed for {field_name}: {e}")
-                # If lookup itself failed (DB error etc), still return as valid new address
-                # Use clean address from parsed components
-                addr_ln2 = parsed.get('addr_ln2', '')
-                if addr_ln2:
-                    clean_address = f"{parsed['addr_ln1']} {addr_ln2}, {parsed['city']}, {parsed['state']} {parsed['zip_code']}"
-                else:
-                    clean_address = f"{parsed['addr_ln1']}, {parsed['city']}, {parsed['state']} {parsed['zip_code']}"
+                address_id = None
 
-                # Validate the rebuilt address can be parsed again
-                reparse_check = self.htc_service.parse_address_string(clean_address.upper())
-                if reparse_check is None:
-                    raise ValueError(
-                        f"Address has ambiguous or conflicting secondary line info "
-                        f"(suite, unit, etc.): '{addr_ln2}' in address '{address}'"
-                    )
-
-                return LocationValue(
-                    address_id=None,
-                    name=location_value.name,
-                    address=clean_address.upper(),
+            if address_id is not None:
+                logger.debug(f"Resolved {field_name} address_id via HTC lookup: {address_id}")
+                return self._location_from_htc_address(
+                    address_id=address_id,
+                    fallback=LocationValue(
+                        address_id=int(address_id),
+                        name=location_value.name,
+                        address=clean_address,
+                    ),
                 )
 
-        # Parsing failed - try LLM fallback
-        logger.debug(f"Address parsing failed for {field_name}, trying LLM fallback: '{address}'")
-        try:
-            llm_result = self._resolve_address_via_llm(
-                field_name=field_name,
-                raw_source_values=raw_source_values,
+            # Not found in HTC - but that's OK! It's a valid new address
+            logger.debug(
+                f"Address for {field_name} not found in HTC (new address). "
+                f"Raw: '{address}' -> Clean: '{clean_address}'"
             )
-            if llm_result is not None:
-                logger.debug(f"Resolved {field_name} address via LLM: {llm_result}")
-                return llm_result
-        except Exception as e:
-            logger.warning(f"LLM address fallback failed for {field_name}: {e}")
+            return LocationValue(
+                address_id=None,
+                name=location_value.name,
+                address=clean_address,
+            )
+
+        # Parsing failed - try LLM cleanup (unless it already ran above)
+        if not llm_attempted:
+            logger.debug(f"Address parsing failed for {field_name}, trying LLM fallback: '{address}'")
+            try:
+                llm_result = self._resolve_address_via_llm(
+                    field_name=field_name,
+                    raw_source_values=raw_source_values,
+                )
+                if llm_result is not None:
+                    logger.debug(f"Resolved {field_name} address via LLM: {llm_result}")
+                    return llm_result
+            except Exception as e:
+                logger.warning(f"LLM address fallback failed for {field_name}: {e}")
 
         # Parsing failed and LLM couldn't help - this is an actual error
         raise ValueError(
             f"Could not parse address for {field_name}: '{address}' - "
             f"address format is invalid and could not be interpreted"
+        )
+
+    def _build_clean_address(
+        self,
+        parsed: dict[str, str],
+        original_address: str,
+        field_name: str,
+    ) -> str:
+        """
+        Rebuild a normalized address string from parsed components.
+
+        Drops a secondary line that is really a reference/order number, so junk
+        embedded in the customer's address text cannot become part of an HTC
+        address record (or defeat the lookup that would have matched the
+        existing one).
+
+        Args:
+            parsed: Component dict from parse_address_string()
+            original_address: The raw address text (for error/log context)
+            field_name: Name of the location field (for logging)
+
+        Returns:
+            Cleaned, uppercased address string
+
+        Raises:
+            ValueError: If the rebuilt address can no longer be parsed, meaning
+                the secondary info was ambiguous or conflicting
+        """
+        raw_addr_ln2 = parsed.get('addr_ln2', '')
+        addr_ln2 = sanitize_secondary_line(raw_addr_ln2)
+
+        if raw_addr_ln2 and not addr_ln2:
+            logger.info(
+                f"Dropped non-address secondary line '{raw_addr_ln2}' from "
+                f"{field_name} address '{original_address}'"
+            )
+
+        if addr_ln2:
+            clean_address = (
+                f"{parsed['addr_ln1']} {addr_ln2}, {parsed['city']}, "
+                f"{parsed['state']} {parsed['zip_code']}"
+            )
+        else:
+            clean_address = (
+                f"{parsed['addr_ln1']}, {parsed['city']}, "
+                f"{parsed['state']} {parsed['zip_code']}"
+            )
+
+        clean_address = clean_address.upper()
+
+        # Validate the rebuilt address can be parsed again. This catches cases
+        # where usaddress parsed garbage into addr_ln2 that makes the rebuilt
+        # address unparseable.
+        if self.htc_service.parse_address_string(clean_address) is None:
+            raise ValueError(
+                f"Address has ambiguous or conflicting secondary line info "
+                f"(suite, unit, etc.): '{raw_addr_ln2}' in address '{original_address}'"
+            )
+
+        return clean_address
+
+    def _location_from_htc_address(
+        self,
+        address_id: float,
+        fallback: LocationValue,
+    ) -> LocationValue:
+        """
+        Build a LocationValue from the canonical HTC address record.
+
+        Args:
+            address_id: Resolved HTC address ID (FavID)
+            fallback: Value to return if the address record can't be read back
+
+        Returns:
+            LocationValue populated from the HTC address table, or `fallback`
+        """
+        addr_info = self.htc_service.get_address_info(address_id)
+        if not addr_info:
+            return fallback
+
+        formatted_address = addr_info.addr_ln1
+        if addr_info.addr_ln2:
+            formatted_address = f"{addr_info.addr_ln1} {addr_info.addr_ln2}"
+        formatted_address = (
+            f"{formatted_address}, {addr_info.city}, {addr_info.state} {addr_info.zip_code}"
+        )
+
+        return LocationValue(
+            address_id=int(address_id),
+            name=addr_info.company,
+            address=formatted_address,
         )
 
     def _resolve_address_via_llm(
@@ -717,12 +813,15 @@ class OrderManagementService:
         raw_source_values: dict[str, Any],
     ) -> LocationValue | None:
         """
-        Use LLM to clean extraneous text from an address that usaddress couldn't parse.
+        Use the LLM to strip extraneous text from a customer-supplied address blob.
 
         Sends the raw address text to OpenAI and asks it to return only the
         address portion, stripping order numbers, reference codes, tracking
         numbers, and other non-address text. The cleaned address is then run
         back through the normal parse_address_string → HTC lookup flow.
+
+        Called both proactively (raw text looks like it carries non-address
+        content) and as a fallback when usaddress cannot parse the text at all.
 
         Args:
             field_name: Name of the location field (for logging)
@@ -747,16 +846,90 @@ class OrderManagementService:
         if not address:
             return None
 
+        cleaned_address = self._llm_clean_address_text(address=address, field_name=field_name)
+        if not cleaned_address:
+            return None
+
+        cleaned_address = cleaned_address.upper()
+
+        # Run the cleaned address back through usaddress parsing
+        parsed = self.htc_service.parse_address_string(cleaned_address)
+        if parsed is None:
+            logger.warning(
+                f"[LLM_ADDRESS] Cleaned address still failed parsing for {field_name}: "
+                f"'{cleaned_address}'"
+            )
+            return None
+
+        logger.info(f"[LLM_ADDRESS] Cleaned address parsed successfully for {field_name}")
+
+        # Rebuild from parsed components so any secondary line the LLM left in
+        # place is still validated before it can reach an HTC address record
+        clean_final = self._build_clean_address(
+            parsed=parsed,
+            original_address=address,
+            field_name=field_name,
+        )
+
+        # Try HTC lookup on the cleaned address
+        try:
+            address_id = self.htc_service.find_address_id(clean_final)
+        except Exception as e:
+            logger.warning(f"[LLM_ADDRESS] HTC lookup failed for {field_name}: {e}")
+            address_id = None
+
+        if address_id is not None:
+            logger.info(f"[LLM_ADDRESS] Found HTC address for {field_name}: ID={address_id}")
+            return self._location_from_htc_address(
+                address_id=address_id,
+                fallback=LocationValue(
+                    address_id=int(address_id),
+                    name=company_name or "",
+                    address=clean_final,
+                ),
+            )
+
+        # Not found in HTC — valid new address from cleaned text
+        logger.info(f"[LLM_ADDRESS] Resolved {field_name} as new address: '{clean_final}'")
+        return LocationValue(
+            address_id=None,
+            name=company_name or "",
+            address=clean_final,
+        )
+
+    def _llm_clean_address_text(self, address: str, field_name: str) -> str | None:
+        """
+        Ask the LLM to return only the mailing address portion of a text blob.
+
+        Results are cached per raw address string - the same blob repeats across
+        sub-runs of a multi-page PDF, and across pickup/delivery of repeat
+        customers, so this keeps the pre-clean pass from re-billing the same text.
+
+        Args:
+            address: Raw address text from the pipeline
+            field_name: Name of the location field (for logging)
+
+        Returns:
+            Cleaned address string, or None if the LLM is unavailable or could
+            not identify an address
+        """
+        cache_key = ' '.join(address.split()).upper()
+        with self._llm_address_cache_lock:
+            if cache_key in self._llm_address_cache:
+                cached = self._llm_address_cache[cache_key]
+                logger.debug(f"[LLM_ADDRESS] Cache hit for {field_name}: '{address}' -> '{cached}'")
+                return cached
+
         # Import OpenAI lazily
         try:
             from openai import OpenAI
         except ImportError:
-            logger.warning("openai library not installed, LLM address fallback unavailable")
+            logger.warning("openai library not installed, LLM address cleanup unavailable")
             return None
 
         api_key = os.getenv("OPENAI_API_KEY")
         if not api_key:
-            logger.warning("OPENAI_API_KEY not set, LLM address fallback unavailable")
+            logger.warning("OPENAI_API_KEY not set, LLM address cleanup unavailable")
             return None
 
         system_prompt = (
@@ -769,6 +942,8 @@ class OrderManagementService:
             "- Return the address in standard format: Street, City, State ZIP\n"
             "- Include suite/unit/apt numbers if they are part of the address\n"
             "- Remove everything that is not part of the physical address\n"
+            "- Order numbers, reference numbers, PO numbers and tracking numbers are "
+            "NEVER part of the address, even when they appear next to a suite or unit\n"
             "- If you cannot identify a valid US address in the text, return null\n"
             "- Do NOT guess or fabricate address components\n\n"
             'Return JSON: {"address": "cleaned address string or null"}'
@@ -798,63 +973,25 @@ class OrderManagementService:
 
             if not cleaned_address:
                 logger.warning(f"[LLM_ADDRESS] LLM returned null address for {field_name}")
+                self._cache_llm_address(cache_key, None)
                 return None
 
             logger.info(f"[LLM_ADDRESS] Cleaned: '{address}' -> '{cleaned_address}'")
+            self._cache_llm_address(cache_key, cleaned_address)
+            return cleaned_address
 
         except Exception as e:
+            # Transient failures are not cached - the next run should retry
             logger.error(f"[LLM_ADDRESS] OpenAI call failed for {field_name}: {e}")
             return None
 
-        # Run the cleaned address back through usaddress parsing
-        parsed = self.htc_service.parse_address_string(cleaned_address.upper())
-        if parsed is None:
-            logger.warning(
-                f"[LLM_ADDRESS] Cleaned address still failed parsing for {field_name}: "
-                f"'{cleaned_address}'"
-            )
-            return None
-
-        logger.info(f"[LLM_ADDRESS] Cleaned address parsed successfully for {field_name}")
-
-        # Try HTC lookup on the cleaned address
-        try:
-            address_id = self.htc_service.find_address_id(cleaned_address.upper())
-            if address_id is not None:
-                logger.info(f"[LLM_ADDRESS] Found HTC address for {field_name}: ID={address_id}")
-                addr_info = self.htc_service.get_address_info(address_id)
-                if addr_info:
-                    formatted_address = addr_info.addr_ln1
-                    if addr_info.addr_ln2:
-                        formatted_address = f"{addr_info.addr_ln1} {addr_info.addr_ln2}"
-                    formatted_address = f"{formatted_address}, {addr_info.city}, {addr_info.state} {addr_info.zip_code}"
-                    return LocationValue(
-                        address_id=int(address_id),
-                        name=addr_info.company,
-                        address=formatted_address,
-                    )
-                else:
-                    return LocationValue(
-                        address_id=int(address_id),
-                        name=company_name or "",
-                        address=cleaned_address.upper(),
-                    )
-        except Exception as e:
-            logger.warning(f"[LLM_ADDRESS] HTC lookup failed for {field_name}: {e}")
-
-        # Not found in HTC — valid new address from cleaned text
-        addr_ln2 = parsed.get('addr_ln2', '')
-        if addr_ln2:
-            clean_final = f"{parsed['addr_ln1']} {addr_ln2}, {parsed['city']}, {parsed['state']} {parsed['zip_code']}"
-        else:
-            clean_final = f"{parsed['addr_ln1']}, {parsed['city']}, {parsed['state']} {parsed['zip_code']}"
-
-        logger.info(f"[LLM_ADDRESS] Resolved {field_name} as new address: '{clean_final}'")
-        return LocationValue(
-            address_id=None,
-            name=company_name or "",
-            address=clean_final.upper(),
-        )
+    def _cache_llm_address(self, cache_key: str, cleaned_address: str | None) -> None:
+        """Store an LLM cleanup result, evicting the oldest entry when full."""
+        with self._llm_address_cache_lock:
+            if len(self._llm_address_cache) >= _LLM_ADDRESS_CACHE_MAX_ENTRIES:
+                oldest_key = next(iter(self._llm_address_cache))
+                del self._llm_address_cache[oldest_key]
+            self._llm_address_cache[cache_key] = cleaned_address
 
     def _is_field_changed(
         self,

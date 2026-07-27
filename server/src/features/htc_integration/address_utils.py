@@ -14,6 +14,11 @@ from typing import Any, Callable
 
 from shared.logging import get_logger
 from shared.exceptions import OutputExecutionError
+from shared.utils.address import (
+    is_valid_secondary_designator,
+    looks_like_reference_value,
+    sanitize_secondary_line,
+)
 
 logger = get_logger(__name__)
 
@@ -407,6 +412,32 @@ class HtcAddressUtils:
                 logger.warning(
                     f"Address contains invalid subaddress type: '{subaddress_type}' "
                     f"(identifier: '{parsed.get('SubaddressIdentifier', '')}') in '{address_string}'"
+                )
+                return None
+
+        # Validate the subaddress identifier itself - a valid type can still carry
+        # a reference number (e.g. "DOCK 100000")
+        subaddress_identifier = parsed.get('SubaddressIdentifier', '')
+        if subaddress_identifier and looks_like_reference_value(subaddress_identifier):
+            logger.warning(
+                f"Address contains reference-like subaddress identifier: "
+                f"'{subaddress_identifier}' in '{address_string}'"
+            )
+            return None
+
+        # Validate occupancy info (suite/unit/#) the same way.
+        # usaddress commonly tags inline order numbers as OccupancyIdentifier
+        # (e.g. "1234 MAIN ST # 100000 DALLAS TX 75201"). Left unchecked these
+        # ride along into FavAddrLn2 and mint a duplicate address per order.
+        if 'OccupancyType' in parsed or 'OccupancyIdentifier' in parsed:
+            is_valid, reason = is_valid_secondary_designator(
+                occupancy_type=parsed.get('OccupancyType', ''),
+                occupancy_identifier=parsed.get('OccupancyIdentifier', ''),
+            )
+            if not is_valid:
+                logger.warning(
+                    f"Address contains non-address secondary info: {reason} "
+                    f"in '{address_string}'"
                 )
                 return None
 
@@ -839,6 +870,18 @@ class HtcAddressUtils:
         company_name = self._sanitize_for_htc(company_name)
         addr_ln1 = self._sanitize_for_htc(addr_ln1)
         addr_ln2 = self._sanitize_for_htc(addr_ln2)
+
+        # Final guard: never write a reference/order number into address line 2.
+        # This is the single write point for new addresses, so junk that slipped
+        # past parsing or came from a manual entry is stopped here.
+        kept_addr_ln2 = sanitize_secondary_line(addr_ln2)
+        if addr_ln2 and not kept_addr_ln2:
+            logger.warning(
+                f"Dropping non-address secondary line '{addr_ln2}' while creating "
+                f"address '{addr_ln1}, {city}, {state} {zip_code}'"
+            )
+        addr_ln2 = kept_addr_ln2
+
         city = self._sanitize_for_htc(city)
         state = self._sanitize_for_htc(state)
         zip_code = self._sanitize_for_htc(zip_code)
