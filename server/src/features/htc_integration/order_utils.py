@@ -102,6 +102,9 @@ class HtcOrderUtils:
     order updates, and supporting records.
     """
 
+    # Dim divisor hardcoded in HTC's dimension forms (HTC200_G030_F120B_*)
+    DIM_FACTOR = 250
+
     def __init__(
         self,
         get_connection: Callable[[], Any],
@@ -962,59 +965,12 @@ class HtcOrderUtils:
 
     # ==================== Dimensions ====================
 
-    def get_dim_factor(self) -> float:
-        """
-        Read the dim factor (dim divisor) for this branch from HTC.
-
-        HTC stores three factors per branch in HTC300_G000_T020 Branch Info
-        (BrDimFIntlAir, BrDimFNatlAir, BrDimfTruck). HTC's own dimension entry
-        forms (HTC200_G030_F120B New/Update Dimension, One Order Dim List) do
-        not distinguish between them: they apply a single factor of 250 to
-        every order, which is the branch's domestic value. We read the
-        domestic air factor so ETO matches manual entry while following the
-        value maintained in HTC.
-
-        Returns:
-            The dim factor as a positive float
-
-        Raises:
-            OutputExecutionError: If the branch row is missing or the factor
-                is not a positive number
-        """
-        connection = self._get_connection()
-
-        try:
-            with connection.cursor() as cursor:
-                cursor.execute("""
-                    SELECT [BrDimFNatlAir]
-                    FROM [HTC300_G000_T020 Branch Info]
-                    WHERE [BrCoID] = ? AND [BrID] = ?
-                """, (self.CO_ID, self.BR_ID))
-                row = cursor.fetchone()
-        except Exception as e:
-            logger.error(f"Failed to read dim factor for branch {self.CO_ID}/{self.BR_ID}: {e}")
-            raise OutputExecutionError(f"Failed to read dim factor: {e}") from e
-
-        if row is None:
-            raise OutputExecutionError(
-                f"No Branch Info row for CoID={self.CO_ID}, BrID={self.BR_ID}; cannot determine dim factor"
-            )
-
-        dim_factor = row[0]
-        if dim_factor is None or dim_factor <= 0:
-            raise OutputExecutionError(
-                f"Invalid dim factor {dim_factor!r} in Branch Info for CoID={self.CO_ID}, BrID={self.BR_ID}"
-            )
-
-        return float(dim_factor)
-
     @staticmethod
     def calculate_dim_weight(
         qty: float,
         length: float,
         width: float,
         height: float,
-        dim_factor: float,
     ) -> float:
         """
         Calculate the dim weight for one dim line exactly as HTC does.
@@ -1022,10 +978,12 @@ class HtcOrderUtils:
         Mirrors the HTC VBA (HTC200_G030_F120B_01 New Dimension):
             OD_UnitDimWeight = new_Qty * (new_Length * new_Width * new_Height) / DimFactor
 
-        Despite the column name, the value is the total for the line (it
-        includes qty), and HTC stores it unrounded.
+        HTC hardcodes DimFactor = 250 in its dimension forms; it does not read
+        the factors stored in Branch Info. Despite the column name, the value
+        is the total for the line (it includes qty), and HTC stores it
+        unrounded.
         """
-        return qty * (length * width * height) / dim_factor
+        return qty * (length * width * height) / HtcOrderUtils.DIM_FACTOR
 
     def create_dims_records(
         self,
@@ -1039,8 +997,7 @@ class HtcOrderUtils:
             order_number: The HTC order number
             dims: List of DimObject, each with: height, length, width, qty, weight.
                   dim_weight is calculated at write time as
-                  qty * L * W * H / dim factor, using the branch's dim factor
-                  stored in HTC (see get_dim_factor).
+                  qty * L * W * H / 250, matching HTC's dimension forms.
 
         Returns:
             Number of dim records created
@@ -1051,8 +1008,6 @@ class HtcOrderUtils:
         if not dims:
             logger.debug(f"No dims to create for order {order_number}")
             return 0
-
-        dim_factor = self.get_dim_factor()
 
         connection = self._get_connection()
         created_count = 0
@@ -1065,7 +1020,7 @@ class HtcOrderUtils:
                     width = dim.width
                     qty = dim.qty
                     weight = dim.weight
-                    dim_weight = self.calculate_dim_weight(qty, length, width, height, dim_factor)
+                    dim_weight = self.calculate_dim_weight(qty, length, width, height)
 
                     cursor.execute("""
                         INSERT INTO [HTC300_G040_T012A Open Order Dims]
@@ -1089,10 +1044,7 @@ class HtcOrderUtils:
                     ))
                     created_count += 1
 
-            logger.info(
-                f"Created {created_count} dim records for order {order_number} "
-                f"(dim factor {dim_factor:g})"
-            )
+            logger.info(f"Created {created_count} dim records for order {order_number}")
             return created_count
 
         except Exception as e:
